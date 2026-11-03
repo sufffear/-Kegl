@@ -6,11 +6,14 @@ import androidx.lifecycle.ViewModelProvider
 import com.example.data.AppBuildInfoRepository
 import com.example.data.AudioHardwareStatus
 import com.example.data.BenchSignalSettings
+import com.example.data.DailySlotWithCompletion
 import com.example.domain.AppBuildInfo
 import com.example.domain.BenchEventLogEntry
 import com.example.domain.DemoProtocolConfig
+import com.example.domain.MetronomeTickStyle
 import com.example.domain.PhaseEngineSnapshot
 import com.example.domain.SignalType
+import com.example.domain.SoundPack
 import com.example.service.BenchSessionCoordinator
 import com.example.service.BenchTimerService
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,8 +21,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * ViewModel технического стенда этапа 0B.
- * Подключается к единому координатору BenchSessionCoordinator и управляет командами BenchTimerService.
+ * ViewModel технического стенда (Этап 0B + Этап 2 + Плавный таймер + Звуковые наборы).
+ * Подключается к единому координатору BenchSessionCoordinator и управляет командами BenchTimerService,
+ * слотами дневного плана Room и настройками звуковых наборов DataStore.
  */
 class TechCheckViewModel(
     private val appContext: Context,
@@ -36,6 +40,12 @@ class TechCheckViewModel(
     val isWakeLockHeld: StateFlow<Boolean> = BenchSessionCoordinator.isWakeLockHeld
     val isServiceForeground: StateFlow<Boolean> = BenchSessionCoordinator.isServiceForeground
 
+    val dailySlots: StateFlow<List<DailySlotWithCompletion>> = BenchSessionCoordinator.dailySlots
+    val isZeroSlotDemoMode: StateFlow<Boolean> = BenchSessionCoordinator.isZeroSlotDemoMode
+    val demoCompletionsCount: StateFlow<Int> = BenchSessionCoordinator.demoCompletionsCount
+    val realCompletionsCount: StateFlow<Int> = BenchSessionCoordinator.realCompletionsCount
+    val databaseErrorMessage: StateFlow<String?> = BenchSessionCoordinator.databaseErrorMessage
+
     val availableProtocols: List<DemoProtocolConfig> = BenchSessionCoordinator.availableProtocols
 
     init {
@@ -45,6 +55,14 @@ class TechCheckViewModel(
 
     fun selectProtocol(protocol: DemoProtocolConfig) {
         BenchSessionCoordinator.selectProtocol(protocol)
+    }
+
+    fun selectDailySlot(slot: DailySlotWithCompletion) {
+        BenchSessionCoordinator.selectDailySlot(slot)
+    }
+
+    fun setZeroSlotDemoMode(enabled: Boolean) {
+        BenchSessionCoordinator.setZeroSlotDemoMode(enabled)
     }
 
     fun startDemo() {
@@ -79,6 +97,14 @@ class TechCheckViewModel(
         BenchSessionCoordinator.playSampleSignal(signal)
     }
 
+    fun setSoundPack(pack: SoundPack) {
+        BenchSessionCoordinator.updateSettings { it.copy(soundPack = pack) }
+    }
+
+    fun setMetronomeTickStyle(style: MetronomeTickStyle) {
+        BenchSessionCoordinator.updateSettings { it.copy(metronomeTickStyle = style) }
+    }
+
     fun setSoundEnabled(enabled: Boolean) {
         BenchSessionCoordinator.updateSettings { it.copy(soundEnabled = enabled) }
     }
@@ -101,6 +127,7 @@ class TechCheckViewModel(
 
     fun refreshHardwareStatus() {
         BenchSessionCoordinator.refreshHardwareStatus()
+        BenchSessionCoordinator.refreshDailySlotsAsync()
     }
 
     fun clearEventLog() {

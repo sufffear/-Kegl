@@ -31,6 +31,11 @@ class MainActivity : ComponentActivity() {
                 val eventLog by viewModel.eventLog.collectAsStateWithLifecycle()
                 val isWakeLockHeld by viewModel.isWakeLockHeld.collectAsStateWithLifecycle()
                 val isServiceForeground by viewModel.isServiceForeground.collectAsStateWithLifecycle()
+                val dailySlots by viewModel.dailySlots.collectAsStateWithLifecycle()
+                val isZeroSlotDemoMode by viewModel.isZeroSlotDemoMode.collectAsStateWithLifecycle()
+                val demoCompletionsCount by viewModel.demoCompletionsCount.collectAsStateWithLifecycle()
+                val realCompletionsCount by viewModel.realCompletionsCount.collectAsStateWithLifecycle()
+                val databaseErrorMessage by viewModel.databaseErrorMessage.collectAsStateWithLifecycle()
 
                 TechCheckScreen(
                     buildInfo = buildInfo,
@@ -40,8 +45,15 @@ class MainActivity : ComponentActivity() {
                     eventLog = eventLog,
                     isWakeLockHeld = isWakeLockHeld,
                     isServiceForeground = isServiceForeground,
+                    dailySlots = dailySlots,
+                    isZeroSlotDemoMode = isZeroSlotDemoMode,
+                    demoCompletionsCount = demoCompletionsCount,
+                    realCompletionsCount = realCompletionsCount,
+                    databaseErrorMessage = databaseErrorMessage,
                     availableProtocols = viewModel.availableProtocols,
                     onSelectProtocol = viewModel::selectProtocol,
+                    onSelectDailySlot = viewModel::selectDailySlot,
+                    onZeroSlotDemoModeChange = viewModel::setZeroSlotDemoMode,
                     onStartDemo = viewModel::startDemo,
                     onPauseDemo = viewModel::pauseDemo,
                     onResumeDemo = viewModel::resumeDemo,
@@ -50,6 +62,8 @@ class MainActivity : ComponentActivity() {
                     onConfirmStopDemo = viewModel::confirmStopDemo,
                     onResetDemo = viewModel::resetDemo,
                     onPlaySample = viewModel::playSample,
+                    onSoundPackChange = viewModel::setSoundPack,
+                    onMetronomeTickStyleChange = viewModel::setMetronomeTickStyle,
                     onSoundEnabledChange = viewModel::setSoundEnabled,
                     onVibrationEnabledChange = viewModel::setVibrationEnabled,
                     onMetronomeEnabledChange = viewModel::setMetronomeEnabled,

@@ -2,28 +2,35 @@ package com.example.domain
 
 /**
  * Чистый Kotlin-движок фаз интервального таймера (тестируется без экрана и без Android-контекста).
- * Реализует правила разделов 7 и 8 ТЗ v1.0:
+ * Реализует правила разделов 6, 7, 8 и 9 ТЗ v1.0:
  * - Состояния: IDLE, PREPARING, RUNNING, PAUSED, INTERRUPTED, COMPLETED, STOPPED.
  * - Максимум одна активная попытка.
  * - Подготовка 3 секунды (3 коротких сигнала), не входит в активное время.
  * - При совпадении тика метронома и команды фазы тик пропускается.
  * - На паузе всегда отображается «Пауза — расслабьтесь».
- * - Продолжение вручную: 3 сигнала подготовки, затем остаток прерванной фазы.
+ * - Продолжение вручную: 3 сигнала подготовки, затем остаток текущей фазы.
  * - Остановка: сначала пауза, затем диалог «Завершить без зачёта?»; отмена диалога оставляет паузу.
  * - Защита от задержки планировщика ОС: если тик задержан сильнее порога, переход в INTERRUPTED без пачки сигналов.
+ * - Контрольные точки (Checkpoints): вызываются при старте, смене фаз, паузе, возобновлении, остановке,
+ *   завершении и каждые ~5 секунд активной работы (НЕ на каждом кадре).
+ * - Восстановление прерванной попытки (restoreInterruptedRun): восстанавливает состояние из последней
+ *   подтверждённой контрольной точки без начисления времени простоя.
  */
 class PhaseEngine(
     private val clock: MonotonicClock,
-    private val onSignal: (SignalType) -> Unit = {},
+    private val onSignal: (SignalType, SoundPack, MetronomeTickStyle) -> Unit = { _, _, _ -> },
+    private val onCheckpoint: (PhaseEngineSnapshot, CheckpointTrigger) -> Unit = { _, _ -> },
     private val onLog: (category: String, message: String) -> Unit = { _, _ -> },
     val preparationDurationMs: Long = 3_000L,
-    val expectedTickIntervalMs: Long = 100L,
-    val schedulerDelayThresholdMs: Long = 2_500L
+    val expectedTickIntervalMs: Long = 50L,
+    val schedulerDelayThresholdMs: Long = 2_500L,
+    val periodicCheckpointIntervalMs: Long = 5_000L
 ) {
     private var snapshot = PhaseEngineSnapshot()
     private var lastTickRealtimeMs: Long = 0L
     private var lastPrepSecondEmitted: Int = -1
     private var lastMetronomeSecondEmitted: Int = -1
+    private var lastCheckpointActiveMs: Long = 0L
     var isMetronomeEnabled: Boolean = true
 
     fun currentSnapshot(): PhaseEngineSnapshot = snapshot
@@ -33,6 +40,7 @@ class PhaseEngine(
             onLog("ENGINE", "Отклонена смена протокола во время активной попытки (${snapshot.status})")
             return false
         }
+        val now = clock.elapsedRealtimeMs()
         snapshot = PhaseEngineSnapshot(
             status = RunStatus.IDLE,
             protocol = protocol,
@@ -44,17 +52,27 @@ class PhaseEngine(
             prepRemainingMs = 0L,
             confirmedActiveMs = 0L,
             totalActiveDurationMs = protocol.totalActiveDurationMs,
-            remainingActiveMs = protocol.totalActiveDurationMs
+            remainingActiveMs = protocol.totalActiveDurationMs,
+            snapshotElapsedRealtimeMs = now
         )
-        onLog("PROTOCOL", "Выбран тестовый протокол: ${protocol.titleRu}")
+        onLog("PROTOCOL", "Выбран слот/протокол: ${protocol.titleRu}")
         return true
     }
 
     /**
-     * Запуск новой демонстрационной попытки.
-     * Если уже есть активная или приостановленная попытка, повторный старт блокируется.
+     * Запуск новой попытки.
+     * Снимок протокола, даты старта, часового пояса и звукового набора фиксируется на всё время подхода.
      */
-    fun start(protocol: DemoProtocolConfig = snapshot.protocol): Boolean {
+    fun start(
+        protocol: DemoProtocolConfig = snapshot.protocol,
+        runId: String = "run_${clock.elapsedRealtimeMs()}",
+        slotId: String = protocol.id,
+        startDate: String = "2026-11-03",
+        zoneId: String = "UTC",
+        soundPackSnapshot: SoundPack = SoundPack.SOFT,
+        metronomeStyleSnapshot: MetronomeTickStyle = MetronomeTickStyle.SOFT,
+        isDemo: Boolean = true
+    ): Boolean {
         if (snapshot.isActiveOrPaused) {
             onLog("GUARD", "Повторный быстрый старт заблокирован: уже активно состояние ${snapshot.status}")
             return false
@@ -63,10 +81,17 @@ class PhaseEngine(
         lastTickRealtimeMs = now
         lastPrepSecondEmitted = 3
         lastMetronomeSecondEmitted = -1
+        lastCheckpointActiveMs = 0L
 
         snapshot = PhaseEngineSnapshot(
+            runId = runId,
+            slotId = slotId,
+            startDate = startDate,
+            zoneId = zoneId,
             status = RunStatus.PREPARING,
             protocol = protocol,
+            soundPackSnapshot = soundPackSnapshot,
+            metronomeStyleSnapshot = metronomeStyleSnapshot,
             currentRepetition = 1,
             totalRepetitions = protocol.repetitions,
             currentPhase = PhaseType.CONTRACTION,
@@ -76,15 +101,83 @@ class PhaseEngine(
             confirmedActiveMs = 0L,
             totalActiveDurationMs = protocol.totalActiveDurationMs,
             remainingActiveMs = protocol.totalActiveDurationMs,
+            snapshotElapsedRealtimeMs = now,
             isStopDialogVisible = false,
             interruptionReason = null,
             lastSchedulerDriftMs = 0L,
             maxSchedulerDriftMs = 0L,
-            isDemo = true
+            isDemo = isDemo
         )
-        onLog("STATE", "IDLE -> PREPARING (подготовка 3 сек, сигнал 1/3)")
-        onSignal(SignalType.PREP_TICK)
+        onLog(
+            "STATE",
+            "IDLE -> PREPARING (слот=$slotId, дата=$startDate, звук=${soundPackSnapshot.titleRu}, сигнал 1/3)"
+        )
+        onCheckpoint(snapshot, CheckpointTrigger.START)
+        emitSignal(SignalType.PREP_TICK)
         return true
+    }
+
+    /**
+     * Восстановление прерванной попытки (например, после смерти процесса или перезагрузки)
+     * строго по последней подтверждённой контрольной точке без начисления времени простоя.
+     */
+    fun restoreInterruptedFromCheckpoint(
+        runId: String,
+        slotId: String,
+        startDate: String,
+        zoneId: String,
+        protocol: DemoProtocolConfig,
+        soundPackSnapshot: SoundPack,
+        metronomeStyleSnapshot: MetronomeTickStyle,
+        confirmedActiveMs: Long,
+        currentRepetition: Int,
+        currentPhase: PhaseType,
+        phaseRemainingMs: Long,
+        interruptionReason: String,
+        isDemo: Boolean = true
+    ): PhaseEngineSnapshot {
+        val now = clock.elapsedRealtimeMs()
+        lastTickRealtimeMs = now
+        val clampedConfirmed = confirmedActiveMs.coerceIn(0L, protocol.totalActiveDurationMs)
+        lastCheckpointActiveMs = clampedConfirmed
+        val phaseDur = if (currentPhase == PhaseType.CONTRACTION) {
+            protocol.contractionMs
+        } else {
+            protocol.relaxationMs
+        }
+        val clampedPhaseRem = phaseRemainingMs.coerceIn(1L, phaseDur)
+
+        snapshot = PhaseEngineSnapshot(
+            runId = runId,
+            slotId = slotId,
+            startDate = startDate,
+            zoneId = zoneId,
+            status = RunStatus.INTERRUPTED,
+            protocol = protocol,
+            soundPackSnapshot = soundPackSnapshot,
+            metronomeStyleSnapshot = metronomeStyleSnapshot,
+            currentRepetition = currentRepetition.coerceIn(1, protocol.repetitions),
+            totalRepetitions = protocol.repetitions,
+            currentPhase = currentPhase,
+            phaseRemainingMs = clampedPhaseRem,
+            phaseDurationMs = phaseDur,
+            prepRemainingMs = 0L,
+            confirmedActiveMs = clampedConfirmed,
+            totalActiveDurationMs = protocol.totalActiveDurationMs,
+            remainingActiveMs = (protocol.totalActiveDurationMs - clampedConfirmed).coerceAtLeast(0L),
+            snapshotElapsedRealtimeMs = now,
+            isStopDialogVisible = false,
+            interruptionReason = interruptionReason,
+            isDemo = isDemo
+        )
+        onLog(
+            "RECOVERY",
+            "Восстановлена прерванная попытка $runId в состоянии INTERRUPTED " +
+                "(активное время=${clampedConfirmed} мс, повтор ${snapshot.currentRepetition}/${snapshot.totalRepetitions}, " +
+                "остаток фазы=${clampedPhaseRem} мс, без начисления простоя)"
+        )
+        onCheckpoint(snapshot, CheckpointTrigger.INTERRUPT)
+        return snapshot
     }
 
     /**
@@ -112,43 +205,47 @@ class PhaseEngine(
             snapshot = snapshot.copy(
                 status = RunStatus.INTERRUPTED,
                 prepRemainingMs = 0L,
+                snapshotElapsedRealtimeMs = now,
                 interruptionReason = reason,
                 lastSchedulerDriftMs = driftMs,
                 maxSchedulerDriftMs = updatedMaxDrift
             )
             onLog("SCHEDULER", "Превышен порог задержки ($deltaMs мс). Переход в INTERRUPTED без пачки сигналов.")
-            onSignal(SignalType.PAUSED)
+            onCheckpoint(snapshot, CheckpointTrigger.INTERRUPT)
+            emitSignal(SignalType.PAUSED)
             return snapshot
         }
 
         snapshot = snapshot.copy(
+            snapshotElapsedRealtimeMs = now,
             lastSchedulerDriftMs = driftMs,
             maxSchedulerDriftMs = updatedMaxDrift
         )
 
         if (status == RunStatus.PREPARING) {
-            advancePreparing(deltaMs)
+            advancePreparing(deltaMs, now)
         } else if (status == RunStatus.RUNNING) {
-            advanceRunning(deltaMs)
+            advanceRunning(deltaMs, now)
         }
 
         return snapshot
     }
 
-    private fun advancePreparing(deltaMs: Long) {
+    private fun advancePreparing(deltaMs: Long, now: Long) {
         val remaining = snapshot.prepRemainingMs - deltaMs
         if (remaining > 0L) {
-            // Подаём короткие сигналы на границах 2 сек и 1 сек (всего 3 сигнала подготовки)
             val ceilSeconds = ((remaining + 999L) / 1000L).toInt()
             if (ceilSeconds in 1..2 && ceilSeconds < lastPrepSecondEmitted) {
                 lastPrepSecondEmitted = ceilSeconds
                 val sigIndex = 4 - ceilSeconds
                 onLog("SIGNAL", "Подготовка: сигнал $sigIndex/3 (осталось ${remaining} мс)")
-                onSignal(SignalType.PREP_TICK)
+                emitSignal(SignalType.PREP_TICK)
             }
-            snapshot = snapshot.copy(prepRemainingMs = remaining)
+            snapshot = snapshot.copy(
+                prepRemainingMs = remaining,
+                snapshotElapsedRealtimeMs = now
+            )
         } else {
-            // Подготовка завершена -> переходим в RUNNING и явно подаём сигнал текущей фазы
             val overflowMs = (-remaining).coerceAtLeast(0L)
             val phaseSignal = if (snapshot.currentPhase == PhaseType.CONTRACTION) {
                 SignalType.CONTRACTION
@@ -161,6 +258,7 @@ class PhaseEngine(
             snapshot = snapshot.copy(
                 status = RunStatus.RUNNING,
                 prepRemainingMs = 0L,
+                snapshotElapsedRealtimeMs = now,
                 interruptionReason = null
             )
             onLog(
@@ -168,17 +266,19 @@ class PhaseEngine(
                 "PREPARING -> RUNNING (Повтор ${snapshot.currentRepetition}/${snapshot.totalRepetitions}, " +
                     "фаза: ${snapshot.currentPhase.labelRu}, остаток фазы: ${snapshot.phaseRemainingMs} мс)"
             )
-            onSignal(phaseSignal)
+            onCheckpoint(snapshot, CheckpointTrigger.PHASE_CHANGE)
+            emitSignal(phaseSignal)
 
             if (overflowMs > 0L) {
-                advanceRunning(overflowMs)
+                advanceRunning(overflowMs, now)
             }
         }
     }
 
-    private fun advanceRunning(deltaMs: Long) {
+    private fun advanceRunning(deltaMs: Long, now: Long) {
         var remainingToConsume = deltaMs
         var commandEmittedOnThisTick = false
+        var phaseChangedOnThisTick = false
 
         while (remainingToConsume > 0L && snapshot.status == RunStatus.RUNNING) {
             val step = minOf(remainingToConsume, snapshot.phaseRemainingMs)
@@ -194,11 +294,12 @@ class PhaseEngine(
                 snapshot = snapshot.copy(
                     phaseRemainingMs = newPhaseRemaining,
                     confirmedActiveMs = newConfirmedActive,
-                    remainingActiveMs = newRemainingActive
+                    remainingActiveMs = newRemainingActive,
+                    snapshotElapsedRealtimeMs = now
                 )
             } else {
-                // Текущая фаза завершилась
                 commandEmittedOnThisTick = true
+                phaseChangedOnThisTick = true
                 if (snapshot.currentPhase == PhaseType.CONTRACTION) {
                     val relaxDuration = snapshot.protocol.relaxationMs
                     lastMetronomeSecondEmitted = ((relaxDuration + 999L) / 1000L).toInt()
@@ -207,15 +308,17 @@ class PhaseEngine(
                         phaseRemainingMs = relaxDuration,
                         phaseDurationMs = relaxDuration,
                         confirmedActiveMs = newConfirmedActive,
-                        remainingActiveMs = newRemainingActive
+                        remainingActiveMs = newRemainingActive,
+                        snapshotElapsedRealtimeMs = now
                     )
+                    lastCheckpointActiveMs = newConfirmedActive
                     onLog(
                         "PHASE",
                         "Повтор ${snapshot.currentRepetition}/${snapshot.totalRepetitions}: Сокращение -> Расслабление"
                     )
-                    onSignal(SignalType.RELAXATION)
+                    onCheckpoint(snapshot, CheckpointTrigger.PHASE_CHANGE)
+                    emitSignal(SignalType.RELAXATION)
                 } else {
-                    // Завершилось расслабление
                     if (snapshot.currentRepetition < snapshot.totalRepetitions) {
                         val nextRep = snapshot.currentRepetition + 1
                         val contractDuration = snapshot.protocol.contractionMs
@@ -226,16 +329,17 @@ class PhaseEngine(
                             phaseRemainingMs = contractDuration,
                             phaseDurationMs = contractDuration,
                             confirmedActiveMs = newConfirmedActive,
-                            remainingActiveMs = newRemainingActive
+                            remainingActiveMs = newRemainingActive,
+                            snapshotElapsedRealtimeMs = now
                         )
+                        lastCheckpointActiveMs = newConfirmedActive
                         onLog(
                             "PHASE",
                             "Начат повтор $nextRep/${snapshot.totalRepetitions}: фаза Сокращение"
                         )
-                        onSignal(SignalType.CONTRACTION)
+                        onCheckpoint(snapshot, CheckpointTrigger.PHASE_CHANGE)
+                        emitSignal(SignalType.CONTRACTION)
                     } else {
-                        // Весь подход завершён!
-                        // ТЗ п. 8: на последнем упражнении группы финальный сигнал заменяет обычный сигнал подхода; двойного финала нет.
                         val finalSignal = if (snapshot.protocol.isLastInGroup) {
                             SignalType.GROUP_COMPLETED
                         } else {
@@ -246,16 +350,29 @@ class PhaseEngine(
                             phaseRemainingMs = 0L,
                             confirmedActiveMs = snapshot.totalActiveDurationMs,
                             remainingActiveMs = 0L,
+                            snapshotElapsedRealtimeMs = now,
                             isStopDialogVisible = false
                         )
+                        lastCheckpointActiveMs = snapshot.totalActiveDurationMs
                         onLog(
                             "STATE",
                             "RUNNING -> COMPLETED (активное время ${snapshot.totalActiveDurationMs} мс, сигнал: ${finalSignal.labelRu})"
                         )
-                        onSignal(finalSignal)
+                        onCheckpoint(snapshot, CheckpointTrigger.COMPLETE)
+                        emitSignal(finalSignal)
                     }
                 }
             }
+        }
+
+        // Периодическая контрольная точка каждые ~5 секунд активной работы (НЕ на каждом кадре)
+        if (snapshot.status == RunStatus.RUNNING &&
+            !phaseChangedOnThisTick &&
+            snapshot.confirmedActiveMs - lastCheckpointActiveMs >= periodicCheckpointIntervalMs
+        ) {
+            lastCheckpointActiveMs = snapshot.confirmedActiveMs
+            onLog("CHECKPOINT", "Периодическая контрольная точка: ${snapshot.confirmedActiveMs} мс активной работы")
+            onCheckpoint(snapshot, CheckpointTrigger.PERIODIC_5S)
         }
 
         // Тихий метроном внутри фазы: если фаза продолжается и на этом тике не подавалась основная команда
@@ -265,7 +382,7 @@ class PhaseEngine(
             if (ceilSeconds in 1 until totalPhaseSeconds && ceilSeconds < lastMetronomeSecondEmitted) {
                 lastMetronomeSecondEmitted = ceilSeconds
                 onLog("METRONOME", "Тик метронома (осталось $ceilSeconds сек фазы)")
-                onSignal(SignalType.METRONOME_TICK)
+                emitSignal(SignalType.METRONOME_TICK)
             }
         }
     }
@@ -277,7 +394,6 @@ class PhaseEngine(
         if (snapshot.status != RunStatus.PREPARING && snapshot.status != RunStatus.RUNNING) {
             return snapshot
         }
-        // Вычитываем время, прошедшее до момента нажатия паузы, если не превышен порог задержки
         val now = clock.elapsedRealtimeMs()
         val delta = (now - lastTickRealtimeMs).coerceAtLeast(0L)
         if (delta in 1..schedulerDelayThresholdMs && snapshot.status == RunStatus.RUNNING) {
@@ -294,29 +410,35 @@ class PhaseEngine(
         snapshot = snapshot.copy(
             status = RunStatus.PAUSED,
             prepRemainingMs = 0L,
+            snapshotElapsedRealtimeMs = now,
             interruptionReason = reason
         )
+        lastCheckpointActiveMs = snapshot.confirmedActiveMs
         onLog("STATE", "Переход в PAUSED ($reason). Команда: Пауза — расслабьтесь")
-        onSignal(SignalType.PAUSED)
+        onCheckpoint(snapshot, CheckpointTrigger.PAUSE)
+        emitSignal(SignalType.PAUSED)
         return snapshot
     }
 
     /**
      * Внешнее прерывание (потеря аудиофокуса, звонок, отключение наушников, смерть процесса).
-     * Переводит в INTERRUPTED / паузу без автовозобновления.
      */
     fun interrupt(reason: String): PhaseEngineSnapshot {
         if (snapshot.status != RunStatus.PREPARING && snapshot.status != RunStatus.RUNNING) {
             return snapshot
         }
-        lastTickRealtimeMs = clock.elapsedRealtimeMs()
+        val now = clock.elapsedRealtimeMs()
+        lastTickRealtimeMs = now
         snapshot = snapshot.copy(
             status = RunStatus.INTERRUPTED,
             prepRemainingMs = 0L,
+            snapshotElapsedRealtimeMs = now,
             interruptionReason = reason
         )
+        lastCheckpointActiveMs = snapshot.confirmedActiveMs
         onLog("INTERRUPT", "Прерывание: $reason -> состояние INTERRUPTED (без автовозобновления)")
-        onSignal(SignalType.PAUSED)
+        onCheckpoint(snapshot, CheckpointTrigger.INTERRUPT)
+        emitSignal(SignalType.PAUSED)
         return snapshot
     }
 
@@ -328,11 +450,13 @@ class PhaseEngine(
         if (snapshot.status != RunStatus.PAUSED && snapshot.status != RunStatus.INTERRUPTED) {
             return false
         }
-        lastTickRealtimeMs = clock.elapsedRealtimeMs()
+        val now = clock.elapsedRealtimeMs()
+        lastTickRealtimeMs = now
         lastPrepSecondEmitted = 3
         snapshot = snapshot.copy(
             status = RunStatus.PREPARING,
             prepRemainingMs = preparationDurationMs,
+            snapshotElapsedRealtimeMs = now,
             isStopDialogVisible = false,
             interruptionReason = null
         )
@@ -341,7 +465,8 @@ class PhaseEngine(
             "Возобновление вручную -> PREPARING (3 сигнала), далее остаток фазы " +
                 "${snapshot.currentPhase.labelRu} (${snapshot.phaseRemainingMs} мс)"
         )
-        onSignal(SignalType.PREP_TICK)
+        onCheckpoint(snapshot, CheckpointTrigger.RESUME)
+        emitSignal(SignalType.PREP_TICK)
         return true
     }
 
@@ -360,7 +485,7 @@ class PhaseEngine(
     }
 
     /**
-     * Отмена диалога остановки («Остаться на паузе» или системная кнопка Back) оставляет паузу.
+     * Отмена диалога остановки («Остаться на паузе» или Back) оставляет паузу.
      */
     fun cancelStopDialog(): PhaseEngineSnapshot {
         if (snapshot.isStopDialogVisible) {
@@ -374,16 +499,20 @@ class PhaseEngine(
      * Подтверждение «Завершить» в диалоге остановки: переводит в STOPPED без зачёта.
      */
     fun confirmStop(): PhaseEngineSnapshot {
+        val now = clock.elapsedRealtimeMs()
         snapshot = snapshot.copy(
             status = RunStatus.STOPPED,
             prepRemainingMs = 0L,
+            snapshotElapsedRealtimeMs = now,
             isStopDialogVisible = false
         )
         onLog("STATE", "Попытка остановлена без зачёта (STOPPED)")
+        onCheckpoint(snapshot, CheckpointTrigger.STOP)
         return snapshot
     }
 
     fun resetToIdle(): PhaseEngineSnapshot {
+        val now = clock.elapsedRealtimeMs()
         val protocol = snapshot.protocol
         snapshot = PhaseEngineSnapshot(
             status = RunStatus.IDLE,
@@ -396,9 +525,14 @@ class PhaseEngine(
             prepRemainingMs = 0L,
             confirmedActiveMs = 0L,
             totalActiveDurationMs = protocol.totalActiveDurationMs,
-            remainingActiveMs = protocol.totalActiveDurationMs
+            remainingActiveMs = protocol.totalActiveDurationMs,
+            snapshotElapsedRealtimeMs = now
         )
-        onLog("STATE", "Сброс стенда в состояние IDLE")
+        onLog("STATE", "Сброс в состояние IDLE")
         return snapshot
+    }
+
+    private fun emitSignal(signal: SignalType) {
+        onSignal(signal, snapshot.soundPackSnapshot, snapshot.metronomeStyleSnapshot)
     }
 }

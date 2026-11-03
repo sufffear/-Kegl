@@ -9,8 +9,6 @@ import com.example.domain.AppBuildInfo
 
 /**
  * Репозиторий сведений о среде и параметрах сборки (пакет data).
- * Считывает фактический applicationId, версию из BuildConfig, реальную модель устройства
- * и проверяет итоговый манифест пакета на отсутствие сетевых разрешений.
  */
 class AppBuildInfoRepository(private val context: Context) {
 
@@ -42,8 +40,8 @@ class AppBuildInfoRepository(private val context: Context) {
 
         return AppBuildInfo(
             appName = "Velaris",
-            stageCode = "0B",
-            stageTitle = "Технический стенд фонового таймера, сигналов и прерываний",
+            stageCode = "0B + Этап 2",
+            stageTitle = "Движок фаз, плавный таймер, 3 набора звуков (DataStore) и надёжное хранение (Room)",
             applicationId = BuildConfig.APPLICATION_ID,
             versionName = BuildConfig.VERSION_NAME,
             versionCode = BuildConfig.VERSION_CODE,

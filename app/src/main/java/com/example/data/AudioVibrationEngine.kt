@@ -12,13 +12,15 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import com.example.domain.MetronomeTickStyle
 import com.example.domain.SignalType
+import com.example.domain.SoundPack
+import com.example.domain.SoundSynthesisSpec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.PI
-import kotlin.math.sin
 
 data class AudioHardwareStatus(
     val outputRouteLabelRu: String = "Динамик",
@@ -30,16 +32,9 @@ data class AudioHardwareStatus(
     val noActiveSignalChannelWarning: String? = null
 )
 
-data class BenchSignalSettings(
-    val soundEnabled: Boolean = true,
-    val vibrationEnabled: Boolean = true,
-    val metronomeEnabled: Boolean = true,
-    val signalVolume: Float = 0.80f,
-    val metronomeVolume: Float = 0.35f
-)
-
 /**
- * Управляет синтезом звуковых сигналов (через PCM AudioTrack без изменения системной громкости),
+ * Управляет локальным синтезом 3 звуковых наборов («Мягкий», «Колокольчики», «Чёткий»)
+ * и 2 вариантов тика метронома через PCM AudioTrack (без изменения системной громкости),
  * вибрацией (VibrationEffect), проверкой маршрута аудиовыхода и аудиофокусом.
  */
 class AudioVibrationEngine(
@@ -128,10 +123,6 @@ class AudioVibrationEngine(
         hasAudioFocus = false
     }
 
-    /**
-     * Проверяет фактический аудиомаршрут, режим звонка, DND и наличие вибромотора.
-     * Не показывает ложного подтверждения наушников, если маршрут не определён.
-     */
     fun inspectHardwareStatus(settings: BenchSignalSettings): AudioHardwareStatus {
         val outputDevices = try {
             audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
@@ -201,7 +192,7 @@ class AudioVibrationEngine(
             !isDnd
 
         val warning = if (!effectiveAudioAvailable && !effectiveVibrationAvailable) {
-            "Внимание: ни звук, ни вибрация сейчас недоступны (проверьте тихий режим / DND / настройки стенда). Не используйте «невидимый» режим для тренировки."
+            "Внимание: ни звук, ни вибрация сейчас недоступны (проверьте тихий режим / DND / настройки). Не используйте «невидимый» режим для тренировки."
         } else {
             null
         }
@@ -218,11 +209,14 @@ class AudioVibrationEngine(
     }
 
     /**
-     * Воспроизводит сигнал (и в рабочем цикле, и по нажатию кнопки образца в настройках стенда).
+     * Воспроизводит сигнал с использованием указанного снимка звукового набора (`packOverride`)
+     * и стиля тика метронома (`metronomeStyleOverride`).
      */
     fun playSignal(
         signal: SignalType,
         settings: BenchSignalSettings,
+        packOverride: SoundPack = settings.soundPack,
+        metronomeStyleOverride: MetronomeTickStyle = settings.metronomeTickStyle,
         isSamplePreview: Boolean = false
     ) {
         val hw = inspectHardwareStatus(settings)
@@ -230,62 +224,23 @@ class AudioVibrationEngine(
             (isSamplePreview || hw.isHeadphonesConnected || !hw.isSilentOrVibrateRinger)
 
         if (allowSound) {
-            when (signal) {
-                SignalType.METRONOME_TICK -> {
-                    if (settings.metronomeEnabled || isSamplePreview) {
-                        playSynthesizedToneAsync(
-                            frequenciesHz = doubleArrayOf(520.0),
-                            durationsMs = intArrayOf(35),
-                            volume = settings.metronomeVolume.coerceIn(0f, 1f)
-                        )
-                    }
+            val shouldPlay = if (signal == SignalType.METRONOME_TICK) {
+                settings.metronomeEnabled || isSamplePreview
+            } else {
+                true
+            }
+            if (shouldPlay) {
+                val volume = if (signal == SignalType.METRONOME_TICK) {
+                    settings.metronomeVolume
+                } else {
+                    settings.signalVolume
                 }
-                SignalType.PREP_TICK -> {
-                    playSynthesizedToneAsync(
-                        frequenciesHz = doubleArrayOf(660.0),
-                        durationsMs = intArrayOf(75),
-                        volume = settings.signalVolume.coerceIn(0f, 1f)
-                    )
-                }
-                SignalType.CONTRACTION -> {
-                    // Восходящее двузвучие («Сокращение»)
-                    playSynthesizedToneAsync(
-                        frequenciesHz = doubleArrayOf(587.33, 880.0),
-                        durationsMs = intArrayOf(110, 160),
-                        volume = settings.signalVolume.coerceIn(0f, 1f)
-                    )
-                }
-                SignalType.RELAXATION -> {
-                    // Спокойное нисходящее двузвучие («Расслабление»)
-                    playSynthesizedToneAsync(
-                        frequenciesHz = doubleArrayOf(659.25, 440.0),
-                        durationsMs = intArrayOf(120, 190),
-                        volume = settings.signalVolume.coerceIn(0f, 1f)
-                    )
-                }
-                SignalType.PAUSED -> {
-                    playSynthesizedToneAsync(
-                        frequenciesHz = doubleArrayOf(440.0, 349.23),
-                        durationsMs = intArrayOf(90, 130),
-                        volume = settings.signalVolume.coerceIn(0f, 1f)
-                    )
-                }
-                SignalType.SET_COMPLETED -> {
-                    // Трёхнотный мягкий аккорд завершения подхода
-                    playSynthesizedToneAsync(
-                        frequenciesHz = doubleArrayOf(523.25, 659.25, 783.99),
-                        durationsMs = intArrayOf(110, 110, 220),
-                        volume = settings.signalVolume.coerceIn(0f, 1f)
-                    )
-                }
-                SignalType.GROUP_COMPLETED -> {
-                    // Четырёхнотный финальный сигнал завершения группы (заменяет обычный сигнал подхода)
-                    playSynthesizedToneAsync(
-                        frequenciesHz = doubleArrayOf(523.25, 659.25, 783.99, 1046.50),
-                        durationsMs = intArrayOf(100, 100, 120, 280),
-                        volume = settings.signalVolume.coerceIn(0f, 1f)
-                    )
-                }
+                val pattern = SoundSynthesisSpec.resolveSignalPattern(
+                    pack = packOverride,
+                    signal = signal,
+                    metronomeStyle = metronomeStyleOverride
+                )
+                playPatternPcmAsync(pattern = pattern, volume = volume)
             }
         }
 
@@ -298,8 +253,6 @@ class AudioVibrationEngine(
     private fun triggerVibration(signal: SignalType) {
         val vib = vibrator ?: return
         if (!vib.hasVibrator()) return
-
-        // Для тика метронома вибрацию не подаём, чтобы не разряжать телефон и не забивать основные команды
         if (signal == SignalType.METRONOME_TICK) return
 
         val timingsAndAmplitudes: Pair<LongArray, IntArray> = when (signal) {
@@ -308,12 +261,10 @@ class AudioVibrationEngine(
                 intArrayOf(0, 140)
             )
             SignalType.CONTRACTION -> Pair(
-                // Чёткий двойной импульс на сокращение
                 longArrayOf(0L, 120L, 70L, 180L),
                 intArrayOf(0, 220, 0, 255)
             )
             SignalType.RELAXATION -> Pair(
-                // Один плавный длинный импульс на расслабление
                 longArrayOf(0L, 280L),
                 intArrayOf(0, 150)
             )
@@ -349,42 +300,16 @@ class AudioVibrationEngine(
         }
     }
 
-    private fun playSynthesizedToneAsync(
-        frequenciesHz: DoubleArray,
-        durationsMs: IntArray,
+    private fun playPatternPcmAsync(
+        pattern: com.example.domain.SignalPatternSpec,
         volume: Float
     ) {
-        if (volume <= 0.01f) return
+        val pcm = SoundSynthesisSpec.synthesizePcm16(pattern, volume)
+        if (pcm.isEmpty()) return
+
         audioScope.launch {
             try {
-                val sampleRate = 24_000
-                val totalMs = durationsMs.sum() + (durationsMs.size - 1).coerceAtLeast(0) * 20
-                val totalSamples = (sampleRate * totalMs) / 1000
-                val pcm = ShortArray(totalSamples)
-
-                var writeIndex = 0
-                for (i in frequenciesHz.indices) {
-                    val freq = frequenciesHz[i]
-                    val durMs = durationsMs[i]
-                    val numSamples = (sampleRate * durMs) / 1000
-                    val fadeSamples = (numSamples / 6).coerceAtLeast(1)
-
-                    for (s in 0 until numSamples) {
-                        if (writeIndex >= pcm.size) break
-                        val env = when {
-                            s < fadeSamples -> s.toFloat() / fadeSamples
-                            s > numSamples - fadeSamples -> (numSamples - s).toFloat() / fadeSamples
-                            else -> 1.0f
-                        }
-                        val angle = 2.0 * PI * s * freq / sampleRate
-                        val sampleValue = (sin(angle) * volume * env * Short.MAX_VALUE * 0.75).toInt()
-                        pcm[writeIndex++] = sampleValue.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
-                    }
-                    // Небольшая пауза 20 мс между нотами
-                    val gapSamples = (sampleRate * 20) / 1000
-                    writeIndex = (writeIndex + gapSamples).coerceAtMost(pcm.size)
-                }
-
+                val sampleRate = SoundSynthesisSpec.SAMPLE_RATE_HZ
                 val audioTrack = AudioTrack.Builder()
                     .setAudioAttributes(
                         AudioAttributes.Builder()
@@ -405,7 +330,7 @@ class AudioVibrationEngine(
 
                 audioTrack.write(pcm, 0, pcm.size)
                 audioTrack.play()
-                kotlinx.coroutines.delay(totalMs.toLong() + 60L)
+                delay(pattern.totalDurationMs.toLong() + 45L)
                 audioTrack.stop()
                 audioTrack.release()
             } catch (_: Exception) {

@@ -1,16 +1,16 @@
 <resources>
     <string name="app_name">Velaris</string>
-    <string name="tech_check_title">Velaris · Технический стенд 0B</string>
-    <string name="tech_check_stage_badge">Этап 0B · Фоновый таймер и сигналы</string>
+    <string name="tech_check_title">Velaris · Этап 2 + Плавный таймер и звуки</string>
+    <string name="tech_check_stage_badge">Этап 2 + 0B · Room, контрольные точки, плавное кольцо, 3 набора звука</string>
     <string name="tech_check_version_format">Версия: %1$s (versionCode %2$d)</string>
     <string name="demo_safety_banner_title">Демо — не выполняйте упражнения по этим сигналам</string>
-    <string name="demo_safety_banner_body">Этот стенд предназначен исключительно для технической проверки фоновой службы, звука, вибрации, паузы и прерываний на Samsung. Значения интервалов тестовые и не являются программой тренировок.</string>
+    <string name="demo_safety_banner_body">Этот стенд предназначен для проверки локального сохранения Room, восстановления после прерываний, плавного движения кольца и трёх звуковых наборов на Samsung. Значения интервалов тестовые и не являются программой тренировок.</string>
     <string name="notification_channel_name">Сессия таймера Velaris</string>
     <string name="notification_channel_desc">Уведомление активной или приостановленной сессии таймера с кнопкой паузы</string>
     <string name="notification_title">Velaris · Сессия</string>
     <string name="notification_action_pause">Пауза</string>
     <string name="stop_dialog_title">Завершить без зачёта?</string>
-    <string name="stop_dialog_body">Текущая тестовая последовательность будет остановлена. Нажмите «Остаться на паузе», если хотите продолжить позже.</string>
+    <string name="stop_dialog_body">Текущая тестовая последовательность будет остановлена без записи зачёта в базу. Нажмите «Остаться на паузе», если хотите продолжить позже.</string>
     <string name="stop_dialog_confirm">Завершить</string>
     <string name="stop_dialog_cancel">Остаться на паузе</string>
     <string name="mountain_illustration_desc">Декоративный силуэт гор на фоне рассвета</string>

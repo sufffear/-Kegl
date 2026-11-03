@@ -206,7 +206,7 @@ class BenchTimerService : Service() {
                         break
                     }
                 }
-                delay(100L)
+                delay(50L)
             }
         }
     }

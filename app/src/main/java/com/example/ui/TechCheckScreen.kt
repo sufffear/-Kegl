@@ -1,13 +1,18 @@
 package com.example.ui
 
 import android.Manifest
+import android.animation.ValueAnimator
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -42,6 +47,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.VolumeUp
@@ -65,7 +71,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -92,16 +100,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import com.example.R
 import com.example.data.AudioHardwareStatus
 import com.example.data.BenchSignalSettings
+import com.example.data.DailySlotWithCompletion
 import com.example.domain.AppBuildInfo
 import com.example.domain.BenchEventLogEntry
 import com.example.domain.DemoProtocolConfig
+import com.example.domain.MetronomeTickStyle
 import com.example.domain.PhaseEngineSnapshot
 import com.example.domain.PhaseType
 import com.example.domain.RunStatus
 import com.example.domain.SignalType
+import com.example.domain.SoundPack
 import com.example.ui.theme.DawnBackgroundBottom
 import com.example.ui.theme.DawnBackgroundMid
 import com.example.ui.theme.DawnBackgroundTop
@@ -116,6 +130,7 @@ import com.example.ui.theme.DawnSurfaceVariant
 import com.example.ui.theme.DawnTextPrimary
 import com.example.ui.theme.DawnTextSecondary
 import com.example.ui.theme.DawnWarningAccent
+import kotlinx.coroutines.isActive
 import java.util.Locale
 
 @Composable
@@ -127,8 +142,15 @@ fun TechCheckScreen(
     eventLog: List<BenchEventLogEntry>,
     isWakeLockHeld: Boolean,
     isServiceForeground: Boolean,
+    dailySlots: List<DailySlotWithCompletion>,
+    isZeroSlotDemoMode: Boolean,
+    demoCompletionsCount: Int,
+    realCompletionsCount: Int,
+    databaseErrorMessage: String?,
     availableProtocols: List<DemoProtocolConfig>,
     onSelectProtocol: (DemoProtocolConfig) -> Unit,
+    onSelectDailySlot: (DailySlotWithCompletion) -> Unit,
+    onZeroSlotDemoModeChange: (Boolean) -> Unit,
     onStartDemo: () -> Unit,
     onPauseDemo: () -> Unit,
     onResumeDemo: () -> Unit,
@@ -137,6 +159,8 @@ fun TechCheckScreen(
     onConfirmStopDemo: () -> Unit,
     onResetDemo: () -> Unit,
     onPlaySample: (SignalType) -> Unit,
+    onSoundPackChange: (SoundPack) -> Unit,
+    onMetronomeTickStyleChange: (MetronomeTickStyle) -> Unit,
     onSoundEnabledChange: (Boolean) -> Unit,
     onVibrationEnabledChange: (Boolean) -> Unit,
     onMetronomeEnabledChange: (Boolean) -> Unit,
@@ -242,6 +266,8 @@ fun TechCheckScreen(
                         hardwareStatus = hardwareStatus,
                         isWakeLockHeld = isWakeLockHeld,
                         isServiceForeground = isServiceForeground,
+                        dailySlots = dailySlots,
+                        isZeroSlotDemoMode = isZeroSlotDemoMode,
                         availableProtocols = availableProtocols,
                         onSelectProtocol = onSelectProtocol,
                         onStartDemo = onStartDemo,
@@ -250,18 +276,31 @@ fun TechCheckScreen(
                         onRequestStopDemo = onRequestStopDemo,
                         onResetDemo = onResetDemo
                     )
-                    NotificationAndHardwareCard(
-                        hardwareStatus = hardwareStatus,
-                        onRefreshHardware = onRefreshHardware
+                    DailyPlanPersistenceCard(
+                        snapshot = snapshot,
+                        dailySlots = dailySlots,
+                        isZeroSlotDemoMode = isZeroSlotDemoMode,
+                        demoCompletionsCount = demoCompletionsCount,
+                        realCompletionsCount = realCompletionsCount,
+                        databaseErrorMessage = databaseErrorMessage,
+                        onSelectDailySlot = onSelectDailySlot,
+                        onZeroSlotDemoModeChange = onZeroSlotDemoModeChange
                     )
                     SignalSettingsAndSamplesCard(
+                        snapshot = snapshot,
                         settings = settings,
+                        onSoundPackChange = onSoundPackChange,
+                        onMetronomeTickStyleChange = onMetronomeTickStyleChange,
                         onSoundEnabledChange = onSoundEnabledChange,
                         onVibrationEnabledChange = onVibrationEnabledChange,
                         onMetronomeEnabledChange = onMetronomeEnabledChange,
                         onSignalVolumeChange = onSignalVolumeChange,
                         onMetronomeVolumeChange = onMetronomeVolumeChange,
                         onPlaySample = onPlaySample
+                    )
+                    NotificationAndHardwareCard(
+                        hardwareStatus = hardwareStatus,
+                        onRefreshHardware = onRefreshHardware
                     )
                     EventLogCard(
                         eventLog = eventLog,
@@ -389,6 +428,8 @@ private fun ActiveTimerBenchCard(
     hardwareStatus: AudioHardwareStatus,
     isWakeLockHeld: Boolean,
     isServiceForeground: Boolean,
+    dailySlots: List<DailySlotWithCompletion>,
+    isZeroSlotDemoMode: Boolean,
     availableProtocols: List<DemoProtocolConfig>,
     onSelectProtocol: (DemoProtocolConfig) -> Unit,
     onStartDemo: () -> Unit,
@@ -397,6 +438,8 @@ private fun ActiveTimerBenchCard(
     onRequestStopDemo: () -> Unit,
     onResetDemo: () -> Unit
 ) {
+    val selectedSlotCompleted = dailySlots.any { it.slot.id == snapshot.protocol.id && it.isCompleted }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -452,10 +495,11 @@ private fun ActiveTimerBenchCard(
                 }
             }
 
-            // Большое кольцо фазы (ТЗ п. 5, п. 7)
+            // Большое плавное кольцо фазы (ТЗ п. 5, п. 7 + плавное движение от единого монотонного источника)
             PhaseRingIndicator(snapshot = snapshot)
 
             // Заголовок текущей команды (объявляется TalkBack только при смене фазы/состояния, а не каждую секунду)
+            // Меняется мгновенно в точный момент перехода фазы вместе со звуковым сигналом
             Text(
                 text = snapshot.headlineCommandRu,
                 style = MaterialTheme.typography.headlineSmall,
@@ -472,7 +516,7 @@ private fun ActiveTimerBenchCard(
                     .testTag("phase_headline")
             )
 
-            // Счётчик повторений и оставшееся активное время подхода
+            // Счётчик повторений и мелкая строка общего остатка активного времени подхода
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
@@ -498,7 +542,7 @@ private fun ActiveTimerBenchCard(
                         color = DawnTextSecondary
                     )
                     Text(
-                        text = formatSecondsTenths(snapshot.remainingActiveMs),
+                        text = formatWholeSeconds(snapshot.remainingActiveMs),
                         style = MaterialTheme.typography.titleMedium,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.SemiBold,
@@ -506,6 +550,17 @@ private fun ActiveTimerBenchCard(
                         modifier = Modifier.testTag("remaining_active_time")
                     )
                 }
+            }
+
+            // Информация о зафиксированном звуковом наборе для активной/приостановленной попытки
+            if (snapshot.isActiveOrPaused) {
+                Text(
+                    text = "Звуковой набор попытки: «${snapshot.soundPackSnapshot.titleRu}» · Метроном: «${snapshot.metronomeStyleSnapshot.titleRu}» · Дата старта: ${snapshot.startDate}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = DawnTextSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.testTag("active_run_snapshot_info")
+                )
             }
 
             // Причина паузы или внешнего прерывания
@@ -528,8 +583,8 @@ private fun ActiveTimerBenchCard(
                 }
             }
 
-            // Выбор тестовой последовательности (доступен, когда нет активного запуска)
-            if (!snapshot.isActiveOrPaused) {
+            // Выбор тестовой последовательности (когда нет активного запуска и не выбран режим N=0)
+            if (!snapshot.isActiveOrPaused && !isZeroSlotDemoMode && dailySlots.isEmpty()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -584,6 +639,7 @@ private fun ActiveTimerBenchCard(
                     ) {
                         Button(
                             onClick = onStartDemo,
+                            enabled = !isZeroSlotDemoMode && !selectedSlotCompleted,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = DawnPrimaryAccent,
                                 contentColor = DawnOnPrimaryAccent
@@ -599,7 +655,11 @@ private fun ActiveTimerBenchCard(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Старт демо-сессии",
+                                text = when {
+                                    isZeroSlotDemoMode -> "Сегодня без тренировок"
+                                    selectedSlotCompleted -> "Слот уже зачтён ✓"
+                                    else -> "Старт демо-сессии"
+                                },
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
@@ -730,22 +790,64 @@ private fun ActiveTimerBenchCard(
     }
 }
 
+/**
+ * Плавный индикатор фазы:
+ * - Непрерывное движение кольца во время видимой активной сессии (`PREPARING` / `RUNNING`)
+ *   от того же единственного монотонного источника `SystemClock.elapsedRealtime()`.
+ * - Цифры показывают только целые секунды без десятых долей и имеют фиксированную ширину (`tnum` + `Monospace`),
+ *   чтобы числа не прыгали при смене цифр.
+ * - Цвет кольца мягко переходит за 180 мс, тогда как текст фазы и звуковой сигнал меняются мгновенно.
+ * - При паузе кольцо останавливается мгновенно без инерции; при смене фазы нет обратного пролёта через весь круг.
+ * - Учитывает системное отключение анимаций (`ValueAnimator.areAnimatorsEnabled()`) и прекращает кадровые
+ *   обновления, когда экран скрыт или сессия не активна.
+ */
 @Composable
 private fun PhaseRingIndicator(snapshot: PhaseEngineSnapshot) {
-    val progress = when (snapshot.status) {
-        RunStatus.IDLE -> 1f
-        RunStatus.PREPARING -> (snapshot.prepRemainingMs.toFloat() / 3_000f).coerceIn(0f, 1f)
-        RunStatus.RUNNING,
-        RunStatus.PAUSED,
-        RunStatus.INTERRUPTED -> {
-            val total = snapshot.phaseDurationMs.coerceAtLeast(1L).toFloat()
-            (snapshot.phaseRemainingMs.toFloat() / total).coerceIn(0f, 1f)
-        }
-        RunStatus.COMPLETED,
-        RunStatus.STOPPED -> 0f
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
+    val isScreenVisible = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
+    val animationsEnabled = remember(snapshot.status, snapshot.currentPhase) {
+        runCatching { ValueAnimator.areAnimatorsEnabled() }.getOrDefault(true)
     }
 
-    val ringColor = when (snapshot.status) {
+    var frameElapsedRealtimeMs by remember(
+        snapshot.status,
+        snapshot.currentPhase,
+        snapshot.currentRepetition,
+        snapshot.snapshotElapsedRealtimeMs
+    ) {
+        mutableLongStateOf(snapshot.snapshotElapsedRealtimeMs)
+    }
+
+    // Кадровый цикл работает ТОЛЬКО когда экран видим, сессия активна и анимации разрешены системой
+    LaunchedEffect(
+        isScreenVisible,
+        snapshot.isRunningOrPreparing,
+        animationsEnabled,
+        snapshot.snapshotElapsedRealtimeMs
+    ) {
+        if (isScreenVisible && snapshot.isRunningOrPreparing && animationsEnabled) {
+            frameElapsedRealtimeMs = SystemClock.elapsedRealtime()
+            while (isActive) {
+                withInfiniteAnimationFrameMillis {
+                    frameElapsedRealtimeMs = SystemClock.elapsedRealtime()
+                }
+            }
+        } else {
+            frameElapsedRealtimeMs = snapshot.snapshotElapsedRealtimeMs
+        }
+    }
+
+    val effectiveElapsedMs = if (isScreenVisible && snapshot.isRunningOrPreparing && animationsEnabled) {
+        frameElapsedRealtimeMs
+    } else {
+        snapshot.snapshotElapsedRealtimeMs
+    }
+
+    val progress = snapshot.computeVisualRingProgress(effectiveElapsedMs)
+    val displaySeconds = snapshot.computeDisplayWholeSeconds(effectiveElapsedMs)
+
+    val targetRingColor = when (snapshot.status) {
         RunStatus.PREPARING -> DawnWarningAccent
         RunStatus.RUNNING -> if (snapshot.currentPhase == PhaseType.CONTRACTION) DawnPrimaryAccent else DawnSecondaryAccent
         RunStatus.PAUSED, RunStatus.INTERRUPTED -> DawnWarningAccent
@@ -753,17 +855,17 @@ private fun PhaseRingIndicator(snapshot: PhaseEngineSnapshot) {
         else -> DawnOutline
     }
 
-    val displayMs = when (snapshot.status) {
-        RunStatus.PREPARING -> snapshot.prepRemainingMs
-        else -> snapshot.phaseRemainingMs
-    }
-    val displaySeconds = ((displayMs + 999L) / 1000L).coerceAtLeast(0L)
+    val animatedRingColor by animateColorAsState(
+        targetValue = targetRingColor,
+        animationSpec = tween(durationMillis = if (animationsEnabled) 180 else 0),
+        label = "phase_ring_color_transition"
+    )
 
     // Важно по ТЗ п. 4: не озвучивать каждое обновление секунды через TalkBack
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(188.dp)
+            .size(196.dp)
             .testTag("phase_ring_box")
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -783,7 +885,7 @@ private fun PhaseRingIndicator(snapshot: PhaseEngineSnapshot) {
             )
 
             drawArc(
-                color = ringColor,
+                color = animatedRingColor,
                 startAngle = -90f,
                 sweepAngle = 360f * progress,
                 useCenter = false,
@@ -795,19 +897,495 @@ private fun PhaseRingIndicator(snapshot: PhaseEngineSnapshot) {
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "$displaySeconds с",
-                style = MaterialTheme.typography.displaySmall,
+                text = String.format(Locale.US, "%d с", displaySeconds),
+                style = MaterialTheme.typography.displayMedium.copy(
+                    fontFeatureSettings = "tnum"
+                ),
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
                 color = DawnTextPrimary,
-                modifier = Modifier.testTag("phase_remaining_seconds")
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .widthIn(min = 116.dp)
+                    .testTag("phase_remaining_seconds")
             )
             Text(
-                text = formatSecondsTenths(displayMs),
+                text = when (snapshot.status) {
+                    RunStatus.PREPARING -> "подготовка"
+                    RunStatus.RUNNING -> if (snapshot.currentPhase == PhaseType.CONTRACTION) "сокращение" else "расслабление"
+                    RunStatus.PAUSED, RunStatus.INTERRUPTED -> "на паузе"
+                    RunStatus.COMPLETED -> "выполнено"
+                    RunStatus.STOPPED -> "остановлено"
+                    RunStatus.IDLE -> "ожидание"
+                },
                 style = MaterialTheme.typography.labelMedium,
-                fontFamily = FontFamily.Monospace,
                 color = DawnTextSecondary
             )
+        }
+    }
+}
+
+@Composable
+private fun DailyPlanPersistenceCard(
+    snapshot: PhaseEngineSnapshot,
+    dailySlots: List<DailySlotWithCompletion>,
+    isZeroSlotDemoMode: Boolean,
+    demoCompletionsCount: Int,
+    realCompletionsCount: Int,
+    databaseErrorMessage: String?,
+    onSelectDailySlot: (DailySlotWithCompletion) -> Unit,
+    onZeroSlotDemoModeChange: (Boolean) -> Unit
+) {
+    val completedToday = dailySlots.count { it.isCompleted }
+    val totalToday = dailySlots.size
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("daily_plan_persistence_card"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DawnSurface)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.Storage,
+                    contentDescription = null,
+                    tint = DawnPrimaryAccent,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Этап 2 · Дневной план и база Room",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = DawnTextPrimary,
+                    modifier = Modifier.semantics { heading() }
+                )
+            }
+
+            if (databaseErrorMessage != null) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("db_error_banner"),
+                    shape = RoundedCornerShape(12.dp),
+                    color = DawnErrorAccent.copy(alpha = 0.16f)
+                ) {
+                    Text(
+                        text = databaseErrorMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = DawnErrorAccent,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+
+            // Сводка «Сегодня X из N» или «Сегодня без тренировок» при N=0 (ТЗ п. 5, п. 6)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = DawnSurfaceVariant
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (totalToday == 0) {
+                        Text(
+                            text = "Сегодня без тренировок",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = DawnSecondaryAccent,
+                            modifier = Modifier.testTag("zero_slots_banner")
+                        )
+                        Text(
+                            text = "В активном плане на сегодня назначено 0 подходов (проверка переменного числа слотов N=0 без ошибки деления на ноль).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = DawnTextSecondary
+                        )
+                    } else {
+                        Text(
+                            text = "Сегодня $completedToday из $totalToday",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (completedToday == totalToday) DawnSuccessAccent else DawnPrimaryAccent,
+                            modifier = Modifier.testTag("daily_plan_progress_title")
+                        )
+                        Text(
+                            text = "Завершённые слоты защищены уникальным индексом Room (повторный зачёт в ту же дату невозможен).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = DawnTextSecondary
+                        )
+                    }
+                }
+            }
+
+            // Список слотов дневного плана
+            if (dailySlots.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    dailySlots.forEach { item ->
+                        val isSelected = item.slot.id == snapshot.protocol.id
+                        val isCompleted = item.isCompleted
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .border(
+                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                    color = when {
+                                        isCompleted -> DawnSuccessAccent.copy(alpha = 0.7f)
+                                        isSelected -> DawnPrimaryAccent
+                                        else -> DawnOutline.copy(alpha = 0.4f)
+                                    },
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .clickable(enabled = !snapshot.isActiveOrPaused) {
+                                    onSelectDailySlot(item)
+                                }
+                                .testTag("daily_slot_${item.slot.sortOrder}"),
+                            color = DawnSurfaceVariant.copy(alpha = if (isSelected) 0.85f else 0.45f)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 52.dp)
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    if (isCompleted) {
+                                        Icon(
+                                            imageVector = Icons.Filled.CheckCircle,
+                                            contentDescription = "Слот выполнен",
+                                            tint = DawnSuccessAccent,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    } else {
+                                        RadioButton(
+                                            selected = isSelected,
+                                            onClick = {
+                                                if (!snapshot.isActiveOrPaused) {
+                                                    onSelectDailySlot(item)
+                                                }
+                                            },
+                                            colors = RadioButtonDefaults.colors(
+                                                selectedColor = DawnPrimaryAccent,
+                                                unselectedColor = DawnTextSecondary
+                                            ),
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = item.slot.titleRu,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                            color = DawnTextPrimary
+                                        )
+                                        val slotActiveSec =
+                                            ((item.slot.contractionMs + item.slot.relaxationMs) * item.slot.repetitions) / 1000L
+                                        Text(
+                                            text = if (isCompleted) {
+                                                "Зачтено в Room · Активное время: $slotActiveSec с"
+                                            } else {
+                                                "Ожидает выполнения · Контрольные точки каждые 5 с"
+                                            },
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (isCompleted) DawnSuccessAccent else DawnTextSecondary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Переключатель тестового режима N=0 («Сегодня без тренировок»)
+            SettingSwitchRow(
+                label = "Проверить режим N=0 («Сегодня без тренировок»)",
+                checked = isZeroSlotDemoMode,
+                onCheckedChange = onZeroSlotDemoModeChange,
+                tag = "switch_zero_slot_mode"
+            )
+
+            Text(
+                text = "Разделение записей в Room: Демо-зачётов = $demoCompletionsCount · Реальных зачётов = $realCompletionsCount (признак isDemo)",
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                color = DawnTextSecondary,
+                modifier = Modifier.testTag("room_demo_vs_real_counter")
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SignalSettingsAndSamplesCard(
+    snapshot: PhaseEngineSnapshot,
+    settings: BenchSignalSettings,
+    onSoundPackChange: (SoundPack) -> Unit,
+    onMetronomeTickStyleChange: (MetronomeTickStyle) -> Unit,
+    onSoundEnabledChange: (Boolean) -> Unit,
+    onVibrationEnabledChange: (Boolean) -> Unit,
+    onMetronomeEnabledChange: (Boolean) -> Unit,
+    onSignalVolumeChange: (Float) -> Unit,
+    onMetronomeVolumeChange: (Float) -> Unit,
+    onPlaySample: (SignalType) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("signal_settings_card"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DawnSurface)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.VolumeUp,
+                    contentDescription = null,
+                    tint = DawnSecondaryAccent,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Звуковые наборы, метроном и образцы (DataStore)",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = DawnTextPrimary,
+                    modifier = Modifier.semantics { heading() }
+                )
+            }
+
+            // Выбор одного из 3 локальных звуковых наборов: «Мягкий», «Колокольчики», «Чёткий»
+            Text(
+                text = "Звуковой набор команд фаз:",
+                style = MaterialTheme.typography.labelLarge,
+                color = DawnTextPrimary
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                SoundPack.entries.forEach { pack ->
+                    val selected = settings.soundPack == pack
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .border(
+                                width = if (selected) 1.5.dp else 1.dp,
+                                color = if (selected) DawnPrimaryAccent else DawnOutline.copy(alpha = 0.4f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .clickable { onSoundPackChange(pack) }
+                            .testTag("sound_pack_${pack.id}"),
+                        color = DawnSurfaceVariant.copy(alpha = if (selected) 0.85f else 0.4f)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selected,
+                                onClick = { onSoundPackChange(pack) },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = DawnPrimaryAccent,
+                                    unselectedColor = DawnTextSecondary
+                                )
+                            )
+                            Column {
+                                Text(
+                                    text = pack.titleRu,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = DawnTextPrimary
+                                )
+                                Text(
+                                    text = pack.descriptionRu,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = DawnTextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Пояснение: смена звукового набора применяется со следующего подхода
+            if (snapshot.isActiveOrPaused && settings.soundPack != snapshot.soundPackSnapshot) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("sound_pack_next_run_notice"),
+                    shape = RoundedCornerShape(10.dp),
+                    color = DawnWarningAccent.copy(alpha = 0.16f)
+                ) {
+                    Text(
+                        text = "В текущем подходе остаётся набор «${snapshot.soundPackSnapshot.titleRu}». Выбранный набор «${settings.soundPack.titleRu}» применится со следующего подхода.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = DawnWarningAccent,
+                        modifier = Modifier.padding(10.dp)
+                    )
+                }
+            } else {
+                Text(
+                    text = "Выбор сохраняется в DataStore. Изменение набора во время начатой попытки применяется со следующего подхода.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = DawnTextSecondary,
+                    modifier = Modifier.testTag("sound_pack_rule_caption")
+                )
+            }
+
+            // Выбор варианта тика метронома: «Мягкий» или «Чёткий»
+            Text(
+                text = "Вариант тика метронома внутри фазы:",
+                style = MaterialTheme.typography.labelLarge,
+                color = DawnTextPrimary
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                MetronomeTickStyle.entries.forEach { style ->
+                    val selected = settings.metronomeTickStyle == style
+                    OutlinedButton(
+                        onClick = { onMetronomeTickStyleChange(style) },
+                        border = androidx.compose.foundation.BorderStroke(
+                            width = if (selected) 1.5.dp else 1.dp,
+                            color = if (selected) DawnSecondaryAccent else DawnOutline
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .testTag("metronome_style_${style.id}")
+                    ) {
+                        Text(
+                            text = "Тик: ${style.titleRu}",
+                            color = if (selected) DawnSecondaryAccent else DawnTextPrimary,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                }
+            }
+
+            SettingSwitchRow(
+                label = "Звуковые сигналы фаз",
+                checked = settings.soundEnabled,
+                onCheckedChange = onSoundEnabledChange,
+                tag = "switch_sound_enabled"
+            )
+            SettingSwitchRow(
+                label = "Вибрация (тактильные сигналы)",
+                checked = settings.vibrationEnabled,
+                onCheckedChange = onVibrationEnabledChange,
+                tag = "switch_vibration_enabled"
+            )
+            SettingSwitchRow(
+                label = "Тихий метроном внутри фазы",
+                checked = settings.metronomeEnabled,
+                onCheckedChange = onMetronomeEnabledChange,
+                tag = "switch_metronome_enabled"
+            )
+
+            // Отдельные уровни громкости внутри приложения (не меняют системную громкость телефона, ТЗ п. 8)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = "Уровень громкости сигналов (внутри приложения): ${(settings.signalVolume * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = DawnTextSecondary
+                )
+                Slider(
+                    value = settings.signalVolume,
+                    onValueChange = onSignalVolumeChange,
+                    colors = SliderDefaults.colors(
+                        thumbColor = DawnPrimaryAccent,
+                        activeTrackColor = DawnPrimaryAccent
+                    ),
+                    modifier = Modifier.testTag("slider_signal_volume")
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = "Уровень тихого метронома (внутри приложения): ${(settings.metronomeVolume * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = DawnTextSecondary
+                )
+                Slider(
+                    value = settings.metronomeVolume,
+                    onValueChange = onMetronomeVolumeChange,
+                    colors = SliderDefaults.colors(
+                        thumbColor = DawnSecondaryAccent,
+                        activeTrackColor = DawnSecondaryAccent
+                    ),
+                    modifier = Modifier.testTag("slider_metronome_volume")
+                )
+            }
+
+            Text(
+                text = if (snapshot.isRunningOrPreparing) {
+                    "Образцы временно заблокированы во время активной фазы, чтобы не мешать командам:"
+                } else {
+                    "Прослушать образцы выбранного набора «${settings.soundPack.titleRu}»:"
+                },
+                style = MaterialTheme.typography.labelLarge,
+                color = if (snapshot.isRunningOrPreparing) DawnWarningAccent else DawnTextPrimary
+            )
+
+            val samplesEnabled = !snapshot.isRunningOrPreparing
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SampleSignalChip(
+                    label = "Сокращение",
+                    tag = "sample_contraction",
+                    enabled = samplesEnabled,
+                    onClick = { onPlaySample(SignalType.CONTRACTION) }
+                )
+                SampleSignalChip(
+                    label = "Расслабление",
+                    tag = "sample_relaxation",
+                    enabled = samplesEnabled,
+                    onClick = { onPlaySample(SignalType.RELAXATION) }
+                )
+                SampleSignalChip(
+                    label = "Подход завершён",
+                    tag = "sample_set_completed",
+                    enabled = samplesEnabled,
+                    onClick = { onPlaySample(SignalType.SET_COMPLETED) }
+                )
+                SampleSignalChip(
+                    label = "Группа завершена",
+                    tag = "sample_group_completed",
+                    enabled = samplesEnabled,
+                    onClick = { onPlaySample(SignalType.GROUP_COMPLETED) }
+                )
+                SampleSignalChip(
+                    label = "Тик метронома",
+                    tag = "sample_metronome",
+                    enabled = samplesEnabled,
+                    onClick = { onPlaySample(SignalType.METRONOME_TICK) }
+                )
+            }
         }
     }
 }
@@ -913,140 +1491,6 @@ private fun NotificationAndHardwareCard(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SignalSettingsAndSamplesCard(
-    settings: BenchSignalSettings,
-    onSoundEnabledChange: (Boolean) -> Unit,
-    onVibrationEnabledChange: (Boolean) -> Unit,
-    onMetronomeEnabledChange: (Boolean) -> Unit,
-    onSignalVolumeChange: (Float) -> Unit,
-    onMetronomeVolumeChange: (Float) -> Unit,
-    onPlaySample: (SignalType) -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("signal_settings_card"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = DawnSurface)
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Filled.VolumeUp,
-                    contentDescription = null,
-                    tint = DawnSecondaryAccent,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Звук, вибрация и образцы сигналов",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = DawnTextPrimary,
-                    modifier = Modifier.semantics { heading() }
-                )
-            }
-
-            SettingSwitchRow(
-                label = "Звуковые сигналы фаз",
-                checked = settings.soundEnabled,
-                onCheckedChange = onSoundEnabledChange,
-                tag = "switch_sound_enabled"
-            )
-            SettingSwitchRow(
-                label = "Вибрация (тактильные сигналы)",
-                checked = settings.vibrationEnabled,
-                onCheckedChange = onVibrationEnabledChange,
-                tag = "switch_vibration_enabled"
-            )
-            SettingSwitchRow(
-                label = "Тихий метроном внутри фазы",
-                checked = settings.metronomeEnabled,
-                onCheckedChange = onMetronomeEnabledChange,
-                tag = "switch_metronome_enabled"
-            )
-
-            // Отдельные уровни громкости внутри приложения (не меняют системную громкость телефона, ТЗ п. 8)
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = "Уровень громкости сигналов (внутри приложения): ${(settings.signalVolume * 100).toInt()}%",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = DawnTextSecondary
-                )
-                Slider(
-                    value = settings.signalVolume,
-                    onValueChange = onSignalVolumeChange,
-                    colors = SliderDefaults.colors(
-                        thumbColor = DawnPrimaryAccent,
-                        activeTrackColor = DawnPrimaryAccent
-                    ),
-                    modifier = Modifier.testTag("slider_signal_volume")
-                )
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = "Уровень тихого метронома (внутри приложения): ${(settings.metronomeVolume * 100).toInt()}%",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = DawnTextSecondary
-                )
-                Slider(
-                    value = settings.metronomeVolume,
-                    onValueChange = onMetronomeVolumeChange,
-                    colors = SliderDefaults.colors(
-                        thumbColor = DawnSecondaryAccent,
-                        activeTrackColor = DawnSecondaryAccent
-                    ),
-                    modifier = Modifier.testTag("slider_metronome_volume")
-                )
-            }
-
-            Text(
-                text = "Прослушать образцы сигналов (ТЗ п. 8):",
-                style = MaterialTheme.typography.labelLarge,
-                color = DawnTextPrimary
-            )
-
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SampleSignalChip(
-                    label = "Сокращение",
-                    tag = "sample_contraction",
-                    onClick = { onPlaySample(SignalType.CONTRACTION) }
-                )
-                SampleSignalChip(
-                    label = "Расслабление",
-                    tag = "sample_relaxation",
-                    onClick = { onPlaySample(SignalType.RELAXATION) }
-                )
-                SampleSignalChip(
-                    label = "Подход завершён",
-                    tag = "sample_set_completed",
-                    onClick = { onPlaySample(SignalType.SET_COMPLETED) }
-                )
-                SampleSignalChip(
-                    label = "Группа завершена",
-                    tag = "sample_group_completed",
-                    onClick = { onPlaySample(SignalType.GROUP_COMPLETED) }
-                )
-                SampleSignalChip(
-                    label = "Тик метронома",
-                    tag = "sample_metronome",
-                    onClick = { onPlaySample(SignalType.METRONOME_TICK) }
-                )
-            }
-        }
-    }
-}
-
 @Composable
 private fun SettingSwitchRow(
     label: String,
@@ -1079,10 +1523,12 @@ private fun SettingSwitchRow(
 private fun SampleSignalChip(
     label: String,
     tag: String,
+    enabled: Boolean,
     onClick: () -> Unit
 ) {
     OutlinedButton(
         onClick = onClick,
+        enabled = enabled,
         modifier = Modifier
             .heightIn(min = 48.dp)
             .testTag(tag)
@@ -1090,14 +1536,14 @@ private fun SampleSignalChip(
         Icon(
             imageVector = Icons.Filled.Vibration,
             contentDescription = null,
-            tint = DawnPrimaryAccent,
+            tint = if (enabled) DawnPrimaryAccent else DawnTextSecondary,
             modifier = Modifier.size(16.dp)
         )
         Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
-            color = DawnTextPrimary
+            color = if (enabled) DawnTextPrimary else DawnTextSecondary
         )
     }
 }
@@ -1143,7 +1589,7 @@ private fun EventLogCard(
                                 "[+${it.elapsedMs}ms][${it.category}] ${it.message}"
                             }
                             clipboard?.setPrimaryClip(
-                                ClipData.newPlainText("Velaris 0B Log", formatted)
+                                ClipData.newPlainText("Velaris S2 Log", formatted)
                             )
                         },
                         modifier = Modifier
@@ -1216,11 +1662,10 @@ private fun checkNotificationPermission(context: Context): Boolean {
     }
 }
 
-private fun formatSecondsTenths(ms: Long): String {
+private fun formatWholeSeconds(ms: Long): String {
     val clamped = ms.coerceAtLeast(0L)
-    val seconds = clamped / 1000L
-    val tenths = (clamped % 1000L) / 100L
-    return String.format(Locale.US, "%d.%d с", seconds, tenths)
+    val seconds = if (clamped == 0L) 0L else ((clamped + 999L) / 1000L)
+    return String.format(Locale.US, "%d с", seconds)
 }
 
 @Composable
