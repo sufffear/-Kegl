@@ -150,3 +150,104 @@ data class DailySlotWithCompletion(
     val isCompleted: Boolean
         get() = completion != null
 }
+
+/**
+ * Метаданные импортированного локального линейного романа в Markdown (Update v1.1 п. 5–7).
+ * Исходные байты хранятся без изменений во внутреннем хранилище по пути `internalFilePath`
+ * и проверяются по контрольной сумме `sha256Hex`; производные блоки для отображения хранятся отдельно.
+ */
+@Entity(tableName = "imported_novels")
+data class ImportedNovelEntity(
+    @PrimaryKey val slotKey: String = ACTIVE_SLOT_KEY,
+    val bookId: String,
+    val fileName: String,
+    val explicitTitle: String?,
+    val displayTitle: String,
+    val sha256Hex: String,
+    val byteSize: Int,
+    val internalFilePath: String,
+    val actHeadingLevel: Int,
+    val chapterHeadingLevel: Int,
+    val actCount: Int,
+    val chapterCount: Int,
+    val totalBlockCount: Int,
+    val importedAtEpochMs: Long
+) {
+    companion object {
+        const val ACTIVE_SLOT_KEY = "ACTIVE_NOVEL"
+    }
+}
+
+/**
+ * Производная запись главы импортированного романа для быстрой навигации акт → глава.
+ */
+@Entity(
+    tableName = "novel_chapters",
+    indices = [Index(value = ["bookId", "chapterNumber"])]
+)
+data class NovelChapterEntity(
+    @PrimaryKey val chapterId: String,
+    val bookId: String,
+    val chapterNumber: Int,
+    val actId: String,
+    val actNumber: Int,
+    val actTitle: String,
+    val title: String,
+    val blockCount: Int,
+    val stepCount: Int
+)
+
+/**
+ * Производный блок отображения внутри главы импортированного романа.
+ * Хранится отдельно от неизменного файла исходных байтов.
+ */
+@Entity(
+    tableName = "novel_blocks",
+    indices = [
+        Index(value = ["bookId", "chapterId", "orderInChapter"]),
+        Index(value = ["bookId", "globalOrder"])
+    ]
+)
+data class NovelBlockEntity(
+    @PrimaryKey val blockId: String,
+    val bookId: String,
+    val chapterId: String,
+    val orderInChapter: Int,
+    val globalOrder: Int,
+    val stepIndex: Int,
+    val stepId: String,
+    val blockType: String,
+    val subheadingLevel: Int,
+    val plainText: String,
+    val inlineSpansEncoded: String
+)
+
+/**
+ * Сохранённая позиция чтения для импортированного линейного романа (Update v1.1 п. 7).
+ * Хранит стабильные ID главы и блока (`currentChapterId`, `currentBlockId`) и индекс шага (`currentStepIndex`),
+ * поэтому переключение между режимами «Книга» и «Пошаговый» возвращает читателя к тому же самому фрагменту.
+ */
+@Entity(tableName = "novel_reading_progress")
+data class NovelReadingProgressEntity(
+    @PrimaryKey val bookId: String,
+    val currentActId: String,
+    val currentChapterId: String,
+    val currentBlockId: String,
+    val currentStepIndex: Int,
+    val readerModeId: String,
+    val isCompleted: Boolean,
+    val updatedAtEpochMs: Long
+)
+
+/**
+ * Устаревшая таблица схемы v2 (сохранена для обратной совместимости миграций `MIGRATION_1_2` -> `MIGRATION_2_3`).
+ */
+@Entity(tableName = "reading_progress")
+data class ReadingProgressEntity(
+    @PrimaryKey val storyId: String,
+    val currentChapterId: String,
+    val currentNodeId: String,
+    val readerModeId: String,
+    val isCompleted: Boolean,
+    val updatedAtEpochMs: Long
+)

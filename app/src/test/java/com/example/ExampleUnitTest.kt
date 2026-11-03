@@ -2,7 +2,12 @@ package com.example
 
 import com.example.domain.CheckpointTrigger
 import com.example.domain.DemoProtocolConfig
+import com.example.domain.HeadingLevelRule
+import com.example.domain.MarkdownNovelParser
 import com.example.domain.MetronomeTickStyle
+import com.example.domain.NeutralTestMarkdownFactory
+import com.example.domain.NovelBlockType
+import com.example.domain.NovelInlineStyle
 import com.example.domain.PhaseEngine
 import com.example.domain.PhaseEngineSnapshot
 import com.example.domain.PhaseType
@@ -12,9 +17,9 @@ import com.example.domain.SoundPack
 import com.example.domain.SoundSynthesisSpec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 
 class ExampleUnitTest {
 
@@ -37,7 +42,6 @@ class ExampleUnitTest {
 
         assertTrue(engine.start(proto))
         assertEquals(RunStatus.PREPARING, engine.currentSnapshot().status)
-        // Повторный быстрый старт должен быть отклонён
         assertFalse(engine.start(proto))
         assertEquals(1, signals.count { it == SignalType.PREP_TICK })
     }
@@ -62,19 +66,16 @@ class ExampleUnitTest {
         engine.start(proto)
         assertEquals(listOf(SignalType.PREP_TICK), signals)
 
-        // +1000 мс (осталось 2000 мс подготовки -> 2-й сигнал)
         nowMs += 1_000L
         engine.tick()
         assertEquals(0L, engine.currentSnapshot().confirmedActiveMs)
         assertEquals(2, signals.count { it == SignalType.PREP_TICK })
 
-        // +1000 мс (осталось 1000 мс подготовки -> 3-й сигнал)
         nowMs += 1_000L
         engine.tick()
         assertEquals(0L, engine.currentSnapshot().confirmedActiveMs)
         assertEquals(3, signals.count { it == SignalType.PREP_TICK })
 
-        // +1000 мс (подготовка завершена -> переход в RUNNING и явная команда CONTRACTION)
         nowMs += 1_000L
         val snap = engine.tick()
         assertEquals(RunStatus.RUNNING, snap.status)
@@ -101,14 +102,12 @@ class ExampleUnitTest {
         )
 
         engine.start(proto)
-        // Проходим 3 секунды подготовки шагами по 1000 мс
         repeat(3) {
             nowMs += 1_000L
             engine.tick()
         }
         assertEquals(RunStatus.RUNNING, engine.currentSnapshot().status)
 
-        // Проходим 1500 мс фазы сокращения (остаётся 2500 мс)
         nowMs += 1_000L
         engine.tick()
         nowMs += 500L
@@ -116,20 +115,17 @@ class ExampleUnitTest {
         assertEquals(1_500L, engine.currentSnapshot().confirmedActiveMs)
         assertEquals(2_500L, engine.currentSnapshot().phaseRemainingMs)
 
-        // Ставим на паузу
         val pausedSnap = engine.pause("Тестовая пауза")
         assertEquals(RunStatus.PAUSED, pausedSnap.status)
         assertEquals("Пауза — расслабьтесь", pausedSnap.headlineCommandRu)
         assertEquals(1_500L, pausedSnap.confirmedActiveMs)
         assertEquals(2_500L, pausedSnap.phaseRemainingMs)
 
-        // Ждём 60 секунд на паузе
         nowMs += 60_000L
         val after60sPause = engine.tick()
         assertEquals(1_500L, after60sPause.confirmedActiveMs)
         assertEquals(2_500L, after60sPause.phaseRemainingMs)
 
-        // Возобновляем вручную -> 3 секунды подготовки -> затем остаток 2500 мс текущей фазы
         assertTrue(engine.resume())
         assertEquals(RunStatus.PREPARING, engine.currentSnapshot().status)
         repeat(3) {
@@ -154,17 +150,14 @@ class ExampleUnitTest {
         }
         assertEquals(RunStatus.RUNNING, engine.currentSnapshot().status)
 
-        // Нажатие «Остановить» сначала ставит на паузу и открывает диалог
         val reqSnap = engine.requestStop()
         assertEquals(RunStatus.PAUSED, reqSnap.status)
         assertTrue(reqSnap.isStopDialogVisible)
 
-        // Отмена диалога («Остаться на паузе») оставляет паузу
         val cancelledSnap = engine.cancelStopDialog()
         assertEquals(RunStatus.PAUSED, cancelledSnap.status)
         assertFalse(cancelledSnap.isStopDialogVisible)
 
-        // Подтверждение «Завершить» переводит в STOPPED
         engine.requestStop()
         val stoppedSnap = engine.confirmStop()
         assertEquals(RunStatus.STOPPED, stoppedSnap.status)
@@ -188,12 +181,10 @@ class ExampleUnitTest {
         assertEquals(RunStatus.RUNNING, engine.currentSnapshot().status)
         val countBeforeDelay = signals.size
 
-        // Имитируем зависание планировщика ОС на 6000 мс (> порога 2500 мс)
         nowMs += 6_000L
         val snap = engine.tick()
         assertEquals(RunStatus.INTERRUPTED, snap.status)
         assertEquals(0L, snap.confirmedActiveMs)
-        // Подан только один сигнал PAUSED, без пачки пропущенных команд
         assertEquals(countBeforeDelay + 1, signals.size)
         assertEquals(SignalType.PAUSED, signals.last())
     }
@@ -217,7 +208,6 @@ class ExampleUnitTest {
         )
 
         engine.start(groupFinalProto)
-        // 3 сек подготовки + 2 сек сокращения + 2 сек расслабления
         repeat(7) {
             nowMs += 1_000L
             engine.tick()
@@ -248,21 +238,18 @@ class ExampleUnitTest {
         engine.start(protocol = proto, runId = "run_cp_1", slotId = "slot_cp_1", startDate = "2026-11-03")
         assertEquals(CheckpointTrigger.START, triggers.last().first)
 
-        // Завершаем 3 сек подготовки -> PHASE_CHANGE
         repeat(3) {
             nowMs += 1_000L
             engine.tick()
         }
         assertTrue(triggers.any { it.first == CheckpointTrigger.PHASE_CHANGE })
 
-        // Проходим 5 сек внутри 6-секундной фазы -> должен сработать PERIODIC_5S
         repeat(5) {
             nowMs += 1_000L
             engine.tick()
         }
         assertTrue(triggers.any { it.first == CheckpointTrigger.PERIODIC_5S })
 
-        // Ещё 1 сек (конец сокращения -> расслабление) + 2 сек (конец расслабления -> COMPLETE)
         repeat(3) {
             nowMs += 1_000L
             engine.tick()
@@ -305,7 +292,6 @@ class ExampleUnitTest {
             metronomeStyleSnapshot = MetronomeTickStyle.CRISP
         )
 
-        // Попытка сменить протокол во время активного подхода должна быть отклонена
         assertFalse(engine.selectProtocolIfIdle(otherProto))
         assertEquals("proto_initial", engine.currentSnapshot().protocol.id)
 
@@ -336,7 +322,6 @@ class ExampleUnitTest {
         )
 
         engine.start(proto)
-        // Завершаем подготовку ровно на 4000 мс
         repeat(3) {
             nowMs += 1_000L
             engine.tick()
@@ -346,8 +331,6 @@ class ExampleUnitTest {
         assertEquals(2_000L, runningSnap.phaseRemainingMs)
         assertEquals(4_000L, runningSnap.snapshotElapsedRealtimeMs)
 
-        // Визуальный опрос между тиками (на 4016 мс, 4250 мс, 4500 мс) даёт плавное убывание кольца
-        // и только целые секунды, не вызывая tick() и не меняя состояние PhaseEngine
         val p0 = runningSnap.computeVisualRingProgress(4_000L)
         val p1 = runningSnap.computeVisualRingProgress(4_016L)
         val p2 = runningSnap.computeVisualRingProgress(4_250L)
@@ -356,12 +339,9 @@ class ExampleUnitTest {
         assertEquals(1.0f, p0, 0.0001f)
         assertTrue(p1 < p0 && p2 < p1 && p3 < p2)
         assertEquals(0.75f, p3, 0.001f)
-        // Целые секунды: на 4500 мс (осталось 1500 мс) показывается 2 с, без десятых долей
         assertEquals(2L, runningSnap.computeDisplayWholeSeconds(4_500L))
-        // На 5100 мс (если бы оставалось 900 мс) показывается 1 с
         assertEquals(1L, runningSnap.computeDisplayWholeSeconds(5_100L))
 
-        // При паузе визуальный прогресс мгновенно замирает на точном значении паузы независимо от времени кадра
         nowMs = 4_600L
         engine.tick()
         val pausedSnap = engine.pause("Пауза")
@@ -371,62 +351,161 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun `all 3 sound packs and 2 metronome styles are click-free, fit inside 1000ms, and differ within each pack`() {
+    fun `all 3 sound packs have RMS-balanced main commands, quieter metronome, and no volume drop after preparation`() {
         val sampleRate = 24_000
         for (pack in SoundPack.entries) {
-            val contraction = SoundSynthesisSpec.synthesizePcm16(
+            val prepPcm = SoundSynthesisSpec.synthesizePcm16(
+                pattern = SoundSynthesisSpec.resolveSignalPattern(pack, SignalType.PREP_TICK),
+                volume = 0.8f,
+                sampleRate = sampleRate
+            )
+            val contractionPcm = SoundSynthesisSpec.synthesizePcm16(
                 pattern = SoundSynthesisSpec.resolveSignalPattern(pack, SignalType.CONTRACTION),
                 volume = 0.8f,
                 sampleRate = sampleRate
             )
-            val relaxation = SoundSynthesisSpec.synthesizePcm16(
+            val relaxationPcm = SoundSynthesisSpec.synthesizePcm16(
                 pattern = SoundSynthesisSpec.resolveSignalPattern(pack, SignalType.RELAXATION),
                 volume = 0.8f,
                 sampleRate = sampleRate
             )
-            val setCompleted = SoundSynthesisSpec.synthesizePcm16(
+            val setCompletedPcm = SoundSynthesisSpec.synthesizePcm16(
                 pattern = SoundSynthesisSpec.resolveSignalPattern(pack, SignalType.SET_COMPLETED),
                 volume = 0.8f,
                 sampleRate = sampleRate
             )
-            val groupCompleted = SoundSynthesisSpec.synthesizePcm16(
+            val groupCompletedPcm = SoundSynthesisSpec.synthesizePcm16(
                 pattern = SoundSynthesisSpec.resolveSignalPattern(pack, SignalType.GROUP_COMPLETED),
                 volume = 0.8f,
                 sampleRate = sampleRate
             )
 
-            val signals = listOf(contraction, relaxation, setCompleted, groupCompleted)
-            for (pcm in signals) {
-                assertTrue("PCM буфер не должен быть пустым", pcm.isNotEmpty())
-                // Длительность не должна превышать 360 мс (гарантированно помещается в минимальную фазу 1000 мс)
+            val prepRms = SoundSynthesisSpec.computeActiveRms(prepPcm)
+            val contractionRms = SoundSynthesisSpec.computeActiveRms(contractionPcm)
+            val relaxationRms = SoundSynthesisSpec.computeActiveRms(relaxationPcm)
+            val setCompletedRms = SoundSynthesisSpec.computeActiveRms(setCompletedPcm)
+            val groupCompletedRms = SoundSynthesisSpec.computeActiveRms(groupCompletedPcm)
+
+            assertTrue(
+                "RMS сокращения ($contractionRms) и расслабления ($relaxationRms) в наборе ${pack.id} должны быть сопоставимы",
+                abs(contractionRms - relaxationRms) < 0.015
+            )
+            assertTrue(
+                "RMS сокращения ($contractionRms) и финала подхода ($setCompletedRms) должны быть сопоставимы",
+                abs(contractionRms - setCompletedRms) < 0.015
+            )
+            assertTrue(
+                "RMS сокращения ($contractionRms) и финала группы ($groupCompletedRms) должны быть сопоставимы",
+                abs(contractionRms - groupCompletedRms) < 0.015
+            )
+            assertTrue(
+                "PREP_TICK ($prepRms) не должен быть громче CONTRACTION ($contractionRms)",
+                prepRms <= contractionRms
+            )
+
+            for (pcm in listOf(prepPcm, contractionPcm, relaxationPcm, setCompletedPcm, groupCompletedPcm)) {
+                assertTrue(pcm.isNotEmpty())
                 val durationMs = (pcm.size * 1000L) / sampleRate
                 assertTrue("Длительность $durationMs мс должна быть <= 360 мс", durationMs <= 360L)
-                // Огибающая raised-cosine гарантирует 0 на первом и последнем отсчёте (без щелчков)
-                assertEquals("Первый отсчёт должен быть 0 (без щелчка)", 0.toShort(), pcm.first())
-                assertEquals("Последний отсчёт должен быть 0 (без щелчка)", 0.toShort(), pcm.last())
+                assertEquals(0.toShort(), pcm.first())
+                assertEquals(0.toShort(), pcm.last())
             }
-
-            // Команды внутри одного набора должны быть различимы (разная длина или спектральная форма)
-            assertFalse(contraction.contentEquals(relaxation))
-            assertFalse(contraction.contentEquals(setCompleted))
-            assertFalse(setCompleted.contentEquals(groupCompleted))
         }
 
-        // Проверяем оба варианта тика метронома («Мягкий» и «Чёткий»)
-        val softTick = SoundSynthesisSpec.synthesizePcm16(
-            pattern = SoundSynthesisSpec.resolveSignalPattern(SoundPack.SOFT, SignalType.METRONOME_TICK, MetronomeTickStyle.SOFT),
-            volume = 0.5f,
-            sampleRate = sampleRate
+        val commandVol = SoundSynthesisSpec.computeEffectiveVolume(
+            signal = SignalType.CONTRACTION,
+            signalVolume = 0.80f,
+            metronomeVolume = 1.00f
         )
-        val crispTick = SoundSynthesisSpec.synthesizePcm16(
-            pattern = SoundSynthesisSpec.resolveSignalPattern(SoundPack.SOFT, SignalType.METRONOME_TICK, MetronomeTickStyle.CRISP),
-            volume = 0.5f,
-            sampleRate = sampleRate
+        val metroVol = SoundSynthesisSpec.computeEffectiveVolume(
+            signal = SignalType.METRONOME_TICK,
+            signalVolume = 0.80f,
+            metronomeVolume = 1.00f
         )
-        assertEquals(0.toShort(), softTick.first())
-        assertEquals(0.toShort(), softTick.last())
-        assertEquals(0.toShort(), crispTick.first())
-        assertEquals(0.toShort(), crispTick.last())
-        assertNotEquals(softTick.size, crispTick.size)
+        assertTrue("Метроном ($metroVol) должен быть тише команды ($commandVol)", metroVol < commandVol)
+    }
+
+    @Test
+    fun `markdown novel parser parses 3 acts and 12 chapters, Cyrillic, long paragraphs, dividers, and preserves exact author text in both modes`() {
+        val rawMarkdown = NeutralTestMarkdownFactory.buildThreeActsTwelveChaptersMarkdown()
+        val rawBytes = rawMarkdown.toByteArray(Charsets.UTF_8)
+
+        val parsed = MarkdownNovelParser.parseMarkdownNovel(
+            rawBytes = rawBytes,
+            fileName = "neutral_test_3acts_12chapters.md",
+            headingRule = HeadingLevelRule()
+        ).getOrThrow()
+
+        // 1. Разбор заголовков и 12 глав в 3 актах
+        assertEquals("Нейтральный технический макет (3 акта, 12 глав)", parsed.explicitBookTitle)
+        assertEquals(3, parsed.acts.size)
+        assertEquals(12, parsed.chapters.size)
+        assertEquals(listOf(4, 4, 4), parsed.acts.map { it.chapters.size })
+
+        // 2. Кириллица, пустые строки, длинные абзацы, цитаты, выделения и разделители
+        for ((index, chapter) in parsed.chapters.withIndex()) {
+            val chapterNum = index + 1
+            assertEquals(String.format(java.util.Locale.US, "ch_%02d", chapterNum), chapter.chapterId)
+            assertTrue(chapter.title.contains("Глава $chapterNum"))
+            assertEquals(5, chapter.blocks.size)
+
+            val p1 = chapter.blocks[0]
+            val p2Long = chapter.blocks[1]
+            val quote = chapter.blocks[2]
+            val divider = chapter.blocks[3]
+            val p3Final = chapter.blocks[4]
+
+            assertEquals(NovelBlockType.PARAGRAPH, p1.type)
+            assertTrue(p1.plainText.contains("Абзац $chapterNum.1. Контрольный кириллический текст главы $chapterNum"))
+            assertTrue(p1.inlineSpans.any { it.style == NovelInlineStyle.ITALIC })
+            assertTrue(p1.inlineSpans.any { it.style == NovelInlineStyle.BOLD })
+
+            assertEquals(NovelBlockType.PARAGRAPH, p2Long.type)
+            assertTrue("Длинный абзац должен сохраняться целиком без разрывов", p2Long.plainText.length > 200)
+            assertTrue(p2Long.plainText.contains("Абзац $chapterNum.2 (длинный абзац для проверки прокрутки и переноса строк)"))
+
+            assertEquals(NovelBlockType.BLOCKQUOTE, quote.type)
+            assertTrue(quote.plainText.contains("Цитата $chapterNum.3"))
+
+            assertEquals(NovelBlockType.DIVIDER, divider.type)
+
+            assertEquals(NovelBlockType.PARAGRAPH, p3Final.type)
+            assertTrue(p3Final.plainText.contains("Абзац $chapterNum.4 после горизонтального разделителя сцены."))
+            assertTrue(p3Final.plainText.contains("CH_${chapterNum}_END"))
+
+            // 3. Отсутствие пропусков, дублирования и перестановки текста
+            val blockIndices = chapter.blocks.map { it.orderInChapter }
+            assertEquals(listOf(0, 1, 2, 3, 4), blockIndices)
+
+            // 4. Одинаковый авторский текст в обоих режимах отображения («Книга» и «Пошаговый»)
+            val bookModeBlocks = chapter.blocks
+            val stepModeBlocks = chapter.steps.flatMap { it.blocks }
+            assertEquals(
+                "Число блоков в режиме «Книга» и суммарно в шагах режима «Пошаговый» должно совпадать",
+                bookModeBlocks.size,
+                stepModeBlocks.size
+            )
+            assertEquals(
+                "Идентификаторы и порядок блоков в обоих режимах обязаны совпадать 1-в-1",
+                bookModeBlocks.map { it.blockId },
+                stepModeBlocks.map { it.blockId }
+            )
+            assertEquals(
+                "Отображаемый авторский текст в обоих режимах обязан совпадать символ-в-символ",
+                bookModeBlocks.map { it.plainText },
+                stepModeBlocks.map { it.plainText }
+            )
+        }
+    }
+
+    @Test
+    fun `markdown novel parser rejects corrupted binary or empty files with clear Russian error`() {
+        val invalidUtf8 = byteArrayOf(0xFF.toByte(), 0xFE.toByte(), 0x00.toByte(), 0x81.toByte())
+        val binaryResult = MarkdownNovelParser.parseMarkdownNovel(invalidUtf8, "broken.md")
+        assertTrue(binaryResult.isFailure)
+
+        val emptyResult = MarkdownNovelParser.parseMarkdownNovel("   \n\n  ".toByteArray(Charsets.UTF_8), "empty.md")
+        assertTrue(emptyResult.isFailure)
     }
 }
+

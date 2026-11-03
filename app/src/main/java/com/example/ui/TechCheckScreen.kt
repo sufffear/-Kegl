@@ -2,12 +2,11 @@ package com.example.ui
 
 import android.Manifest
 import android.animation.ValueAnimator
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -16,7 +15,6 @@ import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,23 +33,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Headphones
-import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -60,16 +56,13 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -79,12 +72,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -92,7 +82,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -104,41 +93,39 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
 import com.example.R
+import com.example.data.AudioDiagnosticEntry
 import com.example.data.AudioHardwareStatus
 import com.example.data.BenchSignalSettings
 import com.example.data.DailySlotWithCompletion
+import com.example.data.StoryReaderUiState
+import com.example.data.WeeklyOverviewState
 import com.example.domain.AppBuildInfo
 import com.example.domain.BenchEventLogEntry
 import com.example.domain.DemoProtocolConfig
 import com.example.domain.MetronomeTickStyle
 import com.example.domain.PhaseEngineSnapshot
 import com.example.domain.PhaseType
+import com.example.domain.ReaderFontSize
+import com.example.domain.ReaderLineSpacing
+import com.example.domain.ReaderMode
 import com.example.domain.RunStatus
 import com.example.domain.SignalType
 import com.example.domain.SoundPack
-import com.example.ui.theme.DawnBackgroundBottom
-import com.example.ui.theme.DawnBackgroundMid
-import com.example.ui.theme.DawnBackgroundTop
-import com.example.ui.theme.DawnErrorAccent
-import com.example.ui.theme.DawnOnPrimaryAccent
-import com.example.ui.theme.DawnOutline
-import com.example.ui.theme.DawnPrimaryAccent
-import com.example.ui.theme.DawnSecondaryAccent
-import com.example.ui.theme.DawnSuccessAccent
-import com.example.ui.theme.DawnSurface
-import com.example.ui.theme.DawnSurfaceVariant
-import com.example.ui.theme.DawnTextPrimary
-import com.example.ui.theme.DawnTextSecondary
-import com.example.ui.theme.DawnWarningAccent
+import com.example.domain.WorkoutDifficulty
+import com.example.ui.theme.LocalVelarisPalette
+import com.example.ui.theme.VelarisThemeId
 import kotlinx.coroutines.isActive
 import java.util.Locale
 
 @Composable
 fun TechCheckScreen(
     buildInfo: AppBuildInfo,
+    currentDestination: VelarisNavDestination,
+    onNavigate: (VelarisNavDestination) -> Unit,
     snapshot: PhaseEngineSnapshot,
     settings: BenchSignalSettings,
     hardwareStatus: AudioHardwareStatus,
+    audioDiagnostics: List<AudioDiagnosticEntry>,
     eventLog: List<BenchEventLogEntry>,
     isWakeLockHeld: Boolean,
     isServiceForeground: Boolean,
@@ -146,10 +133,14 @@ fun TechCheckScreen(
     isZeroSlotDemoMode: Boolean,
     demoCompletionsCount: Int,
     realCompletionsCount: Int,
+    weeklyOverview: WeeklyOverviewState,
+    storyState: StoryReaderUiState,
+    lastCompletedSlotDifficulty: WorkoutDifficulty?,
     databaseErrorMessage: String?,
     availableProtocols: List<DemoProtocolConfig>,
     onSelectProtocol: (DemoProtocolConfig) -> Unit,
     onSelectDailySlot: (DailySlotWithCompletion) -> Unit,
+    onStartSlotAndOpenWorkout: (DailySlotWithCompletion) -> Unit,
     onZeroSlotDemoModeChange: (Boolean) -> Unit,
     onStartDemo: () -> Unit,
     onPauseDemo: () -> Unit,
@@ -158,7 +149,23 @@ fun TechCheckScreen(
     onCancelStopDialog: () -> Unit,
     onConfirmStopDemo: () -> Unit,
     onResetDemo: () -> Unit,
+    onRateDifficulty: (WorkoutDifficulty?) -> Unit,
+    onSelectWeeklyDate: (String) -> Unit,
+    onImportMarkdownUri: (Uri) -> Unit,
+    onUpdatePreviewHeadingLevels: (Int, Int) -> Unit,
+    onConfirmPendingImport: () -> Unit,
+    onCancelPendingImport: () -> Unit,
+    onImportNeutralTestMarkdown: () -> Unit,
+    onNextStoryStep: () -> Unit,
+    onPreviousStoryStep: () -> Unit,
+    onNextStoryChapter: () -> Unit,
+    onPreviousStoryChapter: () -> Unit,
+    onSelectStoryChapter: (String) -> Unit,
+    onSaveStoryBlockPosition: (String) -> Unit,
+    onRestartStoryFromBeginning: () -> Unit,
+    onRemoveImportedBook: () -> Unit,
     onPlaySample: (SignalType) -> Unit,
+    onThemeChange: (VelarisThemeId) -> Unit,
     onSoundPackChange: (SoundPack) -> Unit,
     onMetronomeTickStyleChange: (MetronomeTickStyle) -> Unit,
     onSoundEnabledChange: (Boolean) -> Unit,
@@ -166,21 +173,36 @@ fun TechCheckScreen(
     onMetronomeEnabledChange: (Boolean) -> Unit,
     onSignalVolumeChange: (Float) -> Unit,
     onMetronomeVolumeChange: (Float) -> Unit,
+    onReaderModeChange: (ReaderMode) -> Unit,
+    onReaderFontSizeChange: (ReaderFontSize) -> Unit,
+    onReaderLineSpacingChange: (ReaderLineSpacing) -> Unit,
+    onRealProgramEnabledChange: (Boolean) -> Unit = {},
     onRefreshHardware: () -> Unit,
+    onClearAudioDiagnostics: () -> Unit,
     onClearLog: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val palette = LocalVelarisPalette.current
     val backgroundBrush = Brush.verticalGradient(
-        colors = listOf(DawnBackgroundTop, DawnBackgroundMid, DawnBackgroundBottom)
+        colors = listOf(palette.backgroundTop, palette.backgroundMid, palette.backgroundBottom)
     )
+
+    // Обработка кнопки «Назад» без остановки таймера
+    BackHandler(enabled = currentDestination != VelarisNavDestination.HOME) {
+        if (currentDestination == VelarisNavDestination.DIAGNOSTICS) {
+            onNavigate(VelarisNavDestination.SETTINGS)
+        } else {
+            onNavigate(VelarisNavDestination.HOME)
+        }
+    }
 
     // Диалог остановки: «Завершить без зачёта?» -> «Завершить» / «Остаться на паузе» (ТЗ п. 7)
     if (snapshot.isStopDialogVisible) {
         AlertDialog(
             onDismissRequest = onCancelStopDialog,
-            containerColor = DawnSurface,
-            titleContentColor = DawnTextPrimary,
-            textContentColor = DawnTextSecondary,
+            containerColor = palette.surface,
+            titleContentColor = palette.textPrimary,
+            textContentColor = palette.textSecondary,
             title = {
                 Text(
                     text = stringResource(R.string.stop_dialog_title),
@@ -199,8 +221,8 @@ fun TechCheckScreen(
                 Button(
                     onClick = onConfirmStopDemo,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = DawnErrorAccent,
-                        contentColor = DawnOnPrimaryAccent
+                        containerColor = palette.errorAccent,
+                        contentColor = palette.onPrimaryAccent
                     ),
                     modifier = Modifier
                         .heightIn(min = 48.dp)
@@ -221,7 +243,7 @@ fun TechCheckScreen(
                 ) {
                     Text(
                         text = stringResource(R.string.stop_dialog_cancel),
-                        color = DawnTextPrimary
+                        color = palette.textPrimary
                     )
                 }
             }
@@ -230,1484 +252,729 @@ fun TechCheckScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = Color.Transparent,
-        contentWindowInsets = WindowInsets.safeDrawing
+        contentWindowInsets = WindowInsets.safeDrawing,
+        containerColor = palette.backgroundTop,
+        bottomBar = {
+            NavigationBar(
+                containerColor = palette.surface,
+                contentColor = palette.textPrimary
+            ) {
+                val mainTabs = listOf(
+                    Triple(VelarisNavDestination.HOME, Icons.Default.Home, "Главная"),
+                    Triple(VelarisNavDestination.PLAN, Icons.Default.CalendarMonth, "План"),
+                    Triple(VelarisNavDestination.WORKOUT, Icons.Default.Timer, "Подход"),
+                    Triple(VelarisNavDestination.READER, Icons.Default.AutoStories, "Чтение"),
+                    Triple(VelarisNavDestination.SETTINGS, Icons.Default.Settings, "Настройки")
+                )
+                mainTabs.forEach { (dest, icon, label) ->
+                    val selected = currentDestination == dest ||
+                        (currentDestination == VelarisNavDestination.DIAGNOSTICS && dest == VelarisNavDestination.SETTINGS)
+                    NavigationBarItem(
+                        selected = selected,
+                        onClick = { onNavigate(dest) },
+                        icon = { Icon(icon, contentDescription = label) },
+                        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = palette.onPrimaryAccent,
+                            selectedTextColor = palette.primaryAccent,
+                            indicatorColor = palette.primaryAccent,
+                            unselectedIconColor = palette.textSecondary,
+                            unselectedTextColor = palette.textSecondary
+                        ),
+                        modifier = Modifier.testTag("nav_${dest.id}")
+                    )
+                }
+            }
+        }
     ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(backgroundBrush)
+                .padding(innerPadding)
         ) {
-            MountainSilhouetteBackground(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-                    .align(Alignment.BottomCenter)
-            )
-
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 20.dp),
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .widthIn(max = 600.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    DemoSafetyBanner()
-                    HeaderStageCard(buildInfo = buildInfo)
-                    ActiveTimerBenchCard(
-                        snapshot = snapshot,
-                        hardwareStatus = hardwareStatus,
-                        isWakeLockHeld = isWakeLockHeld,
-                        isServiceForeground = isServiceForeground,
-                        dailySlots = dailySlots,
-                        isZeroSlotDemoMode = isZeroSlotDemoMode,
-                        availableProtocols = availableProtocols,
-                        onSelectProtocol = onSelectProtocol,
-                        onStartDemo = onStartDemo,
-                        onPauseDemo = onPauseDemo,
-                        onResumeDemo = onResumeDemo,
-                        onRequestStopDemo = onRequestStopDemo,
-                        onResetDemo = onResetDemo
-                    )
-                    DailyPlanPersistenceCard(
-                        snapshot = snapshot,
-                        dailySlots = dailySlots,
-                        isZeroSlotDemoMode = isZeroSlotDemoMode,
-                        demoCompletionsCount = demoCompletionsCount,
-                        realCompletionsCount = realCompletionsCount,
-                        databaseErrorMessage = databaseErrorMessage,
-                        onSelectDailySlot = onSelectDailySlot,
-                        onZeroSlotDemoModeChange = onZeroSlotDemoModeChange
-                    )
-                    SignalSettingsAndSamplesCard(
-                        snapshot = snapshot,
-                        settings = settings,
-                        onSoundPackChange = onSoundPackChange,
-                        onMetronomeTickStyleChange = onMetronomeTickStyleChange,
-                        onSoundEnabledChange = onSoundEnabledChange,
-                        onVibrationEnabledChange = onVibrationEnabledChange,
-                        onMetronomeEnabledChange = onMetronomeEnabledChange,
-                        onSignalVolumeChange = onSignalVolumeChange,
-                        onMetronomeVolumeChange = onMetronomeVolumeChange,
-                        onPlaySample = onPlaySample
-                    )
-                    NotificationAndHardwareCard(
-                        hardwareStatus = hardwareStatus,
-                        onRefreshHardware = onRefreshHardware
-                    )
-                    EventLogCard(
-                        eventLog = eventLog,
-                        onClearLog = onClearLog
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DemoSafetyBanner() {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.5.dp, DawnWarningAccent.copy(alpha = 0.75f), RoundedCornerShape(16.dp))
-            .testTag("demo_safety_banner"),
-        shape = RoundedCornerShape(16.dp),
-        color = DawnSurfaceVariant
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Warning,
-                contentDescription = "Предупреждение демо-режима",
-                tint = DawnWarningAccent,
-                modifier = Modifier
-                    .size(24.dp)
-                    .padding(top = 2.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = stringResource(R.string.demo_safety_banner_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = DawnWarningAccent,
-                    modifier = Modifier.testTag("demo_safety_title")
-                )
-                Text(
-                    text = stringResource(R.string.demo_safety_banner_body),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = DawnTextPrimary
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun HeaderStageCard(buildInfo: AppBuildInfo) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, DawnOutline.copy(alpha = 0.5f), RoundedCornerShape(18.dp)),
-        shape = RoundedCornerShape(18.dp),
-        color = DawnSurface
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(DawnSurfaceVariant)
-                    .padding(horizontal = 12.dp, vertical = 5.dp)
-                    .testTag("stage_badge")
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(DawnPrimaryAccent)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = stringResource(R.string.tech_check_stage_badge),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = DawnPrimaryAccent,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            Text(
-                text = stringResource(R.string.tech_check_title),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = DawnTextPrimary,
-                modifier = Modifier
-                    .semantics { heading() }
-                    .testTag("screen_title")
-            )
-
-            Text(
-                text = stringResource(
-                    R.string.tech_check_version_format,
-                    buildInfo.versionName,
-                    buildInfo.versionCode
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-                fontFamily = FontFamily.Monospace,
-                color = DawnSecondaryAccent,
-                modifier = Modifier.testTag("version_info")
-            )
-
-            Text(
-                text = "Пакет: ${buildInfo.applicationId} · ${buildInfo.deviceManufacturer} ${buildInfo.deviceModel} (Android ${buildInfo.androidRelease}, API ${buildInfo.androidSdkInt})",
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = DawnTextSecondary,
-                modifier = Modifier.testTag("package_and_device_summary")
-            )
-        }
-    }
-}
-
-@Composable
-private fun ActiveTimerBenchCard(
-    snapshot: PhaseEngineSnapshot,
-    hardwareStatus: AudioHardwareStatus,
-    isWakeLockHeld: Boolean,
-    isServiceForeground: Boolean,
-    dailySlots: List<DailySlotWithCompletion>,
-    isZeroSlotDemoMode: Boolean,
-    availableProtocols: List<DemoProtocolConfig>,
-    onSelectProtocol: (DemoProtocolConfig) -> Unit,
-    onStartDemo: () -> Unit,
-    onPauseDemo: () -> Unit,
-    onResumeDemo: () -> Unit,
-    onRequestStopDemo: () -> Unit,
-    onResetDemo: () -> Unit
-) {
-    val selectedSlotCompleted = dailySlots.any { it.slot.id == snapshot.protocol.id && it.isCompleted }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("timer_bench_card"),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = DawnSurface)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            // Индикатор фактического аудиовыхода вверху карточки подхода (ТЗ п. 5)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(DawnSurfaceVariant)
-                    .padding(horizontal = 14.dp, vertical = 6.dp)
-                    .testTag("audio_route_indicator")
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Headphones,
-                    contentDescription = "Маршрут аудиовыхода",
-                    tint = DawnSecondaryAccent,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Аудиовыход: ${hardwareStatus.outputRouteLabelRu}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = DawnTextPrimary
-                )
-            }
-
-            // Предупреждение, если ни один канал сигнала (звук или вибрация) не доступен
-            if (hardwareStatus.noActiveSignalChannelWarning != null) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("no_signal_channel_warning"),
-                    shape = RoundedCornerShape(12.dp),
-                    color = DawnErrorAccent.copy(alpha = 0.16f)
-                ) {
-                    Text(
-                        text = hardwareStatus.noActiveSignalChannelWarning,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = DawnErrorAccent,
-                        modifier = Modifier.padding(12.dp)
-                    )
-                }
-            }
-
-            // Большое плавное кольцо фазы (ТЗ п. 5, п. 7 + плавное движение от единого монотонного источника)
-            PhaseRingIndicator(snapshot = snapshot)
-
-            // Заголовок текущей команды (объявляется TalkBack только при смене фазы/состояния, а не каждую секунду)
-            // Меняется мгновенно в точный момент перехода фазы вместе со звуковым сигналом
-            Text(
-                text = snapshot.headlineCommandRu,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = when (snapshot.status) {
-                    RunStatus.RUNNING -> if (snapshot.currentPhase == PhaseType.CONTRACTION) DawnPrimaryAccent else DawnSecondaryAccent
-                    RunStatus.PAUSED, RunStatus.INTERRUPTED -> DawnWarningAccent
-                    RunStatus.COMPLETED -> DawnSuccessAccent
-                    else -> DawnTextPrimary
-                },
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .semantics { liveRegion = LiveRegionMode.Polite }
-                    .testTag("phase_headline")
-            )
-
-            // Счётчик повторений и мелкая строка общего остатка активного времени подхода
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "Повтор",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = DawnTextSecondary
-                    )
-                    Text(
-                        text = "Повтор ${snapshot.currentRepetition} из ${snapshot.totalRepetitions}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = DawnTextPrimary,
-                        modifier = Modifier.testTag("repetition_counter")
-                    )
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "Осталось активного",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = DawnTextSecondary
-                    )
-                    Text(
-                        text = formatWholeSeconds(snapshot.remainingActiveMs),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.SemiBold,
-                        color = DawnTextPrimary,
-                        modifier = Modifier.testTag("remaining_active_time")
-                    )
-                }
-            }
-
-            // Информация о зафиксированном звуковом наборе для активной/приостановленной попытки
-            if (snapshot.isActiveOrPaused) {
-                Text(
-                    text = "Звуковой набор попытки: «${snapshot.soundPackSnapshot.titleRu}» · Метроном: «${snapshot.metronomeStyleSnapshot.titleRu}» · Дата старта: ${snapshot.startDate}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = DawnTextSecondary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.testTag("active_run_snapshot_info")
-                )
-            }
-
-            // Причина паузы или внешнего прерывания
-            if (snapshot.interruptionReason != null &&
-                (snapshot.status == RunStatus.PAUSED || snapshot.status == RunStatus.INTERRUPTED)
-            ) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("interruption_reason_box"),
-                    shape = RoundedCornerShape(12.dp),
-                    color = DawnSurfaceVariant
-                ) {
-                    Text(
-                        text = "Причина паузы: ${snapshot.interruptionReason}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = DawnWarningAccent,
-                        modifier = Modifier.padding(12.dp)
-                    )
-                }
-            }
-
-            // Выбор тестовой последовательности (когда нет активного запуска и не выбран режим N=0)
-            if (!snapshot.isActiveOrPaused && !isZeroSlotDemoMode && dailySlots.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(DawnSurfaceVariant.copy(alpha = 0.65f))
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = "Выбор тестовой последовательности (Демо):",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = DawnTextSecondary
-                    )
-                    availableProtocols.forEach { proto ->
-                        val selected = proto.id == snapshot.protocol.id
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 48.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable { onSelectProtocol(proto) }
-                                .padding(horizontal = 4.dp)
-                                .testTag("protocol_option_${proto.id}")
-                        ) {
-                            RadioButton(
-                                selected = selected,
-                                onClick = { onSelectProtocol(proto) },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = DawnPrimaryAccent,
-                                    unselectedColor = DawnTextSecondary
-                                )
-                            )
-                            Text(
-                                text = proto.titleRu,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = DawnTextPrimary
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Кнопки управления (не менее 48 dp по высоте, ТЗ п. 4 и п. 5)
-            when (snapshot.status) {
-                RunStatus.IDLE,
-                RunStatus.COMPLETED,
-                RunStatus.STOPPED -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Button(
-                            onClick = onStartDemo,
-                            enabled = !isZeroSlotDemoMode && !selectedSlotCompleted,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = DawnPrimaryAccent,
-                                contentColor = DawnOnPrimaryAccent
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 52.dp)
-                                .testTag("btn_start_demo")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.PlayArrow,
-                                contentDescription = null
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = when {
-                                    isZeroSlotDemoMode -> "Сегодня без тренировок"
-                                    selectedSlotCompleted -> "Слот уже зачтён ✓"
-                                    else -> "Старт демо-сессии"
+                    when (currentDestination) {
+                        VelarisNavDestination.HOME -> {
+                            VelarisHomeScreen(
+                                buildInfo = buildInfo,
+                                snapshot = snapshot,
+                                settings = settings,
+                                dailySlots = dailySlots,
+                                isZeroSlotDemoMode = isZeroSlotDemoMode,
+                                weeklyOverview = weeklyOverview,
+                                storyState = storyState,
+                                onStartOrOpenWorkout = {
+                                    onNavigate(VelarisNavDestination.WORKOUT)
+                                    if (!snapshot.isActiveOrPaused) {
+                                        onStartDemo()
+                                    }
                                 },
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
+                                onOpenPlan = { onNavigate(VelarisNavDestination.PLAN) },
+                                onOpenReader = { onNavigate(VelarisNavDestination.READER) },
+                                onOpenSettings = { onNavigate(VelarisNavDestination.SETTINGS) },
+                                onSelectWeeklyDate = onSelectWeeklyDate
                             )
                         }
-
-                        if (snapshot.status == RunStatus.COMPLETED || snapshot.status == RunStatus.STOPPED) {
-                            OutlinedButton(
-                                onClick = onResetDemo,
-                                modifier = Modifier
-                                    .heightIn(min = 52.dp)
-                                    .testTag("btn_reset_demo")
-                            ) {
-                                Text(text = "Сброс", color = DawnTextPrimary)
-                            }
-                        }
-                    }
-                }
-
-                RunStatus.PREPARING,
-                RunStatus.RUNNING -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Button(
-                            onClick = onPauseDemo,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = DawnPrimaryAccent,
-                                contentColor = DawnOnPrimaryAccent
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 52.dp)
-                                .testTag("btn_pause_demo")
-                        ) {
-                            Icon(imageVector = Icons.Filled.Pause, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Пауза",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
+                        VelarisNavDestination.PLAN -> {
+                            VelarisPlanScreen(
+                                snapshot = snapshot,
+                                settings = settings,
+                                dailySlots = dailySlots,
+                                isZeroSlotDemoMode = isZeroSlotDemoMode,
+                                demoCompletionsCount = demoCompletionsCount,
+                                realCompletionsCount = realCompletionsCount,
+                                databaseErrorMessage = databaseErrorMessage,
+                                onSelectDailySlot = onSelectDailySlot,
+                                onStartSelectedSlot = onStartSlotAndOpenWorkout,
+                                onReturnToActiveWorkout = { onNavigate(VelarisNavDestination.WORKOUT) }
                             )
                         }
-
-                        OutlinedButton(
-                            onClick = onRequestStopDemo,
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 52.dp)
-                                .testTag("btn_stop_demo")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Stop,
-                                contentDescription = null,
-                                tint = DawnErrorAccent
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Остановить",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = DawnErrorAccent
+                        VelarisNavDestination.WORKOUT -> {
+                            VelarisActiveWorkoutScreen(
+                                snapshot = snapshot,
+                                settings = settings,
+                                hardwareStatus = hardwareStatus,
+                                isZeroSlotDemoMode = isZeroSlotDemoMode,
+                                lastCompletedSlotDifficulty = lastCompletedSlotDifficulty,
+                                onStartDemo = onStartDemo,
+                                onPauseDemo = onPauseDemo,
+                                onResumeDemo = onResumeDemo,
+                                onRequestStopDemo = onRequestStopDemo,
+                                onResetDemo = onResetDemo,
+                                onRateDifficulty = onRateDifficulty,
+                                onOpenPlan = { onNavigate(VelarisNavDestination.PLAN) },
+                                onOpenReader = { onNavigate(VelarisNavDestination.READER) }
                             )
                         }
-                    }
-                }
-
-                RunStatus.PAUSED,
-                RunStatus.INTERRUPTED -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Button(
-                            onClick = onResumeDemo,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = DawnSuccessAccent,
-                                contentColor = DawnOnPrimaryAccent
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 52.dp)
-                                .testTag("btn_resume_demo")
-                        ) {
-                            Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Продолжить",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
+                        VelarisNavDestination.READER -> {
+                            VelarisReaderScreen(
+                                storyState = storyState,
+                                settings = settings,
+                                snapshot = snapshot,
+                                onImportMarkdownUri = onImportMarkdownUri,
+                                onUpdatePreviewHeadingLevels = onUpdatePreviewHeadingLevels,
+                                onConfirmPendingImport = onConfirmPendingImport,
+                                onCancelPendingImport = onCancelPendingImport,
+                                onReaderModeChange = onReaderModeChange,
+                                onReaderFontSizeChange = onReaderFontSizeChange,
+                                onReaderLineSpacingChange = onReaderLineSpacingChange,
+                                onNextStep = onNextStoryStep,
+                                onPreviousStep = onPreviousStoryStep,
+                                onNextChapter = onNextStoryChapter,
+                                onPreviousChapter = onPreviousStoryChapter,
+                                onSelectChapter = onSelectStoryChapter,
+                                onSaveBlockPosition = onSaveStoryBlockPosition,
+                                onRestartFromBeginning = onRestartStoryFromBeginning,
+                                onReturnToWorkout = { onNavigate(VelarisNavDestination.WORKOUT) }
                             )
                         }
-
-                        OutlinedButton(
-                            onClick = onRequestStopDemo,
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 52.dp)
-                                .testTag("btn_stop_demo")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Stop,
-                                contentDescription = null,
-                                tint = DawnErrorAccent
+                        VelarisNavDestination.SETTINGS -> {
+                            VelarisSettingsScreen(
+                                settings = settings,
+                                snapshot = snapshot,
+                                storyState = storyState,
+                                availableProtocols = availableProtocols,
+                                onSelectProtocol = onSelectProtocol,
+                                onThemeChange = onThemeChange,
+                                onSoundPackChange = onSoundPackChange,
+                                onMetronomeTickStyleChange = onMetronomeTickStyleChange,
+                                onSoundEnabledChange = onSoundEnabledChange,
+                                onVibrationEnabledChange = onVibrationEnabledChange,
+                                onMetronomeEnabledChange = onMetronomeEnabledChange,
+                                onSignalVolumeChange = onSignalVolumeChange,
+                                onMetronomeVolumeChange = onMetronomeVolumeChange,
+                                onPlaySample = onPlaySample,
+                                onReaderModeChange = onReaderModeChange,
+                                onReaderFontSizeChange = onReaderFontSizeChange,
+                                onReaderLineSpacingChange = onReaderLineSpacingChange,
+                                onImportMarkdownUri = onImportMarkdownUri,
+                                onRemoveImportedBook = onRemoveImportedBook,
+                                onOpenDiagnostics = { onNavigate(VelarisNavDestination.DIAGNOSTICS) },
+                                onReturnToWorkout = { onNavigate(VelarisNavDestination.WORKOUT) }
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Остановить",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = DawnErrorAccent
+                        }
+                        VelarisNavDestination.DIAGNOSTICS -> {
+                            VelarisDiagnosticsScreen(
+                                buildInfo = buildInfo,
+                                snapshot = snapshot,
+                                hardwareStatus = hardwareStatus,
+                                audioDiagnostics = audioDiagnostics,
+                                eventLog = eventLog,
+                                isWakeLockHeld = isWakeLockHeld,
+                                isServiceForeground = isServiceForeground,
+                                isZeroSlotDemoMode = isZeroSlotDemoMode,
+                                demoCompletionsCount = demoCompletionsCount,
+                                realCompletionsCount = realCompletionsCount,
+                                onZeroSlotDemoModeChange = onZeroSlotDemoModeChange,
+                                onImportNeutralTestMarkdown = onImportNeutralTestMarkdown,
+                                onRefreshHardware = onRefreshHardware,
+                                onClearAudioDiagnostics = onClearAudioDiagnostics,
+                                onClearEventLog = onClearLog,
+                                onBackToSettings = { onNavigate(VelarisNavDestination.SETTINGS) }
                             )
                         }
                     }
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
-
-            // Техническая строка телеметрии планировщика, FGS и WakeLock
-            Text(
-                text = "FGS: ${if (isServiceForeground) "Активен" else "Выкл"} · " +
-                    "WakeLock: ${if (isWakeLockHeld) "Удерживается" else "Освобождён"} · " +
-                    "Дрейф тика: ${snapshot.lastSchedulerDriftMs} мс (макс ${snapshot.maxSchedulerDriftMs} мс)",
-                style = MaterialTheme.typography.labelSmall,
-                fontFamily = FontFamily.Monospace,
-                color = DawnTextSecondary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.testTag("telemetry_status_line")
-            )
         }
     }
 }
 
 /**
- * Плавный индикатор фазы:
- * - Непрерывное движение кольца во время видимой активной сессии (`PREPARING` / `RUNNING`)
- *   от того же единственного монотонного источника `SystemClock.elapsedRealtime()`.
- * - Цифры показывают только целые секунды без десятых долей и имеют фиксированную ширину (`tnum` + `Monospace`),
- *   чтобы числа не прыгали при смене цифр.
- * - Цвет кольца мягко переходит за 180 мс, тогда как текст фазы и звуковой сигнал меняются мгновенно.
- * - При паузе кольцо останавливается мгновенно без инерции; при смене фазы нет обратного пролёта через весь круг.
- * - Учитывает системное отключение анимаций (`ValueAnimator.areAnimatorsEnabled()`) и прекращает кадровые
- *   обновления, когда экран скрыт или сессия не активна.
+ * Экран 3: Активный подход и экран завершения (Update v1.1 п. 2).
+ * - Крупное плавное кольцо постоянного размера (`268.dp`), целые секунды без десятых долей
+ *   и без «прыжков» ширины текста (`FontFamily.Monospace` + `tnum`).
+ * - Текущая фаза «Сокращение» или «Расслабление», счётчик повторов и оставшееся активное время.
+ * - Крупные кнопки «Пауза» и «Остановить», небольшой индикатор аудиомаршрута.
+ * - После завершения: спокойная отметка, необязательная оценка ощущения, кнопки «К плану» и «Почитать».
  */
-@Composable
-private fun PhaseRingIndicator(snapshot: PhaseEngineSnapshot) {
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
-    val isScreenVisible = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
-    val animationsEnabled = remember(snapshot.status, snapshot.currentPhase) {
-        runCatching { ValueAnimator.areAnimatorsEnabled() }.getOrDefault(true)
-    }
-
-    var frameElapsedRealtimeMs by remember(
-        snapshot.status,
-        snapshot.currentPhase,
-        snapshot.currentRepetition,
-        snapshot.snapshotElapsedRealtimeMs
-    ) {
-        mutableLongStateOf(snapshot.snapshotElapsedRealtimeMs)
-    }
-
-    // Кадровый цикл работает ТОЛЬКО когда экран видим, сессия активна и анимации разрешены системой
-    LaunchedEffect(
-        isScreenVisible,
-        snapshot.isRunningOrPreparing,
-        animationsEnabled,
-        snapshot.snapshotElapsedRealtimeMs
-    ) {
-        if (isScreenVisible && snapshot.isRunningOrPreparing && animationsEnabled) {
-            frameElapsedRealtimeMs = SystemClock.elapsedRealtime()
-            while (isActive) {
-                withInfiniteAnimationFrameMillis {
-                    frameElapsedRealtimeMs = SystemClock.elapsedRealtime()
-                }
-            }
-        } else {
-            frameElapsedRealtimeMs = snapshot.snapshotElapsedRealtimeMs
-        }
-    }
-
-    val effectiveElapsedMs = if (isScreenVisible && snapshot.isRunningOrPreparing && animationsEnabled) {
-        frameElapsedRealtimeMs
-    } else {
-        snapshot.snapshotElapsedRealtimeMs
-    }
-
-    val progress = snapshot.computeVisualRingProgress(effectiveElapsedMs)
-    val displaySeconds = snapshot.computeDisplayWholeSeconds(effectiveElapsedMs)
-
-    val targetRingColor = when (snapshot.status) {
-        RunStatus.PREPARING -> DawnWarningAccent
-        RunStatus.RUNNING -> if (snapshot.currentPhase == PhaseType.CONTRACTION) DawnPrimaryAccent else DawnSecondaryAccent
-        RunStatus.PAUSED, RunStatus.INTERRUPTED -> DawnWarningAccent
-        RunStatus.COMPLETED -> DawnSuccessAccent
-        else -> DawnOutline
-    }
-
-    val animatedRingColor by animateColorAsState(
-        targetValue = targetRingColor,
-        animationSpec = tween(durationMillis = if (animationsEnabled) 180 else 0),
-        label = "phase_ring_color_transition"
-    )
-
-    // Важно по ТЗ п. 4: не озвучивать каждое обновление секунды через TalkBack
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(196.dp)
-            .testTag("phase_ring_box")
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val strokePx = 12.dp.toPx()
-            val diameter = size.minDimension - strokePx
-            val topLeft = Offset(strokePx / 2f, strokePx / 2f)
-            val arcSize = Size(diameter, diameter)
-
-            drawArc(
-                color = DawnSurfaceVariant,
-                startAngle = 0f,
-                sweepAngle = 360f,
-                useCenter = false,
-                topLeft = topLeft,
-                size = arcSize,
-                style = Stroke(width = strokePx)
-            )
-
-            drawArc(
-                color = animatedRingColor,
-                startAngle = -90f,
-                sweepAngle = 360f * progress,
-                useCenter = false,
-                topLeft = topLeft,
-                size = arcSize,
-                style = Stroke(width = strokePx, cap = StrokeCap.Round)
-            )
-        }
-
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = String.format(Locale.US, "%d с", displaySeconds),
-                style = MaterialTheme.typography.displayMedium.copy(
-                    fontFeatureSettings = "tnum"
-                ),
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                color = DawnTextPrimary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .widthIn(min = 116.dp)
-                    .testTag("phase_remaining_seconds")
-            )
-            Text(
-                text = when (snapshot.status) {
-                    RunStatus.PREPARING -> "подготовка"
-                    RunStatus.RUNNING -> if (snapshot.currentPhase == PhaseType.CONTRACTION) "сокращение" else "расслабление"
-                    RunStatus.PAUSED, RunStatus.INTERRUPTED -> "на паузе"
-                    RunStatus.COMPLETED -> "выполнено"
-                    RunStatus.STOPPED -> "остановлено"
-                    RunStatus.IDLE -> "ожидание"
-                },
-                style = MaterialTheme.typography.labelMedium,
-                color = DawnTextSecondary
-            )
-        }
-    }
-}
-
-@Composable
-private fun DailyPlanPersistenceCard(
-    snapshot: PhaseEngineSnapshot,
-    dailySlots: List<DailySlotWithCompletion>,
-    isZeroSlotDemoMode: Boolean,
-    demoCompletionsCount: Int,
-    realCompletionsCount: Int,
-    databaseErrorMessage: String?,
-    onSelectDailySlot: (DailySlotWithCompletion) -> Unit,
-    onZeroSlotDemoModeChange: (Boolean) -> Unit
-) {
-    val completedToday = dailySlots.count { it.isCompleted }
-    val totalToday = dailySlots.size
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("daily_plan_persistence_card"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = DawnSurface)
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Filled.Storage,
-                    contentDescription = null,
-                    tint = DawnPrimaryAccent,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Этап 2 · Дневной план и база Room",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = DawnTextPrimary,
-                    modifier = Modifier.semantics { heading() }
-                )
-            }
-
-            if (databaseErrorMessage != null) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("db_error_banner"),
-                    shape = RoundedCornerShape(12.dp),
-                    color = DawnErrorAccent.copy(alpha = 0.16f)
-                ) {
-                    Text(
-                        text = databaseErrorMessage,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = DawnErrorAccent,
-                        modifier = Modifier.padding(12.dp)
-                    )
-                }
-            }
-
-            // Сводка «Сегодня X из N» или «Сегодня без тренировок» при N=0 (ТЗ п. 5, п. 6)
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                color = DawnSurfaceVariant
-            ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    if (totalToday == 0) {
-                        Text(
-                            text = "Сегодня без тренировок",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = DawnSecondaryAccent,
-                            modifier = Modifier.testTag("zero_slots_banner")
-                        )
-                        Text(
-                            text = "В активном плане на сегодня назначено 0 подходов (проверка переменного числа слотов N=0 без ошибки деления на ноль).",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = DawnTextSecondary
-                        )
-                    } else {
-                        Text(
-                            text = "Сегодня $completedToday из $totalToday",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (completedToday == totalToday) DawnSuccessAccent else DawnPrimaryAccent,
-                            modifier = Modifier.testTag("daily_plan_progress_title")
-                        )
-                        Text(
-                            text = "Завершённые слоты защищены уникальным индексом Room (повторный зачёт в ту же дату невозможен).",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = DawnTextSecondary
-                        )
-                    }
-                }
-            }
-
-            // Список слотов дневного плана
-            if (dailySlots.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    dailySlots.forEach { item ->
-                        val isSelected = item.slot.id == snapshot.protocol.id
-                        val isCompleted = item.isCompleted
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .border(
-                                    width = if (isSelected) 1.5.dp else 1.dp,
-                                    color = when {
-                                        isCompleted -> DawnSuccessAccent.copy(alpha = 0.7f)
-                                        isSelected -> DawnPrimaryAccent
-                                        else -> DawnOutline.copy(alpha = 0.4f)
-                                    },
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                .clickable(enabled = !snapshot.isActiveOrPaused) {
-                                    onSelectDailySlot(item)
-                                }
-                                .testTag("daily_slot_${item.slot.sortOrder}"),
-                            color = DawnSurfaceVariant.copy(alpha = if (isSelected) 0.85f else 0.45f)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 52.dp)
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    if (isCompleted) {
-                                        Icon(
-                                            imageVector = Icons.Filled.CheckCircle,
-                                            contentDescription = "Слот выполнен",
-                                            tint = DawnSuccessAccent,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    } else {
-                                        RadioButton(
-                                            selected = isSelected,
-                                            onClick = {
-                                                if (!snapshot.isActiveOrPaused) {
-                                                    onSelectDailySlot(item)
-                                                }
-                                            },
-                                            colors = RadioButtonDefaults.colors(
-                                                selectedColor = DawnPrimaryAccent,
-                                                unselectedColor = DawnTextSecondary
-                                            ),
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column {
-                                        Text(
-                                            text = item.slot.titleRu,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                            color = DawnTextPrimary
-                                        )
-                                        val slotActiveSec =
-                                            ((item.slot.contractionMs + item.slot.relaxationMs) * item.slot.repetitions) / 1000L
-                                        Text(
-                                            text = if (isCompleted) {
-                                                "Зачтено в Room · Активное время: $slotActiveSec с"
-                                            } else {
-                                                "Ожидает выполнения · Контрольные точки каждые 5 с"
-                                            },
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (isCompleted) DawnSuccessAccent else DawnTextSecondary
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Переключатель тестового режима N=0 («Сегодня без тренировок»)
-            SettingSwitchRow(
-                label = "Проверить режим N=0 («Сегодня без тренировок»)",
-                checked = isZeroSlotDemoMode,
-                onCheckedChange = onZeroSlotDemoModeChange,
-                tag = "switch_zero_slot_mode"
-            )
-
-            Text(
-                text = "Разделение записей в Room: Демо-зачётов = $demoCompletionsCount · Реальных зачётов = $realCompletionsCount (признак isDemo)",
-                style = MaterialTheme.typography.labelSmall,
-                fontFamily = FontFamily.Monospace,
-                color = DawnTextSecondary,
-                modifier = Modifier.testTag("room_demo_vs_real_counter")
-            )
-        }
-    }
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SignalSettingsAndSamplesCard(
+fun VelarisActiveWorkoutScreen(
     snapshot: PhaseEngineSnapshot,
     settings: BenchSignalSettings,
-    onSoundPackChange: (SoundPack) -> Unit,
-    onMetronomeTickStyleChange: (MetronomeTickStyle) -> Unit,
-    onSoundEnabledChange: (Boolean) -> Unit,
-    onVibrationEnabledChange: (Boolean) -> Unit,
-    onMetronomeEnabledChange: (Boolean) -> Unit,
-    onSignalVolumeChange: (Float) -> Unit,
-    onMetronomeVolumeChange: (Float) -> Unit,
-    onPlaySample: (SignalType) -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("signal_settings_card"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = DawnSurface)
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Filled.VolumeUp,
-                    contentDescription = null,
-                    tint = DawnSecondaryAccent,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Звуковые наборы, метроном и образцы (DataStore)",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = DawnTextPrimary,
-                    modifier = Modifier.semantics { heading() }
-                )
-            }
-
-            // Выбор одного из 3 локальных звуковых наборов: «Мягкий», «Колокольчики», «Чёткий»
-            Text(
-                text = "Звуковой набор команд фаз:",
-                style = MaterialTheme.typography.labelLarge,
-                color = DawnTextPrimary
-            )
-
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SoundPack.entries.forEach { pack ->
-                    val selected = settings.soundPack == pack
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .border(
-                                width = if (selected) 1.5.dp else 1.dp,
-                                color = if (selected) DawnPrimaryAccent else DawnOutline.copy(alpha = 0.4f),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            .clickable { onSoundPackChange(pack) }
-                            .testTag("sound_pack_${pack.id}"),
-                        color = DawnSurfaceVariant.copy(alpha = if (selected) 0.85f else 0.4f)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 48.dp)
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = selected,
-                                onClick = { onSoundPackChange(pack) },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = DawnPrimaryAccent,
-                                    unselectedColor = DawnTextSecondary
-                                )
-                            )
-                            Column {
-                                Text(
-                                    text = pack.titleRu,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = DawnTextPrimary
-                                )
-                                Text(
-                                    text = pack.descriptionRu,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = DawnTextSecondary
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Пояснение: смена звукового набора применяется со следующего подхода
-            if (snapshot.isActiveOrPaused && settings.soundPack != snapshot.soundPackSnapshot) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("sound_pack_next_run_notice"),
-                    shape = RoundedCornerShape(10.dp),
-                    color = DawnWarningAccent.copy(alpha = 0.16f)
-                ) {
-                    Text(
-                        text = "В текущем подходе остаётся набор «${snapshot.soundPackSnapshot.titleRu}». Выбранный набор «${settings.soundPack.titleRu}» применится со следующего подхода.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = DawnWarningAccent,
-                        modifier = Modifier.padding(10.dp)
-                    )
-                }
-            } else {
-                Text(
-                    text = "Выбор сохраняется в DataStore. Изменение набора во время начатой попытки применяется со следующего подхода.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = DawnTextSecondary,
-                    modifier = Modifier.testTag("sound_pack_rule_caption")
-                )
-            }
-
-            // Выбор варианта тика метронома: «Мягкий» или «Чёткий»
-            Text(
-                text = "Вариант тика метронома внутри фазы:",
-                style = MaterialTheme.typography.labelLarge,
-                color = DawnTextPrimary
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                MetronomeTickStyle.entries.forEach { style ->
-                    val selected = settings.metronomeTickStyle == style
-                    OutlinedButton(
-                        onClick = { onMetronomeTickStyleChange(style) },
-                        border = androidx.compose.foundation.BorderStroke(
-                            width = if (selected) 1.5.dp else 1.dp,
-                            color = if (selected) DawnSecondaryAccent else DawnOutline
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 48.dp)
-                            .testTag("metronome_style_${style.id}")
-                    ) {
-                        Text(
-                            text = "Тик: ${style.titleRu}",
-                            color = if (selected) DawnSecondaryAccent else DawnTextPrimary,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
-                }
-            }
-
-            SettingSwitchRow(
-                label = "Звуковые сигналы фаз",
-                checked = settings.soundEnabled,
-                onCheckedChange = onSoundEnabledChange,
-                tag = "switch_sound_enabled"
-            )
-            SettingSwitchRow(
-                label = "Вибрация (тактильные сигналы)",
-                checked = settings.vibrationEnabled,
-                onCheckedChange = onVibrationEnabledChange,
-                tag = "switch_vibration_enabled"
-            )
-            SettingSwitchRow(
-                label = "Тихий метроном внутри фазы",
-                checked = settings.metronomeEnabled,
-                onCheckedChange = onMetronomeEnabledChange,
-                tag = "switch_metronome_enabled"
-            )
-
-            // Отдельные уровни громкости внутри приложения (не меняют системную громкость телефона, ТЗ п. 8)
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = "Уровень громкости сигналов (внутри приложения): ${(settings.signalVolume * 100).toInt()}%",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = DawnTextSecondary
-                )
-                Slider(
-                    value = settings.signalVolume,
-                    onValueChange = onSignalVolumeChange,
-                    colors = SliderDefaults.colors(
-                        thumbColor = DawnPrimaryAccent,
-                        activeTrackColor = DawnPrimaryAccent
-                    ),
-                    modifier = Modifier.testTag("slider_signal_volume")
-                )
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = "Уровень тихого метронома (внутри приложения): ${(settings.metronomeVolume * 100).toInt()}%",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = DawnTextSecondary
-                )
-                Slider(
-                    value = settings.metronomeVolume,
-                    onValueChange = onMetronomeVolumeChange,
-                    colors = SliderDefaults.colors(
-                        thumbColor = DawnSecondaryAccent,
-                        activeTrackColor = DawnSecondaryAccent
-                    ),
-                    modifier = Modifier.testTag("slider_metronome_volume")
-                )
-            }
-
-            Text(
-                text = if (snapshot.isRunningOrPreparing) {
-                    "Образцы временно заблокированы во время активной фазы, чтобы не мешать командам:"
-                } else {
-                    "Прослушать образцы выбранного набора «${settings.soundPack.titleRu}»:"
-                },
-                style = MaterialTheme.typography.labelLarge,
-                color = if (snapshot.isRunningOrPreparing) DawnWarningAccent else DawnTextPrimary
-            )
-
-            val samplesEnabled = !snapshot.isRunningOrPreparing
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SampleSignalChip(
-                    label = "Сокращение",
-                    tag = "sample_contraction",
-                    enabled = samplesEnabled,
-                    onClick = { onPlaySample(SignalType.CONTRACTION) }
-                )
-                SampleSignalChip(
-                    label = "Расслабление",
-                    tag = "sample_relaxation",
-                    enabled = samplesEnabled,
-                    onClick = { onPlaySample(SignalType.RELAXATION) }
-                )
-                SampleSignalChip(
-                    label = "Подход завершён",
-                    tag = "sample_set_completed",
-                    enabled = samplesEnabled,
-                    onClick = { onPlaySample(SignalType.SET_COMPLETED) }
-                )
-                SampleSignalChip(
-                    label = "Группа завершена",
-                    tag = "sample_group_completed",
-                    enabled = samplesEnabled,
-                    onClick = { onPlaySample(SignalType.GROUP_COMPLETED) }
-                )
-                SampleSignalChip(
-                    label = "Тик метронома",
-                    tag = "sample_metronome",
-                    enabled = samplesEnabled,
-                    onClick = { onPlaySample(SignalType.METRONOME_TICK) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun NotificationAndHardwareCard(
     hardwareStatus: AudioHardwareStatus,
-    onRefreshHardware: () -> Unit
+    isZeroSlotDemoMode: Boolean,
+    lastCompletedSlotDifficulty: WorkoutDifficulty?,
+    onStartDemo: () -> Unit,
+    onPauseDemo: () -> Unit,
+    onResumeDemo: () -> Unit,
+    onRequestStopDemo: () -> Unit,
+    onResetDemo: () -> Unit,
+    onRateDifficulty: (WorkoutDifficulty?) -> Unit,
+    onOpenPlan: () -> Unit,
+    onOpenReader: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    val palette = LocalVelarisPalette.current
     val context = LocalContext.current
-    var hasNotifPermission by remember {
-        mutableStateOf(checkNotificationPermission(context))
-    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
+    val isResumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    val isDemoMode = !settings.isRealProgramEnabled || isZeroSlotDemoMode
 
+    var hasNotificationPermission by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+        )
+    }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
-        hasNotifPermission = granted
+        hasNotificationPermission = granted
+        onStartDemo()
     }
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("hardware_and_permissions_card"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = DawnSurface)
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Filled.Notifications,
-                        contentDescription = null,
-                        tint = DawnPrimaryAccent,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Уведомления и каналы устройства",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = DawnTextPrimary,
-                        modifier = Modifier.semantics { heading() }
-                    )
-                }
+    var renderNowElapsedMs by remember(snapshot.snapshotElapsedRealtimeMs, snapshot.status) {
+        mutableLongStateOf(snapshot.snapshotElapsedRealtimeMs)
+    }
 
-                Icon(
-                    imageVector = Icons.Filled.Refresh,
-                    contentDescription = "Обновить состояние аудио и датчиков",
-                    tint = DawnSecondaryAccent,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .clickable {
-                            hasNotifPermission = checkNotificationPermission(context)
-                            onRefreshHardware()
-                        }
-                        .padding(12.dp)
-                        .testTag("btn_refresh_hardware")
-                )
-            }
-
-            Text(
-                text = if (hasNotifPermission) {
-                    "Разрешение POST_NOTIFICATIONS: Выдано (уведомление «Velaris · Сессия» с кнопкой «Пауза» отображается в шторке и на экране блокировки)"
-                } else {
-                    "Разрешение POST_NOTIFICATIONS: Не выдано. На Android 13–17 фоновая служба продолжает работать, но баннер с кнопкой «Пауза» в шторке скрыт системой."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = if (hasNotifPermission) DawnSuccessAccent else DawnWarningAccent,
-                modifier = Modifier.testTag("notification_permission_status")
-            )
-
-            if (!hasNotifPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                FilledTonalButton(
-                    onClick = {
-                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
-                        .testTag("btn_request_notification_permission")
-                ) {
-                    Text("Разрешить показ уведомления «Velaris · Сессия»")
-                }
-            }
-
-            Text(
-                text = "Звуковой профиль: ${hardwareStatus.ringerModeLabelRu} · " +
-                    "Не беспокоить (DND): ${if (hardwareStatus.isDndActive) "Включён" else "Выкл"} · " +
-                    "Вибромотор: ${if (hardwareStatus.hasHardwareVibrator) "Доступен" else "Отсутствует"}",
-                style = MaterialTheme.typography.bodySmall,
-                color = DawnTextSecondary
-            )
+    val animationsEnabled = remember(isResumed) {
+        try {
+            ValueAnimator.areAnimatorsEnabled()
+        } catch (_: Throwable) {
+            true
         }
     }
-}
 
-@Composable
-private fun SettingSwitchRow(
-    label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    tag: String
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+    LaunchedEffect(
+        isResumed,
+        snapshot.isRunningOrPreparing,
+        snapshot.snapshotElapsedRealtimeMs,
+        animationsEnabled
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = DawnTextPrimary,
-            modifier = Modifier.weight(1f)
-        )
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            modifier = Modifier.testTag(tag)
-        )
-    }
-}
-
-@Composable
-private fun SampleSignalChip(
-    label: String,
-    tag: String,
-    enabled: Boolean,
-    onClick: () -> Unit
-) {
-    OutlinedButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier
-            .heightIn(min = 48.dp)
-            .testTag(tag)
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Vibration,
-            contentDescription = null,
-            tint = if (enabled) DawnPrimaryAccent else DawnTextSecondary,
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (enabled) DawnTextPrimary else DawnTextSecondary
-        )
-    }
-}
-
-@Composable
-private fun EventLogCard(
-    eventLog: List<BenchEventLogEntry>,
-    onClearLog: () -> Unit
-) {
-    val context = LocalContext.current
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("event_log_card"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = DawnSurface)
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Технический лог событий (без личных данных)",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = DawnTextPrimary,
-                    modifier = Modifier
-                        .weight(1f)
-                        .semantics { heading() }
-                )
-
-                Row {
-                    TextButton(
-                        onClick = {
-                            val clipboard =
-                                context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                            val formatted = eventLog.joinToString("\n") {
-                                "[+${it.elapsedMs}ms][${it.category}] ${it.message}"
-                            }
-                            clipboard?.setPrimaryClip(
-                                ClipData.newPlainText("Velaris S2 Log", formatted)
-                            )
-                        },
-                        modifier = Modifier
-                            .heightIn(min = 48.dp)
-                            .testTag("btn_copy_log")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.ContentCopy,
-                            contentDescription = "Копировать лог",
-                            tint = DawnSecondaryAccent,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Копировать", color = DawnSecondaryAccent)
-                    }
-
-                    TextButton(
-                        onClick = onClearLog,
-                        modifier = Modifier
-                            .heightIn(min = 48.dp)
-                            .testTag("btn_clear_log")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.DeleteOutline,
-                            contentDescription = "Очистить лог",
-                            tint = DawnTextSecondary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+        renderNowElapsedMs = SystemClock.elapsedRealtime()
+        if (isResumed && snapshot.isRunningOrPreparing && animationsEnabled) {
+            while (isActive) {
+                withInfiniteAnimationFrameMillis {
+                    renderNowElapsedMs = SystemClock.elapsedRealtime()
                 }
             }
+        }
+    }
 
+    val visualProgress = snapshot.computeVisualRingProgress(renderNowElapsedMs)
+    val visualRemainingMs = snapshot.computeVisualRemainingMs(renderNowElapsedMs)
+    val displaySeconds = ((visualRemainingMs + 999L) / 1000L).coerceAtLeast(0L)
+
+    val activeElapsedVisualMs = when (snapshot.status) {
+        RunStatus.RUNNING -> {
+            val delta = (renderNowElapsedMs - snapshot.snapshotElapsedRealtimeMs).coerceIn(0L, 2_500L)
+            (snapshot.confirmedActiveMs + delta).coerceAtMost(snapshot.totalActiveDurationMs)
+        }
+        else -> snapshot.confirmedActiveMs
+    }
+    val activeRemainingTotalSec =
+        ((snapshot.totalActiveDurationMs - activeElapsedVisualMs + 999L) / 1000L).coerceAtLeast(0L)
+
+    val targetRingColor = when (snapshot.status) {
+        RunStatus.PREPARING -> palette.warningAccent
+        RunStatus.RUNNING -> if (snapshot.currentPhase == PhaseType.CONTRACTION) {
+            palette.primaryAccent
+        } else {
+            palette.secondaryAccent
+        }
+        RunStatus.PAUSED, RunStatus.INTERRUPTED -> palette.warningAccent
+        RunStatus.COMPLETED -> palette.successAccent
+        RunStatus.STOPPED, RunStatus.IDLE -> palette.outline
+    }
+    val ringColor by animateColorAsState(
+        targetValue = targetRingColor,
+        animationSpec = tween(durationMillis = if (animationsEnabled) 260 else 0),
+        label = "WorkoutRingColor"
+    )
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("active_workout_screen"),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        if (isDemoMode) {
+            DemoSafetyBanner()
+        }
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("timer_display_card"),
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = palette.surface)
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(DawnSurfaceVariant.copy(alpha = 0.7f))
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                if (eventLog.isEmpty()) {
-                    Text(
-                        text = "Лог пуст",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = DawnTextSecondary
-                    )
-                } else {
-                    eventLog.take(25).forEach { entry ->
+                // Верхняя строка: статус + небольшой индикатор аудиомаршрута
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = palette.surfaceVariant
+                    ) {
                         Text(
-                            text = "[${entry.category}] ${entry.message}",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = DawnTextPrimary
+                            text = snapshot.status.labelRu,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = ringColor,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                .testTag("run_status_badge")
                         )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = palette.surfaceVariant,
+                        modifier = Modifier.testTag("workout_audio_route_badge")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (hardwareStatus.isHeadphonesConnected) {
+                                    Icons.Default.Headphones
+                                } else {
+                                    Icons.Default.VolumeUp
+                                },
+                                contentDescription = null,
+                                tint = palette.textSecondary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = if (hardwareStatus.isHeadphonesConnected) "Наушники" else "Динамик",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = palette.textSecondary
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = snapshot.protocol.titleRu,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = palette.textPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Крупное плавное кольцо постоянного размера (268.dp)
+                val phaseTitle = when (snapshot.status) {
+                    RunStatus.IDLE -> "Готов к старту"
+                    RunStatus.PREPARING -> "Подготовка"
+                    RunStatus.RUNNING, RunStatus.PAUSED, RunStatus.INTERRUPTED -> snapshot.currentPhase.labelRu
+                    RunStatus.COMPLETED -> "Подход завершён"
+                    RunStatus.STOPPED -> "Остановлено без зачёта"
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(268.dp)
+                        .semantics {
+                            liveRegion = LiveRegionMode.Polite
+                            contentDescription = "Фаза: $phaseTitle, осталось $displaySeconds секунд"
+                        }
+                        .testTag("smooth_timer_ring"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val trackColor = palette.surfaceVariant
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val strokePx = 15.dp.toPx()
+                        val glowStrokePx = 24.dp.toPx()
+                        val inset = glowStrokePx / 2f + 4.dp.toPx()
+                        val arcSize = Size(size.width - inset * 2f, size.height - inset * 2f)
+                        val topLeft = Offset(inset, inset)
+
+                        drawArc(
+                            color = trackColor,
+                            startAngle = -90f,
+                            sweepAngle = 360f,
+                            useCenter = false,
+                            topLeft = topLeft,
+                            size = arcSize,
+                            style = Stroke(width = strokePx, cap = StrokeCap.Round)
+                        )
+
+                        val sweep = (visualProgress.coerceIn(0f, 1f) * 360f)
+                        if (sweep > 0.5f) {
+                            drawArc(
+                                color = ringColor.copy(alpha = 0.20f),
+                                startAngle = -90f,
+                                sweepAngle = sweep,
+                                useCenter = false,
+                                topLeft = topLeft,
+                                size = arcSize,
+                                style = Stroke(width = glowStrokePx, cap = StrokeCap.Round)
+                            )
+                            drawArc(
+                                color = ringColor,
+                                startAngle = -90f,
+                                sweepAngle = sweep,
+                                useCenter = false,
+                                topLeft = topLeft,
+                                size = arcSize,
+                                style = Stroke(width = strokePx, cap = StrokeCap.Round)
+                            )
+                        }
+                    }
+
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(horizontal = 24.dp)
+                    ) {
+                        Text(
+                            text = phaseTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = ringColor,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.testTag("phase_title_text")
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = String.format(Locale.US, "%02d с", displaySeconds),
+                            style = MaterialTheme.typography.displayMedium.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontFeatureSettings = "tnum"
+                            ),
+                            color = palette.textPrimary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.testTag("countdown_seconds_text")
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = "Повтор ${snapshot.currentRepetition} / ${snapshot.totalRepetitions}",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontFeatureSettings = "tnum"
+                            ),
+                            color = palette.textSecondary,
+                            modifier = Modifier.testTag("repetition_counter_text")
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = "Осталось активного времени: $activeRemainingTotalSec с · Выполнено: ${snapshot.confirmedActiveMs / 1000} / ${snapshot.totalActiveDurationMs / 1000} с",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontFeatureSettings = "tnum"
+                    ),
+                    color = palette.textSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.testTag("confirmed_active_time_text")
+                )
+
+                if (snapshot.interruptionReason != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = palette.warningAccent.copy(alpha = 0.16f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("interruption_reason_banner")
+                    ) {
+                        Text(
+                            text = snapshot.interruptionReason,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = palette.warningAccent,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Крупные кнопки управления сессией
+                when (snapshot.status) {
+                    RunStatus.IDLE, RunStatus.STOPPED -> {
+                        Button(
+                            onClick = {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+                                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    onStartDemo()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = palette.primaryAccent,
+                                contentColor = palette.onPrimaryAccent
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 54.dp)
+                                .testTag("btn_start_demo")
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Начать подход",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    RunStatus.PREPARING, RunStatus.RUNNING -> {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = onPauseDemo,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = palette.warningAccent,
+                                    contentColor = palette.onPrimaryAccent
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 54.dp)
+                                    .testTag("btn_pause_demo")
+                            ) {
+                                Icon(Icons.Default.Pause, contentDescription = null)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Пауза", fontWeight = FontWeight.Bold)
+                            }
+
+                            OutlinedButton(
+                                onClick = onRequestStopDemo,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 54.dp)
+                                    .testTag("btn_stop_demo")
+                            ) {
+                                Icon(
+                                    Icons.Default.Stop,
+                                    contentDescription = null,
+                                    tint = palette.errorAccent
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Остановить", color = palette.errorAccent, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+
+                    RunStatus.PAUSED, RunStatus.INTERRUPTED -> {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = onResumeDemo,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = palette.successAccent,
+                                    contentColor = palette.onPrimaryAccent
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 54.dp)
+                                    .testTag("btn_resume_demo")
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Продолжить", fontWeight = FontWeight.Bold)
+                            }
+
+                            OutlinedButton(
+                                onClick = onRequestStopDemo,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 54.dp)
+                                    .testTag("btn_stop_demo")
+                            ) {
+                                Icon(
+                                    Icons.Default.Stop,
+                                    contentDescription = null,
+                                    tint = palette.errorAccent
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Остановить", color = palette.errorAccent, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+
+                    RunStatus.COMPLETED -> {
+                        // Состояние завершения (Update v1.1 п. 2):
+                        // спокойная отметка, необязательная оценка ощущения, кнопки «К плану» и «Почитать»
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, palette.successAccent.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                                .padding(14.dp)
+                                .testTag("workout_completion_card"),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = palette.successAccent,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Подход спокойно зачтён",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = palette.successAccent,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Text(
+                                text = "Необязательная оценка ощущения:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.textSecondary
+                            )
+
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                WorkoutDifficulty.entries.forEach { diff ->
+                                    val selected = lastCompletedSlotDifficulty == diff
+                                    FilledTonalButton(
+                                        onClick = {
+                                            onRateDifficulty(if (selected) null else diff)
+                                        },
+                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = if (selected) palette.primaryAccent else palette.surfaceVariant,
+                                            contentColor = if (selected) palette.onPrimaryAccent else palette.textPrimary
+                                        ),
+                                        modifier = Modifier
+                                            .heightIn(min = 48.dp)
+                                            .testTag("btn_rate_${diff.code.lowercase(Locale.ROOT)}")
+                                    ) {
+                                        Text(
+                                            text = diff.labelRu,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = onOpenPlan,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 48.dp)
+                                        .testTag("btn_completion_to_plan")
+                                ) {
+                                    Text("К плану", color = palette.textPrimary, fontWeight = FontWeight.SemiBold)
+                                }
+                                Button(
+                                    onClick = onOpenReader,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = palette.primaryAccent,
+                                        contentColor = palette.onPrimaryAccent
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 48.dp)
+                                        .testTag("btn_completion_to_reader")
+                                ) {
+                                    Text("Почитать", fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            OutlinedButton(
+                                onClick = onResetDemo,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .testTag("btn_reset_demo")
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("К следующему свободному подходу", color = palette.textSecondary)
+                            }
+                        }
                     }
                 }
             }
         }
-    }
-}
-
-private fun checkNotificationPermission(context: Context): Boolean {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.POST_NOTIFICATIONS
-        ) == PackageManager.PERMISSION_GRANTED
-    } else {
-        true
-    }
-}
-
-private fun formatWholeSeconds(ms: Long): String {
-    val clamped = ms.coerceAtLeast(0L)
-    val seconds = if (clamped == 0L) 0L else ((clamped + 999L) / 1000L)
-    return String.format(Locale.US, "%d с", seconds)
-}
-
-@Composable
-private fun MountainSilhouetteBackground(modifier: Modifier = Modifier) {
-    val desc = stringResource(R.string.mountain_illustration_desc)
-    Canvas(
-        modifier = modifier.semantics { contentDescription = desc }
-    ) {
-        val w = size.width
-        val h = size.height
-
-        val farRidge = Path().apply {
-            moveTo(0f, h * 0.75f)
-            lineTo(w * 0.22f, h * 0.35f)
-            lineTo(w * 0.46f, h * 0.62f)
-            lineTo(w * 0.74f, h * 0.25f)
-            lineTo(w, h * 0.60f)
-        }
-        drawPath(
-            path = farRidge,
-            color = DawnPrimaryAccent.copy(alpha = 0.16f),
-            style = Stroke(width = 1.5.dp.toPx())
-        )
-
-        val nearRidge = Path().apply {
-            moveTo(0f, h * 0.88f)
-            lineTo(w * 0.34f, h * 0.48f)
-            lineTo(w * 0.61f, h * 0.72f)
-            lineTo(w * 0.86f, h * 0.44f)
-            lineTo(w, h * 0.78f)
-        }
-        drawPath(
-            path = nearRidge,
-            color = DawnSecondaryAccent.copy(alpha = 0.20f),
-            style = Stroke(width = 1.8.dp.toPx())
-        )
-
-        drawLine(
-            color = DawnOutline.copy(alpha = 0.25f),
-            start = Offset(0f, h * 0.92f),
-            end = Offset(w, h * 0.92f),
-            strokeWidth = 1.dp.toPx()
-        )
     }
 }

@@ -6,19 +6,23 @@ import android.content.pm.PackageManager
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.example.data.StoryRepository
 import com.example.data.VelarisDatabase
 import com.example.data.WorkoutPersistenceRepository
-import com.example.domain.DemoProtocolConfig
+import com.example.domain.MarkdownNovelParser
 import com.example.domain.MetronomeTickStyle
+import com.example.domain.NeutralTestMarkdownFactory
 import com.example.domain.PhaseEngineSnapshot
 import com.example.domain.PhaseType
-import com.example.domain.PlanGroup
 import com.example.domain.RunStatus
 import com.example.domain.SoundPack
 import com.example.domain.TimeProvider
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -51,12 +55,12 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify stage 2 versionCode 3, applicationId and offline manifest`() {
+    fun `verify v1_1 versionCode 4, applicationId and offline manifest`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         assertEquals("Velaris", context.getString(R.string.app_name))
         assertEquals("com.velaris.app", BuildConfig.APPLICATION_ID)
-        assertEquals("0.3.0-s2", BuildConfig.VERSION_NAME)
-        assertEquals(3, BuildConfig.VERSION_CODE)
+        assertEquals("0.4.0-v1.1", BuildConfig.VERSION_NAME)
+        assertEquals(4, BuildConfig.VERSION_CODE)
 
         @Suppress("DEPRECATION")
         val packageInfo = context.packageManager.getPackageInfo(
@@ -75,20 +79,242 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify Stage 2 screen displays demo safety warning, version 3, Room daily plan, and 3 sound packs`() {
+    fun `verify v1_1 full interface navigation across Home, Plan, Workout, Reader, Settings and Diagnostics`() {
         composeTestRule.waitForIdle()
+
+        // 1. Главная: карточка Тренировка, карточка История («Добавить книгу» когда книга не импортирована), 7-дневный обзор, предупреждение Демо и версия 0.4.0-v1.1
         composeTestRule.onNodeWithTag("demo_safety_banner").assertExists()
-        composeTestRule.onNodeWithText("Демо — не выполняйте упражнения по этим сигналам").assertExists()
-        composeTestRule.onNodeWithTag("screen_title").assertExists()
-        composeTestRule.onNodeWithText("Версия: 0.3.0-s2 (versionCode 3)").assertExists()
+        composeTestRule.onNodeWithText("Версия: 0.4.0-v1.1 (versionCode 4)").assertExists()
+        composeTestRule.onNodeWithTag("home_workout_card").assertExists()
+        composeTestRule.onNodeWithTag("home_story_card").assertExists()
+        composeTestRule.onNodeWithTag("weekly_overview_card").assertExists()
+
+        // 2. Переход в План
+        composeTestRule.onNodeWithTag("nav_plan").performClick()
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("daily_plan_persistence_card").assertExists()
+
+        // 3. Переход в Активный подход
+        composeTestRule.onNodeWithTag("nav_workout").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("smooth_timer_ring").assertExists()
+        composeTestRule.onNodeWithTag("btn_start_demo").assertExists()
+
+        // 4. Переход в Чтение (пустое состояние «Открыть книгу из файла» до импорта)
+        composeTestRule.onNodeWithTag("nav_reader").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("story_reader_screen").assertExists()
+        composeTestRule.onNodeWithTag("reader_empty_import_card").assertExists()
+        composeTestRule.onNodeWithTag("btn_open_book_from_file").assertExists()
+
+        // 5. Переход в Настройки (5 тем, данные и 3 набора звуков) -> Диагностика
+        composeTestRule.onNodeWithTag("nav_settings").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("theme_selector_card").assertExists()
+        composeTestRule.onNodeWithTag("theme_option_theme_dawn").assertExists()
+        composeTestRule.onNodeWithTag("theme_option_theme_sky").assertExists()
+        composeTestRule.onNodeWithTag("theme_option_theme_aurora").assertExists()
+        composeTestRule.onNodeWithTag("theme_option_theme_sunset").assertExists()
+        composeTestRule.onNodeWithTag("theme_option_theme_sakura").assertExists()
         composeTestRule.onNodeWithTag("sound_pack_soft").assertExists()
         composeTestRule.onNodeWithTag("sound_pack_chimes").assertExists()
         composeTestRule.onNodeWithTag("sound_pack_crisp").assertExists()
-        composeTestRule.onNodeWithTag("metronome_style_soft_tick").assertExists()
-        composeTestRule.onNodeWithTag("metronome_style_crisp_tick").assertExists()
-        composeTestRule.onNodeWithTag("btn_start_demo").assertExists()
+
+        composeTestRule.onNodeWithTag("btn_open_diagnostics")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("diagnostics_screen").assertExists()
+        composeTestRule.onNodeWithTag("audio_diagnostics_card").assertExists()
     }
+
+    @Test
+    fun `weekly 7-day overview includes only real completions and excludes demo completions`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = Room.inMemoryDatabaseBuilder(context, VelarisDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val clock = FakeControllableTimeProvider(localDate = "2026-11-03")
+            val repo = WorkoutPersistenceRepository(db.velarisDao(), clock)
+
+            // Изначально реальных записей нет -> пустое честное состояние
+            val initialOverview = repo.loadWeeklyOverview(todayDateStr = "2026-11-03")
+            assertEquals(7, initialOverview.days.size)
+            assertFalse(initialOverview.hasAnyRealData)
+            assertEquals(0, initialOverview.totalRealCompletionsInWeek)
+
+            // Завершаем демо-подход (isDemo = true) -> он НЕ должен попасть в реальный недельный обзор
+            val demoSlots = repo.getOrCreateDailySlots(
+                localDate = "2026-11-03",
+                planId = WorkoutPersistenceRepository.DEMO_PLAN_STANDARD_3,
+                isDemo = true
+            )
+            val demoSlot = demoSlots.first().slot
+            val demoProto = repo.slotToProtocolConfig(demoSlot)
+            val demoSnap = PhaseEngineSnapshot(
+                status = RunStatus.COMPLETED,
+                protocol = demoProto,
+                currentRepetition = demoProto.repetitions,
+                totalRepetitions = demoProto.repetitions,
+                currentPhase = PhaseType.RELAXATION,
+                phaseRemainingMs = 0L,
+                phaseDurationMs = demoProto.relaxationMs,
+                prepRemainingMs = 0L,
+                confirmedActiveMs = demoProto.totalActiveDurationMs,
+                totalActiveDurationMs = demoProto.totalActiveDurationMs,
+                interruptionReason = null,
+                isStopDialogVisible = false,
+                lastSchedulerDriftMs = 0L,
+                maxSchedulerDriftMs = 0L,
+                snapshotElapsedRealtimeMs = clock.elapsedMs,
+                runId = "run_demo_excluded",
+                slotId = demoSlot.id,
+                startDate = "2026-11-03",
+                zoneId = "Europe/Moscow",
+                isDemo = true,
+                soundPackSnapshot = SoundPack.SOFT,
+                metronomeStyleSnapshot = MetronomeTickStyle.SOFT
+            )
+            assertTrue(repo.completeRunAtomically(demoSnap))
+
+            val overviewAfterDemo = repo.loadWeeklyOverview(todayDateStr = "2026-11-03")
+            assertFalse("Демо-подход не должен попадать в реальную статистику", overviewAfterDemo.hasAnyRealData)
+            assertEquals(0, overviewAfterDemo.totalRealCompletionsInWeek)
+
+            // Теперь завершаем реальный подход (isDemo = false) за 2026-11-03
+            val realSlotsToday = repo.getOrCreateDailySlots(
+                localDate = "2026-11-03",
+                planId = WorkoutPersistenceRepository.REAL_PLAN_STANDARD_3,
+                isDemo = false
+            )
+            val realSlot = realSlotsToday.first().slot
+            val realProto = repo.slotToProtocolConfig(realSlot)
+            val realSnap = demoSnap.copy(
+                protocol = realProto,
+                runId = "run_real_included",
+                slotId = realSlot.id,
+                isDemo = false
+            )
+            assertTrue(repo.completeRunAtomically(realSnap))
+
+            val overviewAfterReal = repo.loadWeeklyOverview(todayDateStr = "2026-11-03")
+            assertTrue(overviewAfterReal.hasAnyRealData)
+            assertEquals(1, overviewAfterReal.totalRealCompletionsInWeek)
+            val todaySummary = overviewAfterReal.days.last()
+            assertTrue(todaySummary.isToday)
+            assertEquals(1, todaySummary.completedCount)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun `markdown novel repository imports 3 acts 12 chapters, verifies SHA-256 original copy, saves position across restart and mode switch, handles idempotent re-import, and preserves book on corrupted import`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = Room.inMemoryDatabaseBuilder(context, VelarisDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val clock = FakeControllableTimeProvider()
+            val storyRepo = StoryRepository(context, db.velarisDao(), clock)
+            storyRepo.removeImportedBook()
+
+            // Изначально книги нет
+            val emptyState = storyRepo.loadReaderState()
+            assertFalse(emptyState.hasImportedBook)
+
+            // 1. Импорт нейтрального тестового Markdown (3 акта, 12 глав)
+            val rawMarkdown = NeutralTestMarkdownFactory.buildThreeActsTwelveChaptersMarkdown()
+            val rawBytes = rawMarkdown.toByteArray(Charsets.UTF_8)
+            val expectedSha256 = MarkdownNovelParser.computeSha256Hex(rawBytes)
+
+            var state = storyRepo.prepareImportPreview(rawBytes, "roman_v1.md")
+            assertNotNull(state.pendingImportPreview)
+            assertEquals(3, state.pendingImportPreview?.actCount)
+            assertEquals(12, state.pendingImportPreview?.chapterCount)
+            assertEquals("Нейтральный технический макет (3 акта, 12 глав)", state.pendingImportPreview?.explicitTitle)
+
+            state = storyRepo.confirmPendingImport()
+            assertTrue(state.hasImportedBook)
+            assertEquals(3, state.actCount)
+            assertEquals(12, state.chapterCount)
+            assertEquals(expectedSha256, state.sha256Hex)
+            assertTrue("Копия исходного файла во внутреннем хранилище должна проходить проверку SHA-256", state.originalBytesChecksumVerified)
+
+            val savedSourceFile = java.io.File(
+                java.io.File(context.applicationContext.filesDir, "imported_books"),
+                StoryRepository.ACTIVE_SOURCE_FILE_NAME
+            )
+            assertTrue(savedSourceFile.exists())
+            assertArrayEquals(
+                "Исходный файл во внутреннем хранилище должен быть побайтово идентичен оригиналу без модификации",
+                rawBytes,
+                savedSourceFile.readBytes()
+            )
+
+            // 4. Одинаковый авторский текст в обоих режимах отображения («Книга» vs «Пошаговый»)
+            for (chapter in state.chapters) {
+                val bookTexts = chapter.blocks.map { it.plainText }
+                val stepTexts = chapter.steps.flatMap { it.blocks }.map { it.plainText }
+                assertEquals(bookTexts, stepTexts)
+            }
+
+            // 5. Сохранение позиции чтения при переходе между шагами/главами, переключении режима и перезапуске
+            state = storyRepo.selectChapter("ch_05")
+            assertEquals("ch_05", state.currentChapter?.chapterId)
+            state = storyRepo.nextStep()
+            val savedChapterId = state.currentChapter?.chapterId.orEmpty()
+            val savedBlockId = state.currentBlockId
+            val savedStepIndex = state.currentStepIndex
+            assertEquals("ch_05", savedChapterId)
+            assertTrue(savedStepIndex > 0)
+
+            // Создаём новый экземпляр StoryRepository поверх той же БД Room (имитация перезапуска приложения)
+            val restartedRepo = StoryRepository(context, db.velarisDao(), clock)
+            val restoredState = restartedRepo.loadReaderState()
+            assertTrue(restoredState.hasImportedBook)
+            assertEquals("Позиция главы должна сохраняться после перезапуска", savedChapterId, restoredState.currentChapter?.chapterId)
+            assertEquals("Позиция блока должна сохраняться после перезапуска и смены режима", savedBlockId, restoredState.currentBlockId)
+            assertEquals("Позиция шага должна сохраняться после перезапуска", savedStepIndex, restoredState.currentStepIndex)
+
+            // 6. Повторный импорт того же файла (одинаковый SHA-256) не создаёт дубликат и не сбрасывает позицию чтения
+            val previewSame = restartedRepo.prepareImportPreview(rawBytes, "roman_v1_copy.md")
+            assertTrue("Предпросмотр должен определять совпадение SHA-256", previewSame.pendingImportPreview?.isIdenticalToCurrentBook == true)
+            val afterReimport = restartedRepo.confirmPendingImport()
+            assertNotNull(db.velarisDao().getActiveNovel())
+            assertEquals("Повторный импорт того же файла НЕ должен сбрасывать главу", savedChapterId, afterReimport.currentChapter?.chapterId)
+            assertEquals("Повторный импорт того же файла НЕ должен сбрасывать блок", savedBlockId, afterReimport.currentBlockId)
+            assertEquals("Повторный импорт того же файла НЕ должен сбрасывать шаг", savedStepIndex, afterReimport.currentStepIndex)
+
+            // 7. Импорт повреждённого файла не затирает уже установленную книгу и её прогресс
+            val corruptedBytes = byteArrayOf(0xFF.toByte(), 0xFE.toByte(), 0x00.toByte(), 0x81.toByte())
+            val stateAfterCorruptedPreview = restartedRepo.prepareImportPreview(corruptedBytes, "corrupted.md")
+            assertNotNull("Должна отображаться понятная ошибка импорта", stateAfterCorruptedPreview.errorMessageRu)
+            assertTrue("Установленная книга должна оставаться доступной", stateAfterCorruptedPreview.hasImportedBook)
+            assertEquals(savedChapterId, stateAfterCorruptedPreview.currentChapter?.chapterId)
+            assertEquals(savedBlockId, stateAfterCorruptedPreview.currentBlockId)
+            assertArrayEquals(rawBytes, savedSourceFile.readBytes())
+
+            // Проверяем прямое отклонение пустого файла через importMarkdownDirect
+            val stateAfterEmptyDirect = restartedRepo.importMarkdownDirect("   \n ".toByteArray(Charsets.UTF_8), "empty.md")
+            assertNotNull(stateAfterEmptyDirect.errorMessageRu)
+            assertTrue(stateAfterEmptyDirect.hasImportedBook)
+            assertEquals(savedChapterId, stateAfterEmptyDirect.currentChapter?.chapterId)
+            assertEquals(savedBlockId, stateAfterEmptyDirect.currentBlockId)
+
+            // Переход к концу книги -> состояние «История прочитана» без автоматического сброса позиции
+            var endState = restartedRepo.selectChapter("ch_12")
+            while (!endState.isCompleted) {
+                endState = restartedRepo.nextStep()
+            }
+            assertTrue(endState.isCompleted)
+            assertEquals("ch_12", endState.currentChapter?.chapterId)
+        } finally {
+            db.close()
+        }
+    }
+
 
     @Test
     fun `room persistence supports variable slots N=3 and N=0, atomic completion, and prevents duplicate credit`() = runBlocking {
@@ -100,7 +326,6 @@ class ExampleRobolectricTest {
             val clock = FakeControllableTimeProvider(localDate = "2026-11-03")
             val repo = WorkoutPersistenceRepository(db.velarisDao(), clock)
 
-            // 1. Стандартный демо-план на 3 подхода (N=3)
             val slotsDay1 = repo.getOrCreateDailySlots(
                 localDate = "2026-11-03",
                 planId = WorkoutPersistenceRepository.DEMO_PLAN_STANDARD_3,
@@ -109,7 +334,6 @@ class ExampleRobolectricTest {
             assertEquals(3, slotsDay1.size)
             assertTrue(slotsDay1.none { it.isCompleted })
 
-            // 2. План выходного дня без тренировок (N=0)
             val zeroSlots = repo.getOrCreateDailySlots(
                 localDate = "2026-11-04",
                 planId = WorkoutPersistenceRepository.DEMO_PLAN_ZERO_SLOTS,
@@ -117,7 +341,6 @@ class ExampleRobolectricTest {
             )
             assertEquals(0, zeroSlots.size)
 
-            // 3. Атомарное завершение первого слота и защита от повторного зачёта (double tap / дубль сигнала)
             val targetSlot = slotsDay1.first().slot
             val proto = repo.slotToProtocolConfig(targetSlot)
             val completedSnap = PhaseEngineSnapshot(
@@ -146,7 +369,6 @@ class ExampleRobolectricTest {
             )
 
             assertTrue(repo.completeRunAtomically(completedSnap))
-            // Повторная попытка зачесть тот же слот (даже с новым runId) должна вернуть false
             val duplicateSnap = completedSnap.copy(runId = "run_atomic_duplicate")
             assertFalse(repo.completeRunAtomically(duplicateSnap))
 
@@ -174,7 +396,6 @@ class ExampleRobolectricTest {
             val slot1 = slotsBeforeMidnight.first().slot
             val proto = repo.slotToProtocolConfig(slot1)
 
-            // Попытка стартует в 23:59:50 2026-11-03
             val startSnap = PhaseEngineSnapshot(
                 status = RunStatus.RUNNING,
                 protocol = proto,
@@ -201,7 +422,6 @@ class ExampleRobolectricTest {
             )
             repo.saveRunCheckpoint(startSnap)
 
-            // Наступает полночь (2026-11-04) и меняется часовой пояс, попытка завершается в 00:00:15
             clock.localDate = "2026-11-04"
             clock.zoneId = "Europe/Kaliningrad"
             clock.wallMs += 25_000L
@@ -213,11 +433,9 @@ class ExampleRobolectricTest {
             )
             assertTrue(repo.completeRunAtomically(finishSnap))
 
-            // Завершение обязано относиться к дате старта (2026-11-03), а на новой дате (2026-11-04) все слоты свободны
             val slotsNextDay = repo.getOrCreateDailySlots(localDate = "2026-11-04")
             assertEquals(0, slotsNextDay.count { it.isCompleted })
 
-            // Возврат часов/даты к уже существующей дате 2026-11-03 использует прежний снимок дня и зачёт
             val slotsReturned = repo.getOrCreateDailySlots(localDate = "2026-11-03")
             assertEquals(1, slotsReturned.count { it.isCompleted })
             assertEquals(slot1.id, slotsReturned.first { it.isCompleted }.slot.id)
@@ -244,7 +462,6 @@ class ExampleRobolectricTest {
             val slot = slots.first().slot
             val proto = repo.slotToProtocolConfig(slot)
 
-            // Сохраняем контрольную точку посреди подхода (confirmedActiveMs = 6_000L)
             val checkpointSnap = PhaseEngineSnapshot(
                 status = RunStatus.RUNNING,
                 protocol = proto,
@@ -271,14 +488,12 @@ class ExampleRobolectricTest {
             )
             repo.saveRunCheckpoint(checkpointSnap)
 
-            // Проходит 15 минут простоя и происходит перезапуск приложения (или перезагрузка устройства)
             clock.wallMs += 15 * 60 * 1000L
             clock.bootSession = "boot_after_reboot"
 
             val recovered = repo.recoverInterruptedRunAfterProcessDeath()
             assertNotNull(recovered)
             assertEquals(RunStatus.INTERRUPTED.name, recovered!!.status)
-            // Время простоя НЕ начислено: confirmedActiveMs остался ровно 6_000L
             assertEquals(6_000L, recovered.confirmedActiveMs)
             assertEquals(1_500L, recovered.phaseRemainingMs)
             assertEquals("crisp", recovered.soundPackIdSnapshot)

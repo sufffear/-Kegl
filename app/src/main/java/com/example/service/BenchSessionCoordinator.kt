@@ -1,13 +1,19 @@
 package com.example.service
 
 import android.content.Context
+import android.net.Uri
 import android.os.SystemClock
+import android.provider.OpenableColumns
+import com.example.data.AudioDiagnosticEntry
 import com.example.data.AudioHardwareStatus
 import com.example.data.AudioVibrationEngine
 import com.example.data.BenchSignalSettings
 import com.example.data.DailySlotWithCompletion
 import com.example.data.PreferencesRepository
+import com.example.data.StoryReaderUiState
+import com.example.data.StoryRepository
 import com.example.data.VelarisDatabase
+import com.example.data.WeeklyOverviewState
 import com.example.data.WorkoutPersistenceRepository
 import com.example.domain.BenchEventLogEntry
 import com.example.domain.CheckpointTrigger
@@ -21,6 +27,7 @@ import com.example.domain.PlanGroup
 import com.example.domain.SignalType
 import com.example.domain.SoundPack
 import com.example.domain.SystemTimeProvider
+import com.example.domain.WorkoutDifficulty
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -32,10 +39,9 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Единый координатор сессии Velaris (Этап 0B + Этап 2: Room, контрольные точки, DataStore и звуковые наборы).
+ * Единый координатор сессии Velaris (Этап 0B + Этап 2 + Итерация v1.1).
  * Хранит единственный экземпляр PhaseEngine, синхронизирует контрольные точки и завершения с Room,
- * сохраняет пользовательские настройки сигналов в DataStore и восстанавливает прерванную попытку
- * после смерти процесса без начисления времени простоя.
+ * управляет 7-дневным обзором реальных записей, офлайн-читалкой истории, аудио-диагностикой и настройками DataStore.
  */
 object BenchSessionCoordinator {
 
@@ -47,12 +53,16 @@ object BenchSessionCoordinator {
     private var audioVibrationEngine: AudioVibrationEngine? = null
     private var preferencesRepository: PreferencesRepository? = null
     private var persistenceRepository: WorkoutPersistenceRepository? = null
+    private var storyRepository: StoryRepository? = null
 
     private val _settings = MutableStateFlow(BenchSignalSettings())
     val settings: StateFlow<BenchSignalSettings> = _settings.asStateFlow()
 
     private val _hardwareStatus = MutableStateFlow(AudioHardwareStatus())
     val hardwareStatus: StateFlow<AudioHardwareStatus> = _hardwareStatus.asStateFlow()
+
+    private val _audioDiagnostics = MutableStateFlow<List<AudioDiagnosticEntry>>(emptyList())
+    val audioDiagnostics: StateFlow<List<AudioDiagnosticEntry>> = _audioDiagnostics.asStateFlow()
 
     private val _eventLog = MutableStateFlow<List<BenchEventLogEntry>>(emptyList())
     val eventLog: StateFlow<List<BenchEventLogEntry>> = _eventLog.asStateFlow()
@@ -74,6 +84,15 @@ object BenchSessionCoordinator {
 
     private val _realCompletionsCount = MutableStateFlow(0)
     val realCompletionsCount: StateFlow<Int> = _realCompletionsCount.asStateFlow()
+
+    private val _weeklyOverview = MutableStateFlow(WeeklyOverviewState())
+    val weeklyOverview: StateFlow<WeeklyOverviewState> = _weeklyOverview.asStateFlow()
+
+    private val _storyState = MutableStateFlow(StoryReaderUiState())
+    val storyState: StateFlow<StoryReaderUiState> = _storyState.asStateFlow()
+
+    private val _lastCompletedSlotDifficulty = MutableStateFlow<WorkoutDifficulty?>(null)
+    val lastCompletedSlotDifficulty: StateFlow<WorkoutDifficulty?> = _lastCompletedSlotDifficulty.asStateFlow()
 
     private val _databaseErrorMessage = MutableStateFlow<String?>(null)
     val databaseErrorMessage: StateFlow<String?> = _databaseErrorMessage.asStateFlow()
@@ -107,7 +126,7 @@ object BenchSessionCoordinator {
         if (appContext == null) {
             val appCtx = context.applicationContext
             appContext = appCtx
-            audioVibrationEngine = AudioVibrationEngine(
+            val audioEngine = AudioVibrationEngine(
                 context = appCtx,
                 onAudioFocusLost = { reasonRu ->
                     onExternalInterruption(reasonRu)
@@ -116,6 +135,7 @@ object BenchSessionCoordinator {
                     appendLog(category, message)
                 }
             )
+            audioVibrationEngine = audioEngine
 
             val prefs = PreferencesRepository(appCtx)
             preferencesRepository = prefs
@@ -124,38 +144,61 @@ object BenchSessionCoordinator {
             val repo = WorkoutPersistenceRepository(db.velarisDao(), timeProvider)
             persistenceRepository = repo
 
+            val storyRepo = StoryRepository(appCtx, db.velarisDao(), timeProvider)
+            storyRepository = storyRepo
+
             coordinatorScope.launch {
-                prefs.signalSettingsFlow.collect { loadedSettings ->
-                    _settings.value = loadedSettings
-                    phaseEngine.isMetronomeEnabled = loadedSettings.metronomeEnabled
-                    refreshHardwareStatus()
+                audioEngine.audioDiagnostics.collect { list ->
+                    _audioDiagnostics.value = list
                 }
             }
 
             coordinatorScope.launch {
-                initializePersistenceAndRecover(repo)
+                prefs.signalSettingsFlow.collect { loadedSettings ->
+                    val prevRealEnabled = _settings.value.isRealProgramEnabled
+                    _settings.value = loadedSettings
+                    phaseEngine.isMetronomeEnabled = loadedSettings.metronomeEnabled
+                    refreshHardwareStatus()
+                    if (prevRealEnabled != loadedSettings.isRealProgramEnabled) {
+                        refreshDailySlotsAsync()
+                    }
+                }
+            }
+
+            coordinatorScope.launch {
+                initializePersistenceAndRecover(repo, storyRepo)
             }
 
             refreshHardwareStatus()
             appendLog(
                 "INIT",
-                "Инициализирован стенд этапа 2 + плавный таймер + звуковые наборы (версия 0.3.0-s2, versionCode 3)"
+                "Инициализировано приложение Velaris v0.4.0-v1.1 (versionCode 4): стабилизация громкости, полный интерфейс, 7-дневный обзор и офлайн-читалка"
             )
         }
     }
 
-    private suspend fun initializePersistenceAndRecover(repo: WorkoutPersistenceRepository) {
+    private suspend fun initializePersistenceAndRecover(
+        repo: WorkoutPersistenceRepository,
+        storyRepo: StoryRepository
+    ) {
         try {
+            val isDemo = isCurrentModeDemo()
             val slots = repo.getOrCreateDailySlots(
                 localDate = activeDateKey(),
                 planId = activePlanId(),
-                isDemo = true
+                isDemo = isDemo
             )
             _dailySlots.value = slots
             _demoCompletionsCount.value = repo.countDemoCompletions()
             _realCompletionsCount.value = repo.countRealCompletions()
+            _weeklyOverview.value = repo.loadWeeklyOverview(
+                todayDateStr = timeProvider.currentLocalDate(),
+                selectedDateStr = _weeklyOverview.value.selectedDate.ifEmpty { null }
+            )
 
-            // Синхронизируем выбранный протокол с первым незавершённым слотом дня (если двигатель в IDLE)
+            // Загружаем офлайн-читалку независимо (ошибки читалки изолированы внутри StoryRepository)
+            _storyState.value = storyRepo.loadReaderState()
+
             val firstTargetSlot = slots.firstOrNull { !it.isCompleted }?.slot ?: slots.firstOrNull()?.slot
             if (firstTargetSlot != null) {
                 val proto = repo.slotToProtocolConfig(firstTargetSlot)
@@ -166,7 +209,6 @@ object BenchSessionCoordinator {
                 }
             }
 
-            // Проверяем, не осталась ли прерванная попытка после выгрузки процесса или перезагрузки
             val recovered = repo.recoverInterruptedRunAfterProcessDeath()
             if (recovered != null) {
                 val restoredProto = DemoProtocolConfig(
@@ -208,16 +250,20 @@ object BenchSessionCoordinator {
         }
     }
 
+    private fun isCurrentModeDemo(): Boolean {
+        return _isZeroSlotDemoMode.value || !_settings.value.isRealProgramEnabled
+    }
+
     private fun activeDateKey(): String {
         val today = timeProvider.currentLocalDate()
         return if (_isZeroSlotDemoMode.value) "${today}_rest" else today
     }
 
     private fun activePlanId(): String {
-        return if (_isZeroSlotDemoMode.value) {
-            WorkoutPersistenceRepository.DEMO_PLAN_ZERO_SLOTS
-        } else {
-            WorkoutPersistenceRepository.DEMO_PLAN_STANDARD_3
+        return when {
+            _isZeroSlotDemoMode.value -> WorkoutPersistenceRepository.DEMO_PLAN_ZERO_SLOTS
+            _settings.value.isRealProgramEnabled -> WorkoutPersistenceRepository.REAL_PLAN_STANDARD_3
+            else -> WorkoutPersistenceRepository.DEMO_PLAN_STANDARD_3
         }
     }
 
@@ -232,7 +278,7 @@ object BenchSessionCoordinator {
             if (enabled) {
                 "Включён тестовый режим N=0 («Сегодня без тренировок»)"
             } else {
-                "Включён стандартный демо-план дня (3 подхода)"
+                "Включён план дня (3 подхода)"
             }
         )
         refreshDailySlotsAsync()
@@ -242,16 +288,20 @@ object BenchSessionCoordinator {
         val repo = persistenceRepository ?: return
         coordinatorScope.launch {
             try {
+                val isDemo = isCurrentModeDemo()
                 val slots = repo.getOrCreateDailySlots(
                     localDate = activeDateKey(),
                     planId = activePlanId(),
-                    isDemo = true
+                    isDemo = isDemo
                 )
                 _dailySlots.value = slots
                 _demoCompletionsCount.value = repo.countDemoCompletions()
                 _realCompletionsCount.value = repo.countRealCompletions()
+                _weeklyOverview.value = repo.loadWeeklyOverview(
+                    todayDateStr = timeProvider.currentLocalDate(),
+                    selectedDateStr = _weeklyOverview.value.selectedDate.ifEmpty { null }
+                )
 
-                // Если текущий выбранный протокол не входит в список слотов и двигатель свободен, выбираем первый доступный
                 if (slots.isNotEmpty() && !phaseEngine.currentSnapshot().isActiveOrPaused) {
                     val currentId = phaseEngine.currentSnapshot().protocol.id
                     if (slots.none { it.slot.id == currentId }) {
@@ -273,16 +323,179 @@ object BenchSessionCoordinator {
         }
     }
 
+    fun selectWeeklyOverviewDate(localDate: String) {
+        val repo = persistenceRepository ?: return
+        coordinatorScope.launch {
+            runCatching {
+                _weeklyOverview.value = repo.loadWeeklyOverview(
+                    todayDateStr = timeProvider.currentLocalDate(),
+                    selectedDateStr = localDate
+                )
+            }
+        }
+    }
+
+    fun rateLastCompletedSlotDifficulty(difficulty: WorkoutDifficulty?) {
+        val slotId = _engineSnapshot.value.slotId ?: return
+        val repo = persistenceRepository ?: return
+        _lastCompletedSlotDifficulty.value = difficulty
+        coordinatorScope.launch {
+            runCatching {
+                repo.updateCompletionDifficulty(slotId = slotId, difficulty = difficulty)
+                refreshDailySlotsAsync()
+            }
+        }
+    }
+
+    fun prepareMarkdownImportFromUri(context: Context, uri: Uri) {
+        val repo = storyRepository ?: return
+        coordinatorScope.launch {
+            try {
+                val resolver = context.contentResolver
+                var displayName = uri.lastPathSegment?.substringAfterLast('/') ?: "book.md"
+                resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (nameIndex >= 0 && cursor.moveToFirst()) {
+                        val queried = cursor.getString(nameIndex)
+                        if (!queried.isNullOrBlank()) {
+                            displayName = queried
+                        }
+                    }
+                }
+                val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: throw IllegalArgumentException("Не удалось открыть выбранный документ.")
+                val newState = repo.prepareImportPreview(rawBytes = bytes, fileName = displayName)
+                _storyState.value = newState
+                val preview = newState.pendingImportPreview
+                if (preview != null) {
+                    appendLog(
+                        "BOOK",
+                        "Подготовлен предпросмотр файла «${preview.fileName}»: актов=${preview.actCount}, глав=${preview.chapterCount}, sha256=${preview.sha256Hex.take(12)}..."
+                    )
+                }
+            } catch (e: Exception) {
+                _storyState.value = repo.loadReaderState(
+                    errorBannerRu = "Не удалось прочитать выбранный файл (${e.javaClass.simpleName}). Текущая книга сохранена."
+                )
+            }
+        }
+    }
+
+    fun prepareMarkdownImportBytes(rawBytes: ByteArray, fileName: String) {
+        val repo = storyRepository ?: return
+        coordinatorScope.launch {
+            _storyState.value = repo.prepareImportPreview(rawBytes = rawBytes, fileName = fileName)
+        }
+    }
+
+    fun updateImportPreviewHeadingLevels(actHeadingLevel: Int, chapterHeadingLevel: Int) {
+        val repo = storyRepository ?: return
+        coordinatorScope.launch {
+            _storyState.value = repo.updatePreviewHeadingLevels(actHeadingLevel, chapterHeadingLevel)
+        }
+    }
+
+    fun confirmPendingMarkdownImport() {
+        val repo = storyRepository ?: return
+        coordinatorScope.launch {
+            val state = repo.confirmPendingImport()
+            _storyState.value = state
+            if (state.hasImportedBook) {
+                appendLog(
+                    "BOOK",
+                    "Импортирована книга (файл=${state.fileName}, актов=${state.actCount}, глав=${state.chapterCount}, sha256=${state.sha256Hex.take(12)}...)"
+                )
+            }
+        }
+    }
+
+    fun cancelPendingMarkdownImport() {
+        val repo = storyRepository ?: return
+        coordinatorScope.launch {
+            _storyState.value = repo.cancelPendingImport()
+        }
+    }
+
+    fun importNeutralTestMarkdown() {
+        val repo = storyRepository ?: return
+        coordinatorScope.launch {
+            val state = repo.importNeutralTestSample()
+            _storyState.value = state
+            appendLog(
+                "BOOK",
+                "Импортирован нейтральный тестовый макет Markdown (${state.actCount} акта, ${state.chapterCount} глав)"
+            )
+        }
+    }
+
+    fun nextStoryStep() {
+        val repo = storyRepository ?: return
+        coordinatorScope.launch {
+            _storyState.value = repo.nextStep()
+        }
+    }
+
+    fun previousStoryStep() {
+        val repo = storyRepository ?: return
+        coordinatorScope.launch {
+            _storyState.value = repo.previousStep()
+        }
+    }
+
+    fun nextStoryChapter() {
+        val repo = storyRepository ?: return
+        coordinatorScope.launch {
+            _storyState.value = repo.nextChapter()
+        }
+    }
+
+    fun previousStoryChapter() {
+        val repo = storyRepository ?: return
+        coordinatorScope.launch {
+            _storyState.value = repo.previousChapter()
+        }
+    }
+
+    fun selectStoryChapter(chapterId: String) {
+        val repo = storyRepository ?: return
+        coordinatorScope.launch {
+            _storyState.value = repo.selectChapter(chapterId)
+        }
+    }
+
+    fun saveStoryBlockPosition(blockId: String) {
+        val repo = storyRepository ?: return
+        coordinatorScope.launch {
+            _storyState.value = repo.saveBlockPosition(blockId)
+        }
+    }
+
+    fun restartStoryFromBeginning() {
+        val repo = storyRepository ?: return
+        coordinatorScope.launch {
+            _storyState.value = repo.restartFromBeginning()
+        }
+    }
+
+    fun removeImportedBook() {
+        val repo = storyRepository ?: return
+        coordinatorScope.launch {
+            _storyState.value = repo.removeImportedBook()
+            appendLog("BOOK", "Импортированная книга удалена из внутреннего хранилища по подтверждению пользователя")
+        }
+    }
+
     private fun persistCheckpointAsync(snapshot: PhaseEngineSnapshot, trigger: CheckpointTrigger) {
         val repo = persistenceRepository ?: return
         coordinatorScope.launch {
             try {
                 if (trigger == CheckpointTrigger.COMPLETE) {
+                    _lastCompletedSlotDifficulty.value = null
                     val inserted = repo.completeRunAtomically(snapshot)
                     if (inserted) {
                         appendLog(
                             "DB_COMMIT",
-                            "Атомарный зачёт подхода сохранён в Room: slotId=${snapshot.slotId}, дата=${snapshot.startDate}"
+                            "Атомарный зачёт подхода сохранён в Room: slotId=${snapshot.slotId}, дата=${snapshot.startDate}, isDemo=${snapshot.isDemo}"
                         )
                     } else {
                         appendLog(
@@ -290,14 +503,19 @@ object BenchSessionCoordinator {
                             "Повторный зачёт слота ${snapshot.slotId} заблокирован уникальным ограничением Room"
                         )
                     }
+                    val isDemo = isCurrentModeDemo()
                     val slots = repo.getOrCreateDailySlots(
                         localDate = activeDateKey(),
                         planId = activePlanId(),
-                        isDemo = true
+                        isDemo = isDemo
                     )
                     _dailySlots.value = slots
                     _demoCompletionsCount.value = repo.countDemoCompletions()
                     _realCompletionsCount.value = repo.countRealCompletions()
+                    _weeklyOverview.value = repo.loadWeeklyOverview(
+                        todayDateStr = timeProvider.currentLocalDate(),
+                        selectedDateStr = _weeklyOverview.value.selectedDate.ifEmpty { null }
+                    )
                 } else {
                     repo.saveRunCheckpoint(snapshot)
                 }
@@ -315,9 +533,20 @@ object BenchSessionCoordinator {
         _hardwareStatus.value = engine.inspectHardwareStatus(_settings.value)
     }
 
+    fun clearAudioDiagnostics() {
+        audioVibrationEngine?.clearAudioDiagnostics()
+    }
+
     fun updateSettings(transform: (BenchSignalSettings) -> BenchSignalSettings) {
         val previous = _settings.value
         val updated = transform(previous)
+        if (previous.isRealProgramEnabled != updated.isRealProgramEnabled &&
+            _engineSnapshot.value.isActiveOrPaused
+        ) {
+            appendLog("PLAN", "Переключение режима программы заблокировано на время активного подхода")
+            return
+        }
+
         _settings.value = updated
         phaseEngine.isMetronomeEnabled = updated.metronomeEnabled
         refreshHardwareStatus()
@@ -334,13 +563,17 @@ object BenchSessionCoordinator {
             )
         }
 
+        if (previous.isRealProgramEnabled != updated.isRealProgramEnabled) {
+            refreshDailySlotsAsync()
+        }
+
         val prefs = preferencesRepository
         if (prefs != null) {
             coordinatorScope.launch {
                 try {
                     prefs.updateSettings(updated)
                 } catch (e: Exception) {
-                    appendLog("PREFS_ERR", "Не удалось сохранить настройки сигналов: ${e.javaClass.simpleName}")
+                    appendLog("PREFS_ERR", "Не удалось сохранить настройки: ${e.javaClass.simpleName}")
                 }
             }
         }
@@ -423,17 +656,19 @@ object BenchSessionCoordinator {
         }
 
         val slotIdToUse = matchingSlot?.slot?.id ?: phaseEngine.currentSnapshot().protocol.id
+        val isDemoSlot = matchingSlot?.slot?.isDemo ?: isCurrentModeDemo()
         val runId = "run_${UUID.randomUUID()}"
         val startDate = timeProvider.currentLocalDate()
         val zoneId = timeProvider.currentZoneId()
         val currentSettings = _settings.value
+        _lastCompletedSlotDifficulty.value = null
 
         val started = phaseEngine.start(
             runId = runId,
             slotId = slotIdToUse,
             startDate = startDate,
             zoneId = zoneId,
-            isDemo = true,
+            isDemo = isDemoSlot,
             soundPackSnapshot = currentSettings.soundPack,
             metronomeStyleSnapshot = currentSettings.metronomeTickStyle
         )

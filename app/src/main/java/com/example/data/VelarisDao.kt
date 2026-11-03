@@ -36,11 +36,17 @@ interface VelarisDao {
     @Query("SELECT * FROM daily_slots WHERE dailyPlanId = :dailyPlanId ORDER BY sortOrder ASC")
     suspend fun getSlotsForDailyPlan(dailyPlanId: String): List<DailySlotEntity>
 
+    @Query("SELECT * FROM daily_slots WHERE localDate IN (:localDates) AND isDemo = :isDemo ORDER BY localDate ASC, sortOrder ASC")
+    suspend fun getSlotsForDates(localDates: List<String>, isDemo: Boolean): List<DailySlotEntity>
+
     @Query("SELECT * FROM daily_slots WHERE id = :slotId LIMIT 1")
     suspend fun getSlotById(slotId: String): DailySlotEntity?
 
     @Query("SELECT * FROM workout_completions WHERE localDate = :localDate AND isDemo = :isDemo")
     suspend fun getCompletionsForDate(localDate: String, isDemo: Boolean): List<WorkoutCompletionEntity>
+
+    @Query("SELECT * FROM workout_completions WHERE localDate IN (:localDates) AND isDemo = :isDemo ORDER BY completedAtEpochMs ASC")
+    suspend fun getCompletionsForDates(localDates: List<String>, isDemo: Boolean): List<WorkoutCompletionEntity>
 
     @Query("SELECT * FROM workout_completions WHERE localDate = :localDate AND isDemo = :isDemo")
     fun observeCompletionsForDate(localDate: String, isDemo: Boolean): Flow<List<WorkoutCompletionEntity>>
@@ -114,5 +120,78 @@ interface VelarisDao {
             )
         )
         return rowId != -1L
+    }
+
+    // --- Универсальный офлайн-читатель линейного романа из Markdown (Update v1.1 п. 5–7) ---
+
+    @Query("SELECT * FROM imported_novels WHERE slotKey = :slotKey LIMIT 1")
+    suspend fun getActiveNovel(slotKey: String = ImportedNovelEntity.ACTIVE_SLOT_KEY): ImportedNovelEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertImportedNovel(novel: ImportedNovelEntity)
+
+    @Query("SELECT * FROM novel_chapters WHERE bookId = :bookId ORDER BY chapterNumber ASC")
+    suspend fun getNovelChapters(bookId: String): List<NovelChapterEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertNovelChapters(chapters: List<NovelChapterEntity>)
+
+    @Query("SELECT * FROM novel_blocks WHERE bookId = :bookId ORDER BY globalOrder ASC")
+    suspend fun getNovelBlocksForBook(bookId: String): List<NovelBlockEntity>
+
+    @Query("SELECT * FROM novel_blocks WHERE bookId = :bookId AND chapterId = :chapterId ORDER BY orderInChapter ASC")
+    suspend fun getNovelBlocksForChapter(bookId: String, chapterId: String): List<NovelBlockEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertNovelBlocks(blocks: List<NovelBlockEntity>)
+
+    @Query("SELECT * FROM novel_reading_progress WHERE bookId = :bookId LIMIT 1")
+    suspend fun getNovelReadingProgress(bookId: String): NovelReadingProgressEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertNovelReadingProgress(progress: NovelReadingProgressEntity)
+
+    @Query("DELETE FROM imported_novels")
+    suspend fun deleteAllImportedNovels()
+
+    @Query("DELETE FROM novel_chapters")
+    suspend fun deleteAllNovelChapters()
+
+    @Query("DELETE FROM novel_blocks")
+    suspend fun deleteAllNovelBlocks()
+
+    @Query("DELETE FROM novel_reading_progress WHERE bookId = :bookId")
+    suspend fun deleteNovelReadingProgress(bookId: String)
+
+    @Query("DELETE FROM novel_reading_progress")
+    suspend fun deleteAllNovelReadingProgress()
+
+    /**
+     * Атомарная установка или замена импортированного романа вместе с производными главами,
+     * блоками и начальной позицией чтения.
+     */
+    @Transaction
+    suspend fun replaceActiveNovelAtomically(
+        novel: ImportedNovelEntity,
+        chapters: List<NovelChapterEntity>,
+        blocks: List<NovelBlockEntity>,
+        initialProgress: NovelReadingProgressEntity
+    ) {
+        deleteAllNovelBlocks()
+        deleteAllNovelChapters()
+        deleteAllImportedNovels()
+        deleteAllNovelReadingProgress()
+        upsertImportedNovel(novel)
+        insertNovelChapters(chapters)
+        insertNovelBlocks(blocks)
+        upsertNovelReadingProgress(initialProgress)
+    }
+
+    @Transaction
+    suspend fun clearImportedNovelAtomically() {
+        deleteAllNovelBlocks()
+        deleteAllNovelChapters()
+        deleteAllImportedNovels()
+        deleteAllNovelReadingProgress()
     }
 }

@@ -1,37 +1,47 @@
 package com.example.ui.theme
 
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 
-private val VelarisDawnColorScheme = darkColorScheme(
-    primary = DawnPrimaryAccent,
-    onPrimary = DawnOnPrimaryAccent,
-    secondary = DawnSecondaryAccent,
-    onSecondary = DawnOnSecondaryAccent,
-    tertiary = DawnSuccessAccent,
-    background = DawnBackgroundTop,
-    onBackground = DawnTextPrimary,
-    surface = DawnSurface,
-    onSurface = DawnTextPrimary,
-    surfaceVariant = DawnSurfaceVariant,
-    onSurfaceVariant = DawnTextSecondary,
-    outline = DawnOutline,
-    error = DawnErrorAccent
+val LocalVelarisPalette = staticCompositionLocalOf { VelarisDawnPalette }
+
+private fun VelarisPalette.toMaterialColorScheme(): ColorScheme = darkColorScheme(
+    primary = primaryAccent,
+    onPrimary = onPrimaryAccent,
+    secondary = secondaryAccent,
+    onSecondary = onSecondaryAccent,
+    tertiary = successAccent,
+    background = backgroundTop,
+    onBackground = textPrimary,
+    surface = surface,
+    onSurface = textPrimary,
+    surfaceVariant = surfaceVariant,
+    onSurfaceVariant = textSecondary,
+    outline = outline,
+    error = errorAccent
 )
 
 /**
- * Тема Velaris (по умолчанию — «Рассвет», тёмный атмосферный минимализм).
- * По ТЗ п. 4 используются заранее проверенные семантические цвета с гарантированным контрастом,
- * без случайной динамической генерации цветов.
+ * Тема Velaris с поддержкой 5 заранее проверенных контрастных палитр:
+ * «Рассвет» (по умолчанию), «Небо», «Северное сияние», «Закат», «Сакура».
  */
 @Composable
 fun VelarisTheme(
+    themeId: VelarisThemeId = VelarisThemeId.DAWN,
     content: @Composable () -> Unit
 ) {
-    MaterialTheme(
-        colorScheme = VelarisDawnColorScheme,
-        typography = Typography,
-        content = content
-    )
+    val palette = paletteForTheme(themeId)
+    val colorScheme = palette.toMaterialColorScheme()
+
+    CompositionLocalProvider(LocalVelarisPalette provides palette) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }

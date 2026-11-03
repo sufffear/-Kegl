@@ -40,8 +40,8 @@ class AppBuildInfoRepository(private val context: Context) {
 
         return AppBuildInfo(
             appName = "Velaris",
-            stageCode = "0B + Этап 2",
-            stageTitle = "Движок фаз, плавный таймер, 3 набора звуков (DataStore) и надёжное хранение (Room)",
+            stageCode = "Итерация v1.1",
+            stageTitle = "Стабилизация громкости, полный интерфейс (5 тем), 7-дневный обзор и офлайн-читалка",
             applicationId = BuildConfig.APPLICATION_ID,
             versionName = BuildConfig.VERSION_NAME,
             versionCode = BuildConfig.VERSION_CODE,

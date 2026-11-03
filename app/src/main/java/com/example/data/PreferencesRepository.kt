@@ -9,7 +9,11 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.domain.MetronomeTickStyle
+import com.example.domain.ReaderFontSize
+import com.example.domain.ReaderLineSpacing
+import com.example.domain.ReaderMode
 import com.example.domain.SoundPack
+import com.example.ui.theme.VelarisThemeId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -24,11 +28,22 @@ data class BenchSignalSettings(
     val signalVolume: Float = 0.80f,
     val metronomeVolume: Float = 0.35f,
     val soundPack: SoundPack = SoundPack.SOFT,
-    val metronomeTickStyle: MetronomeTickStyle = MetronomeTickStyle.SOFT
-)
+    val metronomeTickStyle: MetronomeTickStyle = MetronomeTickStyle.SOFT,
+    val themeId: VelarisThemeId = VelarisThemeId.DAWN,
+    val readerMode: ReaderMode = ReaderMode.STEP_BY_STEP,
+    val readerFontSize: ReaderFontSize = ReaderFontSize.NORMAL,
+    val readerLineSpacing: ReaderLineSpacing = ReaderLineSpacing.COMFORTABLE,
+    val isRealProgramEnabled: Boolean = false,
+    val realProgramSource: String = DEFAULT_REAL_PROGRAM_SOURCE
+) {
+    companion object {
+        const val DEFAULT_REAL_PROGRAM_SOURCE = "Личный базовый протокол (Утро / Обед / Вечер)"
+    }
+}
 
 /**
- * Хранилище пользовательских настроек звука, вибрации, звукового набора и тика метронома в DataStore.
+ * Хранилище пользовательских настроек звука, вибрации, звукового набора, тика метронома,
+ * темы оформления, параметров читалки и режима программы в DataStore.
  */
 class PreferencesRepository(private val dataStore: DataStore<Preferences>) {
 
@@ -42,7 +57,14 @@ class PreferencesRepository(private val dataStore: DataStore<Preferences>) {
             signalVolume = (prefs[KEY_SIGNAL_VOLUME] ?: 0.80f).coerceIn(0f, 1f),
             metronomeVolume = (prefs[KEY_METRONOME_VOLUME] ?: 0.35f).coerceIn(0f, 1f),
             soundPack = SoundPack.fromId(prefs[KEY_SOUND_PACK_ID]),
-            metronomeTickStyle = MetronomeTickStyle.fromId(prefs[KEY_METRONOME_STYLE_ID])
+            metronomeTickStyle = MetronomeTickStyle.fromId(prefs[KEY_METRONOME_STYLE_ID]),
+            themeId = VelarisThemeId.fromId(prefs[KEY_THEME_ID]),
+            readerMode = ReaderMode.fromId(prefs[KEY_READER_MODE_ID]),
+            readerFontSize = ReaderFontSize.fromId(prefs[KEY_READER_FONT_SIZE_ID]),
+            readerLineSpacing = ReaderLineSpacing.fromId(prefs[KEY_READER_LINE_SPACING_ID]),
+            isRealProgramEnabled = prefs[KEY_REAL_PROGRAM_ENABLED] ?: false,
+            realProgramSource = prefs[KEY_REAL_PROGRAM_SOURCE]
+                ?: BenchSignalSettings.DEFAULT_REAL_PROGRAM_SOURCE
         )
     }
 
@@ -74,6 +96,26 @@ class PreferencesRepository(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { it[KEY_METRONOME_STYLE_ID] = style.id }
     }
 
+    suspend fun setThemeId(themeId: VelarisThemeId) {
+        dataStore.edit { it[KEY_THEME_ID] = themeId.id }
+    }
+
+    suspend fun setReaderMode(mode: ReaderMode) {
+        dataStore.edit { it[KEY_READER_MODE_ID] = mode.id }
+    }
+
+    suspend fun setReaderFontSize(size: ReaderFontSize) {
+        dataStore.edit { it[KEY_READER_FONT_SIZE_ID] = size.id }
+    }
+
+    suspend fun setReaderLineSpacing(spacing: ReaderLineSpacing) {
+        dataStore.edit { it[KEY_READER_LINE_SPACING_ID] = spacing.id }
+    }
+
+    suspend fun setRealProgramEnabled(enabled: Boolean) {
+        dataStore.edit { it[KEY_REAL_PROGRAM_ENABLED] = enabled }
+    }
+
     suspend fun updateSettings(settings: BenchSignalSettings) {
         dataStore.edit { prefs ->
             prefs[KEY_SOUND_ENABLED] = settings.soundEnabled
@@ -83,6 +125,12 @@ class PreferencesRepository(private val dataStore: DataStore<Preferences>) {
             prefs[KEY_METRONOME_VOLUME] = settings.metronomeVolume.coerceIn(0f, 1f)
             prefs[KEY_SOUND_PACK_ID] = settings.soundPack.id
             prefs[KEY_METRONOME_STYLE_ID] = settings.metronomeTickStyle.id
+            prefs[KEY_THEME_ID] = settings.themeId.id
+            prefs[KEY_READER_MODE_ID] = settings.readerMode.id
+            prefs[KEY_READER_FONT_SIZE_ID] = settings.readerFontSize.id
+            prefs[KEY_READER_LINE_SPACING_ID] = settings.readerLineSpacing.id
+            prefs[KEY_REAL_PROGRAM_ENABLED] = settings.isRealProgramEnabled
+            prefs[KEY_REAL_PROGRAM_SOURCE] = settings.realProgramSource
         }
     }
 
@@ -94,5 +142,11 @@ class PreferencesRepository(private val dataStore: DataStore<Preferences>) {
         private val KEY_METRONOME_VOLUME = floatPreferencesKey("metronome_volume")
         private val KEY_SOUND_PACK_ID = stringPreferencesKey("sound_pack_id")
         private val KEY_METRONOME_STYLE_ID = stringPreferencesKey("metronome_tick_style_id")
+        private val KEY_THEME_ID = stringPreferencesKey("theme_id")
+        private val KEY_READER_MODE_ID = stringPreferencesKey("reader_mode_id")
+        private val KEY_READER_FONT_SIZE_ID = stringPreferencesKey("reader_font_size_id")
+        private val KEY_READER_LINE_SPACING_ID = stringPreferencesKey("reader_line_spacing_id")
+        private val KEY_REAL_PROGRAM_ENABLED = booleanPreferencesKey("real_program_enabled")
+        private val KEY_REAL_PROGRAM_SOURCE = stringPreferencesKey("real_program_source")
     }
 }

@@ -8,9 +8,9 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
- * Локальная база данных Room проекта Velaris (ТЗ п. 9).
+ * Локальная база данных Room проекта Velaris (ТЗ п. 9, Update v1.1 п. 6–8).
  * Запрещён destructive fallback (`fallbackToDestructiveMigration` не используется);
- * поддерживаются явные миграции.
+ * поддерживаются явные миграции `MIGRATION_1_2` и `MIGRATION_2_3` без потери пользовательских данных.
  */
 @Database(
     entities = [
@@ -19,9 +19,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DailyPlanEntity::class,
         DailySlotEntity::class,
         WorkoutRunEntity::class,
-        WorkoutCompletionEntity::class
+        WorkoutCompletionEntity::class,
+        ImportedNovelEntity::class,
+        NovelChapterEntity::class,
+        NovelBlockEntity::class,
+        NovelReadingProgressEntity::class,
+        ReadingProgressEntity::class
     ],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
 abstract class VelarisDatabase : RoomDatabase() {
@@ -34,7 +39,109 @@ abstract class VelarisDatabase : RoomDatabase() {
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // Задел под будущие миграции этапа 3/4 без потери пользовательских данных
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `reading_progress` (
+                        `storyId` TEXT NOT NULL,
+                        `currentChapterId` TEXT NOT NULL,
+                        `currentNodeId` TEXT NOT NULL,
+                        `readerModeId` TEXT NOT NULL,
+                        `isCompleted` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`storyId`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `story_choice_selections`")
+                db.execSQL("DROP TABLE IF EXISTS `story_flags`")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `imported_novels` (
+                        `slotKey` TEXT NOT NULL,
+                        `bookId` TEXT NOT NULL,
+                        `fileName` TEXT NOT NULL,
+                        `explicitTitle` TEXT,
+                        `displayTitle` TEXT NOT NULL,
+                        `sha256Hex` TEXT NOT NULL,
+                        `byteSize` INTEGER NOT NULL,
+                        `internalFilePath` TEXT NOT NULL,
+                        `actHeadingLevel` INTEGER NOT NULL,
+                        `chapterHeadingLevel` INTEGER NOT NULL,
+                        `actCount` INTEGER NOT NULL,
+                        `chapterCount` INTEGER NOT NULL,
+                        `totalBlockCount` INTEGER NOT NULL,
+                        `importedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`slotKey`)
+                    )
+                    """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `novel_chapters` (
+                        `chapterId` TEXT NOT NULL,
+                        `bookId` TEXT NOT NULL,
+                        `chapterNumber` INTEGER NOT NULL,
+                        `actId` TEXT NOT NULL,
+                        `actNumber` INTEGER NOT NULL,
+                        `actTitle` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `blockCount` INTEGER NOT NULL,
+                        `stepCount` INTEGER NOT NULL,
+                        PRIMARY KEY(`chapterId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_novel_chapters_bookId_chapterNumber` ON `novel_chapters` (`bookId`, `chapterNumber`)"
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `novel_blocks` (
+                        `blockId` TEXT NOT NULL,
+                        `bookId` TEXT NOT NULL,
+                        `chapterId` TEXT NOT NULL,
+                        `orderInChapter` INTEGER NOT NULL,
+                        `globalOrder` INTEGER NOT NULL,
+                        `stepIndex` INTEGER NOT NULL,
+                        `stepId` TEXT NOT NULL,
+                        `blockType` TEXT NOT NULL,
+                        `subheadingLevel` INTEGER NOT NULL,
+                        `plainText` TEXT NOT NULL,
+                        `inlineSpansEncoded` TEXT NOT NULL,
+                        PRIMARY KEY(`blockId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_novel_blocks_bookId_chapterId_orderInChapter` ON `novel_blocks` (`bookId`, `chapterId`, `orderInChapter`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_novel_blocks_bookId_globalOrder` ON `novel_blocks` (`bookId`, `globalOrder`)"
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `novel_reading_progress` (
+                        `bookId` TEXT NOT NULL,
+                        `currentActId` TEXT NOT NULL,
+                        `currentChapterId` TEXT NOT NULL,
+                        `currentBlockId` TEXT NOT NULL,
+                        `currentStepIndex` INTEGER NOT NULL,
+                        `readerModeId` TEXT NOT NULL,
+                        `isCompleted` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`bookId`)
+                    )
+                    """.trimIndent()
+                )
             }
         }
 
@@ -45,7 +152,7 @@ abstract class VelarisDatabase : RoomDatabase() {
                     VelarisDatabase::class.java,
                     "velaris_local.db"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { INSTANCE = it }
             }

@@ -9,18 +9,27 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.os.Build
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import com.example.domain.MetronomeTickStyle
+import com.example.domain.SignalPatternSpec
 import com.example.domain.SignalType
 import com.example.domain.SoundPack
 import com.example.domain.SoundSynthesisSpec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.Locale
 
 data class AudioHardwareStatus(
     val outputRouteLabelRu: String = "Динамик",
@@ -33,9 +42,51 @@ data class AudioHardwareStatus(
 )
 
 /**
+ * Компактная запись диагностики аудиособытия (без личных данных) для раздела «Настройки → Диагностика».
+ */
+data class AudioDiagnosticEntry(
+    val elapsedMs: Long,
+    val eventType: String,
+    val signalLabel: String,
+    val packTitle: String,
+    val isSample: Boolean,
+    val effectiveVolume: Float,
+    val pcmRms: Float,
+    val trackGain: Float,
+    val focusHeld: Boolean,
+    val outputRoute: String
+) {
+    fun formatCompactLine(): String {
+        return String.format(
+            Locale.US,
+            "[+%dms][%s] %s (%s%s) vol=%.2f rms=%.3f gain=%.1f focus=%s route=%s",
+            elapsedMs,
+            eventType,
+            signalLabel,
+            packTitle,
+            if (isSample) ", образец" else "",
+            effectiveVolume,
+            pcmRms,
+            trackGain,
+            if (focusHeld) "ON" else "OFF",
+            outputRoute
+        )
+    }
+}
+
+/**
  * Управляет локальным синтезом 3 звуковых наборов («Мягкий», «Колокольчики», «Чёткий»)
  * и 2 вариантов тика метронома через PCM AudioTrack (без изменения системной громкости),
  * вибрацией (VibrationEffect), проверкой маршрута аудиовыхода и аудиофокусом.
+ *
+ * Исправление перепада громкости (v1.1):
+ * 1. Единые AudioAttributes (USAGE_MEDIA + CONTENT_TYPE_MUSIC) для AudioFocusRequest и AudioTrack
+ *    вместе с setWillPauseWhenDucked(true) и AUDIOFOCUS_GAIN_TRANSIENT: исключает автоматическое
+ *    системное приглушение (auto-ducking) собственного потока USAGE_MEDIA после первого сигнала.
+ * 2. Приоритет основных команд над метрономом: если звучит команда фазы, пришедший тик метронома
+ *    пропускается; если звучит тик метронома и приходит команда фазы, тик немедленно прерывается.
+ * 3. На паузе сигнал PAUSED доигрывает без принудительного обрыва дорожки при освобождении фокуса.
+ * 4. Единый тракт расчёта громкости и синтеза PCM для образцов в настройках и сигналов сессии.
  */
 class AudioVibrationEngine(
     private val context: Context,
@@ -55,9 +106,31 @@ class AudioVibrationEngine(
     }
 
     private val audioScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val playbackMutex = Mutex()
+
+    @Volatile
+    private var activeAudioTrack: AudioTrack? = null
+
+    @Volatile
+    private var activePlayingSignal: SignalType? = null
+
+    @Volatile
+    private var activePlaybackJob: Job? = null
 
     private var currentFocusRequest: AudioFocusRequest? = null
+
+    @Volatile
     private var hasAudioFocus: Boolean = false
+
+    private val _audioDiagnostics = MutableStateFlow<List<AudioDiagnosticEntry>>(emptyList())
+    val audioDiagnostics: StateFlow<List<AudioDiagnosticEntry>> = _audioDiagnostics.asStateFlow()
+
+    private fun buildUnifiedAudioAttributes(): AudioAttributes {
+        return AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+            .build()
+    }
 
     private val focusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
         when (focusChange) {
@@ -70,11 +143,31 @@ class AudioVibrationEngine(
                     AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> "AUDIOFOCUS_LOSS_TRANSIENT"
                     else -> "AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK"
                 }
+                recordDiagnostic(
+                    eventType = "FOCUS_LOST",
+                    signalLabel = codeName,
+                    packTitle = "-",
+                    isSample = false,
+                    effectiveVolume = 0f,
+                    pcmRms = 0f,
+                    trackGain = 0f,
+                    outputRoute = "auto-pause"
+                )
                 onAudioFocusLost("Потеря аудиофокуса ($codeName: звонок или внешнее медиа)")
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
                 // По ТЗ п. 7: без автовозобновления после возврата аудиофокуса!
                 hasAudioFocus = true
+                recordDiagnostic(
+                    eventType = "FOCUS_GAIN",
+                    signalLabel = "AUDIOFOCUS_GAIN",
+                    packTitle = "-",
+                    isSample = false,
+                    effectiveVolume = 0f,
+                    pcmRms = 0f,
+                    trackGain = 1.0f,
+                    outputRoute = "manual-resume-only"
+                )
                 onLog("AUDIO_FOCUS", "Аудиофокус возвращён системой (AUDIOFOCUS_GAIN), автовозобновление отключено")
             }
         }
@@ -82,12 +175,10 @@ class AudioVibrationEngine(
 
     fun requestSessionAudioFocus(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val attrs = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
-            val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            val attrs = buildUnifiedAudioAttributes()
+            val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
                 .setAudioAttributes(attrs)
+                .setWillPauseWhenDucked(true)
                 .setAcceptsDelayedFocusGain(false)
                 .setOnAudioFocusChangeListener(focusChangeListener)
                 .build()
@@ -99,19 +190,38 @@ class AudioVibrationEngine(
             val res = audioManager.requestAudioFocus(
                 focusChangeListener,
                 AudioManager.STREAM_MUSIC,
-                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
             )
             hasAudioFocus = (res == AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
         }
+        recordDiagnostic(
+            eventType = "FOCUS_REQ",
+            signalLabel = if (hasAudioFocus) "GRANTED" else "DENIED",
+            packTitle = "USAGE_MEDIA",
+            isSample = false,
+            effectiveVolume = 1f,
+            pcmRms = 0f,
+            trackGain = 1.0f,
+            outputRoute = "STREAM_MUSIC"
+        )
         onLog(
             "AUDIO_FOCUS",
-            if (hasAudioFocus) "Аудиофокус успешно получен" else "Отказ в получении аудиофокуса (возможно, активен звонок)"
+            if (hasAudioFocus) {
+                "Аудиофокус получен (USAGE_MEDIA, AUDIOFOCUS_GAIN_TRANSIENT, willPauseWhenDucked=true)"
+            } else {
+                "Отказ в получении аудиофокуса (активен звонок или внешний монопольный поток)"
+            }
         )
         return hasAudioFocus
     }
 
     fun abandonSessionAudioFocus() {
         try {
+            // Останавливаем немедленно только фоновый тик метронома; сигналу PAUSED даём спокойно доиграть
+            if (activePlayingSignal == SignalType.METRONOME_TICK) {
+                activePlaybackJob?.cancel()
+                stopActiveTrackImmediate()
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 currentFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
             } else {
@@ -121,6 +231,22 @@ class AudioVibrationEngine(
         } catch (_: Exception) {
         }
         hasAudioFocus = false
+    }
+
+    private fun stopActiveTrackImmediate() {
+        val current = activeAudioTrack ?: return
+        activeAudioTrack = null
+        activePlayingSignal = null
+        try {
+            if (current.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                current.stop()
+            }
+        } catch (_: Exception) {
+        }
+        try {
+            current.release()
+        } catch (_: Exception) {
+        }
     }
 
     fun inspectHardwareStatus(settings: BenchSignalSettings): AudioHardwareStatus {
@@ -209,8 +335,7 @@ class AudioVibrationEngine(
     }
 
     /**
-     * Воспроизводит сигнал с использованием указанного снимка звукового набора (`packOverride`)
-     * и стиля тика метронома (`metronomeStyleOverride`).
+     * Воспроизводит сигнал с использованием единого тракта настроек для образцов и сессии.
      */
     fun playSignal(
         signal: SignalType,
@@ -230,17 +355,46 @@ class AudioVibrationEngine(
                 true
             }
             if (shouldPlay) {
-                val volume = if (signal == SignalType.METRONOME_TICK) {
-                    settings.metronomeVolume
+                // ТЗ п. 8: при совпадении тика и команды пропустить тик, не заглушать команду
+                val currentPlaying = activePlayingSignal
+                if (signal == SignalType.METRONOME_TICK &&
+                    !isSamplePreview &&
+                    currentPlaying != null &&
+                    currentPlaying != SignalType.METRONOME_TICK
+                ) {
+                    recordDiagnostic(
+                        eventType = "TICK_SKIP",
+                        signalLabel = signal.name,
+                        packTitle = packOverride.titleRu,
+                        isSample = false,
+                        effectiveVolume = 0f,
+                        pcmRms = 0f,
+                        trackGain = 1.0f,
+                        outputRoute = hw.outputRouteLabelRu
+                    )
                 } else {
-                    settings.signalVolume
+                    if (signal != SignalType.METRONOME_TICK && currentPlaying == SignalType.METRONOME_TICK) {
+                        activePlaybackJob?.cancel()
+                    }
+                    val effectiveVolume = SoundSynthesisSpec.computeEffectiveVolume(
+                        signal = signal,
+                        signalVolume = settings.signalVolume,
+                        metronomeVolume = settings.metronomeVolume
+                    )
+                    val pattern = SoundSynthesisSpec.resolveSignalPattern(
+                        pack = packOverride,
+                        signal = signal,
+                        metronomeStyle = metronomeStyleOverride
+                    )
+                    playPatternPcmSerialized(
+                        signal = signal,
+                        pack = packOverride,
+                        pattern = pattern,
+                        effectiveVolume = effectiveVolume,
+                        isSamplePreview = isSamplePreview,
+                        outputRoute = hw.outputRouteLabelRu
+                    )
                 }
-                val pattern = SoundSynthesisSpec.resolveSignalPattern(
-                    pack = packOverride,
-                    signal = signal,
-                    metronomeStyle = metronomeStyleOverride
-                )
-                playPatternPcmAsync(pattern = pattern, volume = volume)
             }
         }
 
@@ -300,42 +454,91 @@ class AudioVibrationEngine(
         }
     }
 
-    private fun playPatternPcmAsync(
-        pattern: com.example.domain.SignalPatternSpec,
-        volume: Float
+    private fun playPatternPcmSerialized(
+        signal: SignalType,
+        pack: SoundPack,
+        pattern: SignalPatternSpec,
+        effectiveVolume: Float,
+        isSamplePreview: Boolean,
+        outputRoute: String
     ) {
-        val pcm = SoundSynthesisSpec.synthesizePcm16(pattern, volume)
+        val pcm = SoundSynthesisSpec.synthesizePcm16(pattern, effectiveVolume)
         if (pcm.isEmpty()) return
+        val pcmRms = SoundSynthesisSpec.computeActiveRms(pcm)
 
-        audioScope.launch {
-            try {
-                val sampleRate = SoundSynthesisSpec.SAMPLE_RATE_HZ
-                val audioTrack = AudioTrack.Builder()
-                    .setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_MEDIA)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .build()
-                    )
-                    .setAudioFormat(
-                        AudioFormat.Builder()
-                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                            .setSampleRate(sampleRate)
-                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                            .build()
-                    )
-                    .setBufferSizeInBytes(pcm.size * 2)
-                    .setTransferMode(AudioTrack.MODE_STATIC)
-                    .build()
+        recordDiagnostic(
+            eventType = if (isSamplePreview) "SAMPLE" else "SIGNAL",
+            signalLabel = signal.name,
+            packTitle = pack.titleRu,
+            isSample = isSamplePreview,
+            effectiveVolume = effectiveVolume,
+            pcmRms = pcmRms,
+            trackGain = 1.0f,
+            outputRoute = outputRoute
+        )
 
-                audioTrack.write(pcm, 0, pcm.size)
-                audioTrack.play()
-                delay(pattern.totalDurationMs.toLong() + 45L)
-                audioTrack.stop()
-                audioTrack.release()
-            } catch (_: Exception) {
-                // В JVM/Robolectric тестах или без аудиоустройства игнорируем ошибку AudioTrack
+        activePlaybackJob = audioScope.launch {
+            playbackMutex.withLock {
+                // Гарантированно освобождаем предыдущий AudioTrack перед созданием нового,
+                // чтобы исключить наложение дорожек и системный лимитер
+                stopActiveTrackImmediate()
+                try {
+                    val sampleRate = SoundSynthesisSpec.SAMPLE_RATE_HZ
+                    val audioTrack = AudioTrack.Builder()
+                        .setAudioAttributes(buildUnifiedAudioAttributes())
+                        .setAudioFormat(
+                            AudioFormat.Builder()
+                                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                                .setSampleRate(sampleRate)
+                                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                                .build()
+                        )
+                        .setBufferSizeInBytes(pcm.size * 2)
+                        .setTransferMode(AudioTrack.MODE_STATIC)
+                        .build()
+
+                    // Явно фиксируем единичное усиление AudioTrack (1.0f); уровень громкости уже заложен в PCM
+                    audioTrack.setVolume(1.0f)
+                    audioTrack.write(pcm, 0, pcm.size)
+                    activeAudioTrack = audioTrack
+                    activePlayingSignal = signal
+                    audioTrack.play()
+                    delay(pattern.totalDurationMs.toLong() + 35L)
+                } catch (_: Exception) {
+                    // В JVM/Robolectric тестах, при прерывании тика командой или без аудиоустройства
+                } finally {
+                    stopActiveTrackImmediate()
+                }
             }
         }
+    }
+
+    private fun recordDiagnostic(
+        eventType: String,
+        signalLabel: String,
+        packTitle: String,
+        isSample: Boolean,
+        effectiveVolume: Float,
+        pcmRms: Float,
+        trackGain: Float,
+        outputRoute: String
+    ) {
+        val entry = AudioDiagnosticEntry(
+            elapsedMs = SystemClock.elapsedRealtime(),
+            eventType = eventType,
+            signalLabel = signalLabel,
+            packTitle = packTitle,
+            isSample = isSample,
+            effectiveVolume = effectiveVolume,
+            pcmRms = pcmRms,
+            trackGain = trackGain,
+            focusHeld = hasAudioFocus,
+            outputRoute = outputRoute
+        )
+        _audioDiagnostics.value = (listOf(entry) + _audioDiagnostics.value).take(40)
+    }
+
+    fun clearAudioDiagnostics() {
+        _audioDiagnostics.value = emptyList()
     }
 }
