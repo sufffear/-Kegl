@@ -38,6 +38,9 @@ class MainActivity : ComponentActivity() {
             val realCompletionsCount by viewModel.realCompletionsCount.collectAsStateWithLifecycle()
             val weeklyOverview by viewModel.weeklyOverview.collectAsStateWithLifecycle()
             val storyState by viewModel.storyState.collectAsStateWithLifecycle()
+            val pendingRestorePreview by viewModel.pendingRestorePreview.collectAsStateWithLifecycle()
+            val backupOperationBanner by viewModel.backupOperationBanner.collectAsStateWithLifecycle()
+            val backupErrorMessage by viewModel.backupErrorMessage.collectAsStateWithLifecycle()
             val lastCompletedSlotDifficulty by viewModel.lastCompletedSlotDifficulty.collectAsStateWithLifecycle()
             val databaseErrorMessage by viewModel.databaseErrorMessage.collectAsStateWithLifecycle()
 
@@ -59,6 +62,9 @@ class MainActivity : ComponentActivity() {
                     realCompletionsCount = realCompletionsCount,
                     weeklyOverview = weeklyOverview,
                     storyState = storyState,
+                    pendingRestorePreview = pendingRestorePreview,
+                    backupOperationBanner = backupOperationBanner,
+                    backupErrorMessage = backupErrorMessage,
                     lastCompletedSlotDifficulty = lastCompletedSlotDifficulty,
                     databaseErrorMessage = databaseErrorMessage,
                     availableProtocols = viewModel.availableProtocols,
@@ -88,6 +94,11 @@ class MainActivity : ComponentActivity() {
                     onSaveStoryBlockPosition = viewModel::saveStoryBlockPosition,
                     onRestartStoryFromBeginning = viewModel::restartStoryFromBeginning,
                     onRemoveImportedBook = viewModel::removeImportedBook,
+                    onCreateBackupUri = viewModel::createBackupToUri,
+                    onInspectBackupUri = viewModel::inspectBackupFromUri,
+                    onConfirmRestore = viewModel::confirmPendingRestore,
+                    onCancelRestore = viewModel::cancelPendingRestore,
+                    onDismissBackupBanners = viewModel::dismissBackupBanners,
                     onPlaySample = viewModel::playSample,
                     onThemeChange = viewModel::setThemeId,
                     onSoundPackChange = viewModel::setSoundPack,

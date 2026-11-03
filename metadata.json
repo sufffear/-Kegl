@@ -1,6 +1,6 @@
 {
   "name": "Velaris",
-  "description": "Спокойный офлайн-тренер и интерактивная история — техническая проверка (Этап 0A)",
+  "description": "Спокойный офлайн-тренер и читатель романа: таймер фаз, 5 тем, чтение Markdown, локальный бэкап и восстановление",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

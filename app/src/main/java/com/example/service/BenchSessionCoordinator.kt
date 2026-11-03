@@ -7,6 +7,9 @@ import android.provider.OpenableColumns
 import com.example.data.AudioDiagnosticEntry
 import com.example.data.AudioHardwareStatus
 import com.example.data.AudioVibrationEngine
+import com.example.data.BackupManifest
+import com.example.data.BackupPreviewInfo
+import com.example.data.BackupRestoreManager
 import com.example.data.BenchSignalSettings
 import com.example.data.DailySlotWithCompletion
 import com.example.data.PreferencesRepository
@@ -15,6 +18,8 @@ import com.example.data.StoryRepository
 import com.example.data.VelarisDatabase
 import com.example.data.WeeklyOverviewState
 import com.example.data.WorkoutPersistenceRepository
+import java.io.InputStream
+import java.io.OutputStream
 import com.example.domain.BenchEventLogEntry
 import com.example.domain.CheckpointTrigger
 import com.example.domain.DEFAULT_DEMO_PROTOCOLS
@@ -54,6 +59,7 @@ object BenchSessionCoordinator {
     private var preferencesRepository: PreferencesRepository? = null
     private var persistenceRepository: WorkoutPersistenceRepository? = null
     private var storyRepository: StoryRepository? = null
+    private var backupRestoreManager: BackupRestoreManager? = null
 
     private val _settings = MutableStateFlow(BenchSignalSettings())
     val settings: StateFlow<BenchSignalSettings> = _settings.asStateFlow()
@@ -90,6 +96,17 @@ object BenchSessionCoordinator {
 
     private val _storyState = MutableStateFlow(StoryReaderUiState())
     val storyState: StateFlow<StoryReaderUiState> = _storyState.asStateFlow()
+
+    private val _pendingRestorePreview = MutableStateFlow<BackupPreviewInfo?>(null)
+    val pendingRestorePreview: StateFlow<BackupPreviewInfo?> = _pendingRestorePreview.asStateFlow()
+
+    private val _backupOperationBanner = MutableStateFlow<String?>(null)
+    val backupOperationBanner: StateFlow<String?> = _backupOperationBanner.asStateFlow()
+
+    private val _backupErrorMessage = MutableStateFlow<String?>(null)
+    val backupErrorMessage: StateFlow<String?> = _backupErrorMessage.asStateFlow()
+
+    private var pendingRestoreUri: Uri? = null
 
     private val _lastCompletedSlotDifficulty = MutableStateFlow<WorkoutDifficulty?>(null)
     val lastCompletedSlotDifficulty: StateFlow<WorkoutDifficulty?> = _lastCompletedSlotDifficulty.asStateFlow()
@@ -147,6 +164,15 @@ object BenchSessionCoordinator {
             val storyRepo = StoryRepository(appCtx, db.velarisDao(), timeProvider)
             storyRepository = storyRepo
 
+            val backupManager = BackupRestoreManager(
+                context = appCtx,
+                dao = db.velarisDao(),
+                preferencesRepository = prefs,
+                storyRepository = storyRepo,
+                timeProvider = timeProvider
+            )
+            backupRestoreManager = backupManager
+
             coordinatorScope.launch {
                 audioEngine.audioDiagnostics.collect { list ->
                     _audioDiagnostics.value = list
@@ -172,7 +198,7 @@ object BenchSessionCoordinator {
             refreshHardwareStatus()
             appendLog(
                 "INIT",
-                "Инициализировано приложение Velaris v0.4.0-v1.1 (versionCode 4): стабилизация громкости, полный интерфейс, 7-дневный обзор и офлайн-читалка"
+                "Инициализировано приложение Velaris v0.5.0-v1.2 (versionCode 5): резервное копирование и атомарное восстановление"
             )
         }
     }
@@ -483,6 +509,179 @@ object BenchSessionCoordinator {
             _storyState.value = repo.removeImportedBook()
             appendLog("BOOK", "Импортированная книга удалена из внутреннего хранилища по подтверждению пользователя")
         }
+    }
+
+    // --- Резервное копирование и атомарное восстановление данных (v1.2 п. 1–3) ---
+
+    fun createBackupToUri(context: Context, uri: Uri) {
+        if (phaseEngine.currentSnapshot().isActiveOrPaused) {
+            _backupErrorMessage.value = "Нельзя сохранять резервную копию во время активной тренировки. Завершите или остановите подход."
+            return
+        }
+        val manager = backupRestoreManager ?: return
+        coordinatorScope.launch {
+            try {
+                val out = context.contentResolver.openOutputStream(uri)
+                    ?: throw IllegalArgumentException("Не удалось открыть файл для записи резервной копии.")
+                val manifestResult = manager.createBackup(out)
+                manifestResult.fold(
+                    onSuccess = { manifest ->
+                        val bookInfo = if (manifest.hasBook) ", книга: «${manifest.bookTitle}»" else ""
+                        _backupOperationBanner.value = "Резервная копия успешно сохранена (${manifest.workoutCount} тренировок$bookInfo)."
+                        _backupErrorMessage.value = null
+                        appendLog(
+                            "BACKUP",
+                            "Резервная копия сохранена (тренировок=${manifest.workoutCount}, книга=${manifest.bookTitle ?: "нет"})"
+                        )
+                    },
+                    onFailure = { err ->
+                        _backupErrorMessage.value = "Ошибка сохранения копии: ${err.message ?: "неизвестный сбой"}"
+                        _backupOperationBanner.value = null
+                        appendLog("BACKUP_ERROR", "Ошибка создания копии: ${err.message}")
+                    }
+                )
+            } catch (e: Exception) {
+                _backupErrorMessage.value = "Ошибка записи файла копии: ${e.message}"
+                _backupOperationBanner.value = null
+                appendLog("BACKUP_ERROR", "Исключение при записи копии: ${e.message}")
+            }
+        }
+    }
+
+    fun inspectBackupFromUri(context: Context, uri: Uri) {
+        if (phaseEngine.currentSnapshot().isActiveOrPaused) {
+            _backupErrorMessage.value = "Нельзя восстанавливать данные во время активной тренировки. Завершите или остановите подход."
+            return
+        }
+        val manager = backupRestoreManager ?: return
+        coordinatorScope.launch {
+            try {
+                var sizeBytes = 0L
+                context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+                    val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (sizeIndex >= 0 && cursor.moveToFirst()) {
+                        sizeBytes = cursor.getLong(sizeIndex)
+                    }
+                }
+                val inputStream = context.contentResolver.openInputStream(uri)
+                    ?: throw IllegalArgumentException("Не удалось открыть выбранный файл резервной копии.")
+                val previewResult = manager.inspectBackup(inputStream, sizeBytes)
+                previewResult.fold(
+                    onSuccess = { preview ->
+                        pendingRestoreUri = uri
+                        _pendingRestorePreview.value = preview
+                        _backupErrorMessage.value = null
+                        appendLog(
+                            "BACKUP_INSPECT",
+                            "Прочитан архив резервной копии от ${preview.createdAtRu} (тренировок=${preview.workoutCount}, книга=${preview.bookTitle ?: "нет"})"
+                        )
+                    },
+                    onFailure = { err ->
+                        pendingRestoreUri = null
+                        _pendingRestorePreview.value = null
+                        _backupErrorMessage.value = "Файл не является корректной резервной копией Velaris: ${err.message ?: "некорректный формат"}"
+                        appendLog("BACKUP_ERROR", "Ошибка проверки архива копии: ${err.message}")
+                    }
+                )
+            } catch (e: Exception) {
+                pendingRestoreUri = null
+                _pendingRestorePreview.value = null
+                _backupErrorMessage.value = "Не удалось открыть архив: ${e.message}"
+                appendLog("BACKUP_ERROR", "Исключение при открытии архива: ${e.message}")
+            }
+        }
+    }
+
+    fun confirmPendingRestore(context: Context) {
+        if (phaseEngine.currentSnapshot().isActiveOrPaused) {
+            _backupErrorMessage.value = "Нельзя восстанавливать данные во время активной тренировки."
+            return
+        }
+        val targetUri = pendingRestoreUri ?: return
+        val manager = backupRestoreManager ?: return
+        coordinatorScope.launch {
+            try {
+                val inputStream = context.contentResolver.openInputStream(targetUri)
+                    ?: throw IllegalArgumentException("Не удалось прочитать файл резервной копии.")
+                val restoreResult = manager.restoreBackup(inputStream, isWorkoutActiveOrPaused = false)
+                restoreResult.fold(
+                    onSuccess = { manifest ->
+                        pendingRestoreUri = null
+                        _pendingRestorePreview.value = null
+                        _backupErrorMessage.value = null
+
+                        // Перезагружаем тренировочные данные и читатель
+                        val isDemo = isCurrentModeDemo()
+                        val repo = persistenceRepository
+                        if (repo != null) {
+                            _dailySlots.value = repo.getOrCreateDailySlots(activeDateKey(), activePlanId(), isDemo)
+                            _demoCompletionsCount.value = repo.countDemoCompletions()
+                            _realCompletionsCount.value = repo.countRealCompletions()
+                            _weeklyOverview.value = repo.loadWeeklyOverview(timeProvider.currentLocalDate())
+                        }
+                        val storyRepo = storyRepository
+                        if (storyRepo != null) {
+                            _storyState.value = storyRepo.loadReaderState()
+                        }
+
+                        val bookInfo = if (manifest.hasBook) ", книга: «${manifest.bookTitle}»" else ""
+                        _backupOperationBanner.value = "Данные успешно восстановлены из копии от ${manifest.createdAtRu} (${manifest.workoutCount} тренировок$bookInfo)."
+                        appendLog(
+                            "RESTORE",
+                            "Данные восстановлены из копии от ${manifest.createdAtRu}: тренировок=${manifest.workoutCount}, книга=${manifest.bookTitle ?: "нет"}"
+                        )
+                    },
+                    onFailure = { err ->
+                        _backupErrorMessage.value = "Восстановление не удалось: ${err.message ?: "ошибка данных"}. Текущие данные сохранены без изменений."
+                        _backupOperationBanner.value = null
+                        appendLog("RESTORE_ERROR", "Ошибка восстановления: ${err.message}")
+                    }
+                )
+            } catch (e: Exception) {
+                _backupErrorMessage.value = "Восстановление прервано: ${e.message}. Текущие данные сохранены без изменений."
+                _backupOperationBanner.value = null
+                appendLog("RESTORE_ERROR", "Исключение при восстановлении: ${e.message}")
+            }
+        }
+    }
+
+    fun cancelPendingRestore() {
+        pendingRestoreUri = null
+        _pendingRestorePreview.value = null
+    }
+
+    fun dismissBackupBanners() {
+        _backupOperationBanner.value = null
+        _backupErrorMessage.value = null
+    }
+
+    suspend fun createBackupDirect(outputStream: OutputStream): Result<BackupManifest> {
+        val manager = backupRestoreManager ?: return Result.failure(IllegalStateException("Менеджер резервного копирования не инициализирован"))
+        return manager.createBackup(outputStream)
+    }
+
+    suspend fun inspectBackupDirect(inputStream: InputStream, sizeBytes: Long = 0L): Result<BackupPreviewInfo> {
+        val manager = backupRestoreManager ?: return Result.failure(IllegalStateException("Менеджер резервного копирования не инициализирован"))
+        return manager.inspectBackup(inputStream, sizeBytes)
+    }
+
+    suspend fun restoreBackupDirect(inputStream: InputStream): Result<BackupManifest> {
+        val manager = backupRestoreManager ?: return Result.failure(IllegalStateException("Менеджер резервного копирования не инициализирован"))
+        val active = phaseEngine.currentSnapshot().isActiveOrPaused
+        val res = manager.restoreBackup(inputStream, isWorkoutActiveOrPaused = active)
+        if (res.isSuccess) {
+            val isDemo = isCurrentModeDemo()
+            persistenceRepository?.let { repo ->
+                _dailySlots.value = repo.getOrCreateDailySlots(activeDateKey(), activePlanId(), isDemo)
+                _demoCompletionsCount.value = repo.countDemoCompletions()
+                _realCompletionsCount.value = repo.countRealCompletions()
+                _weeklyOverview.value = repo.loadWeeklyOverview(timeProvider.currentLocalDate())
+            }
+            storyRepository?.let { storyRepo ->
+                _storyState.value = storyRepo.loadReaderState()
+            }
+        }
+        return res
     }
 
     private fun persistCheckpointAsync(snapshot: PhaseEngineSnapshot, trigger: CheckpointTrigger) {

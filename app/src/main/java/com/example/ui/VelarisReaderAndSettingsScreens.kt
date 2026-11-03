@@ -28,12 +28,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -42,7 +46,12 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import com.example.data.BackupPreviewInfo
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
@@ -96,12 +105,17 @@ import com.example.ui.theme.LocalVelarisPalette
 import com.example.ui.theme.VelarisPalette
 import com.example.ui.theme.VelarisThemeId
 import com.example.ui.theme.paletteForTheme
-import java.util.Locale
 
 private val MARKDOWN_DOCUMENT_MIME_TYPES = arrayOf(
     "text/markdown",
     "text/x-markdown",
     "text/plain",
+    "application/octet-stream",
+    "*/*"
+)
+
+private val BACKUP_DOCUMENT_MIME_TYPES = arrayOf(
+    "application/zip",
     "application/octet-stream",
     "*/*"
 )
@@ -1161,12 +1175,21 @@ fun VelarisSettingsScreen(
     onReaderLineSpacingChange: (ReaderLineSpacing) -> Unit,
     onImportMarkdownUri: (Uri) -> Unit,
     onRemoveImportedBook: () -> Unit,
+    pendingRestorePreview: BackupPreviewInfo? = null,
+    backupOperationBanner: String? = null,
+    backupErrorMessage: String? = null,
+    onCreateBackupUri: (Uri) -> Unit = {},
+    onInspectBackupUri: (Uri) -> Unit = {},
+    onConfirmRestore: () -> Unit = {},
+    onCancelRestore: () -> Unit = {},
+    onDismissBackupBanners: () -> Unit = {},
     onOpenDiagnostics: () -> Unit,
     onReturnToWorkout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalVelarisPalette.current
     var showRemoveBookDialog by remember { mutableStateOf(false) }
+    var showBackupNoticeDialog by remember { mutableStateOf(false) }
 
     val openDocumentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -1174,6 +1197,135 @@ fun VelarisSettingsScreen(
         if (uri != null) {
             onImportMarkdownUri(uri)
         }
+    }
+
+    val createBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            onCreateBackupUri(uri)
+        }
+    }
+
+    val restoreBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            onInspectBackupUri(uri)
+        }
+    }
+
+    // Предупреждение перед экспортом (v1.2 п. 1): «Копия содержит историю занятий и текст вашей книги. Сохраните её в надёжном месте»
+    if (showBackupNoticeDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackupNoticeDialog = false },
+            containerColor = palette.surface,
+            titleContentColor = palette.textPrimary,
+            textContentColor = palette.textSecondary,
+            title = {
+                Text("Резервная копия", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text("Копия содержит историю занятий и текст вашей книги. Сохраните её в надёжном месте.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showBackupNoticeDialog = false
+                        val dateSuffix = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
+                        createBackupLauncher.launch("velaris_backup_$dateSuffix.zip")
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = palette.primaryAccent,
+                        contentColor = palette.onPrimaryAccent
+                    ),
+                    modifier = Modifier.testTag("btn_confirm_export_dialog")
+                ) {
+                    Text("Выбрать куда сохранить", fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showBackupNoticeDialog = false },
+                    modifier = Modifier.testTag("btn_cancel_export_dialog")
+                ) {
+                    Text("Отмена", color = palette.textPrimary)
+                }
+            }
+        )
+    }
+
+    // Диалог подтверждения восстановления из копии (v1.2 п. 2)
+    if (pendingRestorePreview != null) {
+        val preview = pendingRestorePreview
+        AlertDialog(
+            onDismissRequest = onCancelRestore,
+            containerColor = palette.surface,
+            titleContentColor = palette.textPrimary,
+            textContentColor = palette.textSecondary,
+            title = {
+                Text("Восстановление из копии", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Дата создания: ${preview.createdAtRu}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = palette.textPrimary
+                    )
+                    Text(
+                        text = "Тренировок в копии: ${preview.workoutCount}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = palette.primaryAccent,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = if (preview.hasBook && !preview.bookTitle.isNullOrBlank()) {
+                            "Книга: ${preview.bookTitle} (глав: ${preview.chapterCount})"
+                        } else {
+                            "Книга: отсутствует"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = palette.textPrimary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = palette.errorAccent.copy(alpha = 0.16f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Внимание: текущие данные в приложении будут полностью заменены данными из резервной копии. Действие необратимо.",
+                            color = palette.errorAccent,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = onConfirmRestore,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = palette.errorAccent,
+                        contentColor = palette.onPrimaryAccent
+                    ),
+                    modifier = Modifier.testTag("btn_confirm_restore")
+                ) {
+                    Text("Восстановить данные", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = onCancelRestore,
+                    modifier = Modifier.testTag("btn_cancel_restore")
+                ) {
+                    Text("Отмена", color = palette.textPrimary)
+                }
+            },
+            modifier = Modifier.testTag("restore_confirm_dialog")
+        )
     }
 
     if (showRemoveBookDialog) {
@@ -1706,7 +1858,7 @@ fun VelarisSettingsScreen(
             }
         }
 
-        // 5. Данные (локальный импорт романа из Markdown и управление книгой)
+        // 5. Данные и резервное копирование (v1.2 п. 1–3)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1718,11 +1870,181 @@ fun VelarisSettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "Данные и локальная книга",
+                    text = "Резервная копия и данные",
                     style = MaterialTheme.typography.titleMedium,
+                    color = palette.textPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+
+                // Статусные баннеры операций с резервной копией
+                if (backupOperationBanner != null) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = palette.successAccent.copy(alpha = 0.18f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("backup_success_banner")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = palette.successAccent,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = backupOperationBanner,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.successAccent,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = onDismissBackupBanners,
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Закрыть",
+                                    tint = palette.textSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (backupErrorMessage != null) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = palette.errorAccent.copy(alpha = 0.18f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("backup_error_banner")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = palette.errorAccent,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = backupErrorMessage,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.errorAccent,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = onDismissBackupBanners,
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Закрыть",
+                                    tint = palette.textSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Предупреждение о блокировке во время активной тренировки (v1.2 п. 3)
+                if (snapshot.isActiveOrPaused) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = palette.warningAccent.copy(alpha = 0.16f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("backup_active_workout_warning")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = palette.warningAccent,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Завершите или остановите текущую тренировку перед резервным копированием или восстановлением.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.warningAccent,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    text = "Резервная копия сохраняет реальные тренировки, настройки и точный текст вашей книги в локальный файл. Восстановление полностью заменяет текущие данные без слияния версий.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.textSecondary
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = { showBackupNoticeDialog = true },
+                        enabled = !snapshot.isActiveOrPaused,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = palette.primaryAccent,
+                            contentColor = palette.onPrimaryAccent
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .testTag("btn_create_backup")
+                    ) {
+                        Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Сохранить копию", fontWeight = FontWeight.SemiBold)
+                    }
+
+                    OutlinedButton(
+                        onClick = { restoreBackupLauncher.launch(BACKUP_DOCUMENT_MIME_TYPES) },
+                        enabled = !snapshot.isActiveOrPaused,
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .testTag("btn_restore_backup")
+                    ) {
+                        Icon(Icons.Default.SettingsBackupRestore, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Восстановить", color = if (!snapshot.isActiveOrPaused) palette.textPrimary else palette.textSecondary)
+                    }
+                }
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    color = palette.outline.copy(alpha = 0.35f)
+                )
+
+                Text(
+                    text = "Локальная книга в Markdown",
+                    style = MaterialTheme.typography.labelLarge,
                     color = palette.textPrimary,
                     fontWeight = FontWeight.Bold
                 )
@@ -1755,7 +2077,7 @@ fun VelarisSettingsScreen(
                 Button(
                     onClick = { openDocumentLauncher.launch(MARKDOWN_DOCUMENT_MIME_TYPES) },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = palette.primaryAccent,
+                        containerColor = palette.secondaryAccent,
                         contentColor = palette.onPrimaryAccent
                     ),
                     modifier = Modifier

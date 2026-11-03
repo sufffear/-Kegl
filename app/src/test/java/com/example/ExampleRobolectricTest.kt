@@ -55,12 +55,12 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify v1_1 versionCode 4, applicationId and offline manifest`() {
+    fun `verify v1_2 versionCode 5, applicationId and offline manifest`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         assertEquals("Velaris", context.getString(R.string.app_name))
         assertEquals("com.velaris.app", BuildConfig.APPLICATION_ID)
-        assertEquals("0.4.0-v1.1", BuildConfig.VERSION_NAME)
-        assertEquals(4, BuildConfig.VERSION_CODE)
+        assertEquals("0.5.0-v1.2", BuildConfig.VERSION_NAME)
+        assertEquals(5, BuildConfig.VERSION_CODE)
 
         @Suppress("DEPRECATION")
         val packageInfo = context.packageManager.getPackageInfo(
@@ -79,12 +79,12 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify v1_1 full interface navigation across Home, Plan, Workout, Reader, Settings and Diagnostics`() {
+    fun `verify v1_2 full interface navigation across Home, Plan, Workout, Reader, Settings and Diagnostics`() {
         composeTestRule.waitForIdle()
 
-        // 1. Главная: карточка Тренировка, карточка История («Добавить книгу» когда книга не импортирована), 7-дневный обзор, предупреждение Демо и версия 0.4.0-v1.1
+        // 1. Главная: карточка Тренировка, карточка История («Добавить книгу» когда книга не импортирована), 7-дневный обзор, предупреждение Демо и версия 0.5.0-v1.2
         composeTestRule.onNodeWithTag("demo_safety_banner").assertExists()
-        composeTestRule.onNodeWithText("Версия: 0.4.0-v1.1 (versionCode 4)").assertExists()
+        composeTestRule.onNodeWithText("Версия: 0.5.0-v1.2 (versionCode 5)").assertExists()
         composeTestRule.onNodeWithTag("home_workout_card").assertExists()
         composeTestRule.onNodeWithTag("home_story_card").assertExists()
         composeTestRule.onNodeWithTag("weekly_overview_card").assertExists()
@@ -107,7 +107,7 @@ class ExampleRobolectricTest {
         composeTestRule.onNodeWithTag("reader_empty_import_card").assertExists()
         composeTestRule.onNodeWithTag("btn_open_book_from_file").assertExists()
 
-        // 5. Переход в Настройки (5 тем, данные и 3 набора звуков) -> Диагностика
+        // 5. Переход в Настройки (5 тем, данные, резервные копии и 3 набора звуков) -> Диагностика
         composeTestRule.onNodeWithTag("nav_settings").performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("theme_selector_card").assertExists()
@@ -119,6 +119,14 @@ class ExampleRobolectricTest {
         composeTestRule.onNodeWithTag("sound_pack_soft").assertExists()
         composeTestRule.onNodeWithTag("sound_pack_chimes").assertExists()
         composeTestRule.onNodeWithTag("sound_pack_crisp").assertExists()
+
+        // Кнопки резервного копирования и восстановления в «Настройки → Данные» (v1.2 п. 1)
+        composeTestRule.onNodeWithTag("btn_create_backup")
+            .performScrollTo()
+            .assertExists()
+        composeTestRule.onNodeWithTag("btn_restore_backup")
+            .performScrollTo()
+            .assertExists()
 
         composeTestRule.onNodeWithTag("btn_open_diagnostics")
             .performScrollTo()
@@ -500,5 +508,249 @@ class ExampleRobolectricTest {
         } finally {
             db.close()
         }
+    }
+
+    @Test
+    fun `backup export creates valid zip containing real completions, preferences, and novel without demo records`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = Room.inMemoryDatabaseBuilder(context, VelarisDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val clock = FakeControllableTimeProvider(localDate = "2026-11-03")
+            val dao = db.velarisDao()
+            val repo = WorkoutPersistenceRepository(dao, clock)
+            val preferencesRepo = com.example.data.PreferencesRepository(context)
+            preferencesRepo.setSoundPack(SoundPack.CRISP)
+            preferencesRepo.setThemeId(com.example.ui.theme.VelarisThemeId.SKY)
+
+            val storyRepo = StoryRepository(context, dao, clock)
+            storyRepo.importNeutralTestSample()
+
+            // 1 реальный завершённый слот + 1 демонстрационный завершённый слот
+            val realSlots = repo.getOrCreateDailySlots(localDate = "2026-11-03", isDemo = false)
+            val realSlot = realSlots.first().slot
+            dao.insertCompletionIgnore(
+                com.example.data.WorkoutCompletionEntity(
+                    runId = "real_run_1",
+                    slotId = realSlot.id,
+                    localDate = "2026-11-03",
+                    completedAtEpochMs = 1762129000000L,
+                    optionalDifficulty = "EASY",
+                    isDemo = false
+                )
+            )
+
+            val demoSlots = repo.getOrCreateDailySlots(localDate = "2026-11-03", isDemo = true)
+            val demoSlot = demoSlots.first().slot
+            dao.insertCompletionIgnore(
+                com.example.data.WorkoutCompletionEntity(
+                    runId = "demo_run_1",
+                    slotId = demoSlot.id,
+                    localDate = "2026-11-03",
+                    completedAtEpochMs = 1762128000000L,
+                    optionalDifficulty = null,
+                    isDemo = true
+                )
+            )
+
+            val backupManager = com.example.data.BackupRestoreManager(
+                context = context,
+                dao = dao,
+                preferencesRepository = preferencesRepo,
+                storyRepository = storyRepo,
+                timeProvider = clock
+            )
+
+            val bos = java.io.ByteArrayOutputStream()
+            val exportResult = backupManager.createBackup(bos)
+            assertTrue(exportResult.isSuccess)
+
+            val manifest = exportResult.getOrThrow()
+            assertEquals("Резервная копия должна содержать только реальные тренировки", 1, manifest.workoutCount)
+            assertTrue(manifest.hasBook)
+            assertEquals(12, manifest.chapterCount)
+            assertEquals(3, manifest.actCount)
+
+            // Проверяем предварительный осмотр архива перед подтверждением (v1.2 п. 2)
+            val backupBytes = bos.toByteArray()
+            val inspectResult = backupManager.inspectBackup(
+                java.io.ByteArrayInputStream(backupBytes),
+                backupBytes.size.toLong()
+            )
+            assertTrue(inspectResult.isSuccess)
+            val preview = inspectResult.getOrThrow()
+            assertEquals(1, preview.workoutCount)
+            assertTrue(preview.hasBook)
+            assertEquals(12, preview.chapterCount)
+
+            // Проверяем атомарное восстановление из архива
+            // Очищаем базу данных и проверяем, что restore восстановит реальные тренировки, роман и настройки
+            dao.clearImportedNovelAtomically()
+            dao.deleteRealWorkoutCompletions()
+            preferencesRepo.setSoundPack(SoundPack.SOFT)
+
+            val restoreResult = backupManager.restoreBackup(
+                java.io.ByteArrayInputStream(backupBytes),
+                isWorkoutActiveOrPaused = false
+            )
+            assertTrue(restoreResult.isSuccess)
+
+            val restoredCompletions = dao.getRealWorkoutCompletions()
+            assertEquals(1, restoredCompletions.size)
+            assertEquals("real_run_1", restoredCompletions.first().runId)
+
+            val restoredNovel = dao.getActiveNovel()
+            assertNotNull(restoredNovel)
+            assertEquals(12, dao.getNovelChapters(restoredNovel!!.bookId).size)
+
+            val restoredBytes = storyRepo.readStoredOriginalBytes()
+            assertNotNull(restoredBytes)
+            assertEquals(manifest.files[com.example.data.BackupManifest.BOOK_SOURCE_FILE_NAME], MarkdownNovelParser.computeSha256Hex(restoredBytes!!))
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun `backup restore with invalid checksum or active workout is rejected preserving existing data intact`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = Room.inMemoryDatabaseBuilder(context, VelarisDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val clock = FakeControllableTimeProvider(localDate = "2026-11-03")
+            val dao = db.velarisDao()
+            val preferencesRepo = com.example.data.PreferencesRepository(context)
+            val storyRepo = StoryRepository(context, dao, clock)
+
+            val backupManager = com.example.data.BackupRestoreManager(
+                context = context,
+                dao = dao,
+                preferencesRepository = preferencesRepo,
+                storyRepository = storyRepo,
+                timeProvider = clock
+            )
+
+            // 1. Попытка восстановления во время активной тренировки должна быть отклонена
+            val blockedResult = backupManager.restoreBackup(
+                java.io.ByteArrayInputStream(byteArrayOf()),
+                isWorkoutActiveOrPaused = true
+            )
+            assertTrue(blockedResult.isFailure)
+            assertTrue(blockedResult.exceptionOrNull()?.message?.contains("Нельзя восстанавливать данные во время активной тренировки") == true)
+
+            // 2. Попытка восстановления повреждённого файла
+            val corruptedZip = byteArrayOf(0x50, 0x4B, 0x03, 0x04, 0x00, 0x00, 0x00)
+            val corruptedResult = backupManager.restoreBackup(
+                java.io.ByteArrayInputStream(corruptedZip),
+                isWorkoutActiveOrPaused = false
+            )
+            assertTrue(corruptedResult.isFailure)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun `backup manifest serialization and parsing preserves format version, checksums, and counts`() {
+        val manifest = com.example.data.BackupManifest(
+            formatVersion = 1,
+            appVersion = "0.5.0-v1.2",
+            appVersionCode = 5,
+            schemaVersion = 3,
+            createdAtEpochMs = 1762128000000L,
+            createdAtRu = "03.11.2026 12:00",
+            workoutCount = 7,
+            hasBook = true,
+            bookTitle = "Роман Испытание",
+            bookFileName = "test_novel.md",
+            chapterCount = 12,
+            actCount = 3,
+            files = mapOf(
+                "database_export.json" to "abc123hash",
+                "preferences.json" to "def456hash",
+                "book_source.md" to "789xyzhash"
+            )
+        )
+
+        val json = manifest.toJson()
+        val restored = com.example.data.BackupManifest.fromJson(json)
+
+        assertEquals(1, restored.formatVersion)
+        assertEquals("0.5.0-v1.2", restored.appVersion)
+        assertEquals(5, restored.appVersionCode)
+        assertEquals(3, restored.schemaVersion)
+        assertEquals(7, restored.workoutCount)
+        assertTrue(restored.hasBook)
+        assertEquals("Роман Испытание", restored.bookTitle)
+        assertEquals("test_novel.md", restored.bookFileName)
+        assertEquals(12, restored.chapterCount)
+        assertEquals(3, restored.actCount)
+        assertEquals(3, restored.files.size)
+        assertEquals("abc123hash", restored.files["database_export.json"])
+        assertEquals("789xyzhash", restored.files["book_source.md"])
+    }
+
+    @Test
+    fun `backup database and preferences snapshots serialize correctly and roundtrip without loss`() {
+        val prefsSnapshot = com.example.data.BackupPreferencesSnapshot(
+            soundEnabled = true,
+            vibrationEnabled = false,
+            metronomeEnabled = true,
+            signalVolume = 0.95f,
+            metronomeVolume = 0.25f,
+            soundPackId = "CRISP",
+            metronomeTickStyleId = "WOOD",
+            themeId = "SKY",
+            readerModeId = "BOOK",
+            readerFontSizeId = "LARGE",
+            readerLineSpacingId = "SPACIOUS",
+            isRealProgramEnabled = true,
+            realProgramSource = "Мой протокол"
+        )
+        val prefsJson = prefsSnapshot.toJson()
+        val restoredPrefs = com.example.data.BackupPreferencesSnapshot.fromJson(prefsJson)
+
+        assertEquals("CRISP", restoredPrefs.soundPackId)
+        assertEquals("SKY", restoredPrefs.themeId)
+        assertEquals("BOOK", restoredPrefs.readerModeId)
+        assertFalse(restoredPrefs.vibrationEnabled)
+        assertEquals(0.95f, restoredPrefs.signalVolume, 0.001f)
+        assertEquals(0.25f, restoredPrefs.metronomeVolume, 0.001f)
+        assertTrue(restoredPrefs.isRealProgramEnabled)
+        assertEquals("Мой протокол", restoredPrefs.realProgramSource)
+
+        val dbSnapshot = com.example.data.BackupDatabaseSnapshot(
+            plans = listOf(
+                com.example.data.TrainingPlanEntity(
+                    id = "real_p1",
+                    version = 1,
+                    titleRu = "Реальный план",
+                    source = "Пользователь",
+                    effectiveFromDate = "2026-11-03",
+                    isDemo = false
+                )
+            ),
+            completions = listOf(
+                com.example.data.WorkoutCompletionEntity(
+                    runId = "run_101",
+                    slotId = "slot_morning",
+                    localDate = "2026-11-03",
+                    completedAtEpochMs = 1762129000000L,
+                    optionalDifficulty = "MEDIUM",
+                    isDemo = false
+                )
+            )
+        )
+        val dbJson = dbSnapshot.toJson()
+        val restoredDb = com.example.data.BackupDatabaseSnapshot.fromJson(dbJson)
+
+        assertEquals(1, restoredDb.plans.size)
+        assertEquals("real_p1", restoredDb.plans.first().id)
+        assertFalse(restoredDb.plans.first().isDemo)
+        assertEquals(1, restoredDb.completions.size)
+        assertEquals("run_101", restoredDb.completions.first().runId)
+        assertFalse(restoredDb.completions.first().isDemo)
     }
 }

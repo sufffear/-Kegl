@@ -95,6 +95,7 @@ import androidx.lifecycle.compose.currentStateAsState
 import com.example.R
 import com.example.data.AudioDiagnosticEntry
 import com.example.data.AudioHardwareStatus
+import com.example.data.BackupPreviewInfo
 import com.example.data.BenchSignalSettings
 import com.example.data.DailySlotWithCompletion
 import com.example.data.StoryReaderUiState
@@ -164,6 +165,14 @@ fun TechCheckScreen(
     onSaveStoryBlockPosition: (String) -> Unit,
     onRestartStoryFromBeginning: () -> Unit,
     onRemoveImportedBook: () -> Unit,
+    pendingRestorePreview: BackupPreviewInfo? = null,
+    backupOperationBanner: String? = null,
+    backupErrorMessage: String? = null,
+    onCreateBackupUri: (Uri) -> Unit = {},
+    onInspectBackupUri: (Uri) -> Unit = {},
+    onConfirmRestore: () -> Unit = {},
+    onCancelRestore: () -> Unit = {},
+    onDismissBackupBanners: () -> Unit = {},
     onPlaySample: (SignalType) -> Unit,
     onThemeChange: (VelarisThemeId) -> Unit,
     onSoundPackChange: (SoundPack) -> Unit,
@@ -402,6 +411,14 @@ fun TechCheckScreen(
                                 onReaderLineSpacingChange = onReaderLineSpacingChange,
                                 onImportMarkdownUri = onImportMarkdownUri,
                                 onRemoveImportedBook = onRemoveImportedBook,
+                                pendingRestorePreview = pendingRestorePreview,
+                                backupOperationBanner = backupOperationBanner,
+                                backupErrorMessage = backupErrorMessage,
+                                onCreateBackupUri = onCreateBackupUri,
+                                onInspectBackupUri = onInspectBackupUri,
+                                onConfirmRestore = onConfirmRestore,
+                                onCancelRestore = onCancelRestore,
+                                onDismissBackupBanners = onDismissBackupBanners,
                                 onOpenDiagnostics = { onNavigate(VelarisNavDestination.DIAGNOSTICS) },
                                 onReturnToWorkout = { onNavigate(VelarisNavDestination.WORKOUT) }
                             )

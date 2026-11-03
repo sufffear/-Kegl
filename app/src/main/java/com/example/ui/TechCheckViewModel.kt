@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.example.data.AppBuildInfoRepository
 import com.example.data.AudioDiagnosticEntry
 import com.example.data.AudioHardwareStatus
+import com.example.data.BackupPreviewInfo
 import com.example.data.BenchSignalSettings
 import com.example.data.DailySlotWithCompletion
 import com.example.data.StoryReaderUiState
@@ -75,6 +76,9 @@ class TechCheckViewModel(
     val realCompletionsCount: StateFlow<Int> = BenchSessionCoordinator.realCompletionsCount
     val weeklyOverview: StateFlow<WeeklyOverviewState> = BenchSessionCoordinator.weeklyOverview
     val storyState: StateFlow<StoryReaderUiState> = BenchSessionCoordinator.storyState
+    val pendingRestorePreview: StateFlow<BackupPreviewInfo?> = BenchSessionCoordinator.pendingRestorePreview
+    val backupOperationBanner: StateFlow<String?> = BenchSessionCoordinator.backupOperationBanner
+    val backupErrorMessage: StateFlow<String?> = BenchSessionCoordinator.backupErrorMessage
     val lastCompletedSlotDifficulty: StateFlow<WorkoutDifficulty?> = BenchSessionCoordinator.lastCompletedSlotDifficulty
     val databaseErrorMessage: StateFlow<String?> = BenchSessionCoordinator.databaseErrorMessage
 
@@ -195,6 +199,28 @@ class TechCheckViewModel(
 
     fun removeImportedBook() {
         BenchSessionCoordinator.removeImportedBook()
+    }
+
+    // --- Резервное копирование и восстановление (v1.2) ---
+
+    fun createBackupToUri(uri: Uri) {
+        BenchSessionCoordinator.createBackupToUri(appContext, uri)
+    }
+
+    fun inspectBackupFromUri(uri: Uri) {
+        BenchSessionCoordinator.inspectBackupFromUri(appContext, uri)
+    }
+
+    fun confirmPendingRestore() {
+        BenchSessionCoordinator.confirmPendingRestore(appContext)
+    }
+
+    fun cancelPendingRestore() {
+        BenchSessionCoordinator.cancelPendingRestore()
+    }
+
+    fun dismissBackupBanners() {
+        BenchSessionCoordinator.dismissBackupBanners()
     }
 
     // --- Настройки сигнала и интерфейса ---

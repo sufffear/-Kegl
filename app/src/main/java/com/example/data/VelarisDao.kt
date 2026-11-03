@@ -194,4 +194,98 @@ interface VelarisDao {
         deleteAllImportedNovels()
         deleteAllNovelReadingProgress()
     }
+
+    // --- Резервное копирование и атомарное восстановление данных (v1.2 п. 1–2) ---
+
+    @Query("SELECT * FROM training_plans WHERE isDemo = 0")
+    suspend fun getRealTrainingPlans(): List<TrainingPlanEntity>
+
+    @Query("SELECT * FROM plan_assignments WHERE isDemo = 0")
+    suspend fun getRealPlanAssignments(): List<PlanAssignmentEntity>
+
+    @Query("SELECT * FROM daily_plans WHERE isDemo = 0")
+    suspend fun getRealDailyPlans(): List<DailyPlanEntity>
+
+    @Query("SELECT * FROM daily_slots WHERE isDemo = 0")
+    suspend fun getRealDailySlots(): List<DailySlotEntity>
+
+    @Query("SELECT * FROM workout_runs WHERE isDemo = 0")
+    suspend fun getRealWorkoutRuns(): List<WorkoutRunEntity>
+
+    @Query("SELECT * FROM workout_completions WHERE isDemo = 0")
+    suspend fun getRealWorkoutCompletions(): List<WorkoutCompletionEntity>
+
+    @Query("DELETE FROM training_plans WHERE isDemo = 0")
+    suspend fun deleteRealTrainingPlans()
+
+    @Query("DELETE FROM plan_assignments WHERE isDemo = 0")
+    suspend fun deleteRealPlanAssignments()
+
+    @Query("DELETE FROM daily_plans WHERE isDemo = 0")
+    suspend fun deleteRealDailyPlans()
+
+    @Query("DELETE FROM daily_slots WHERE isDemo = 0")
+    suspend fun deleteRealDailySlots()
+
+    @Query("DELETE FROM workout_runs WHERE isDemo = 0")
+    suspend fun deleteRealWorkoutRuns()
+
+    @Query("DELETE FROM workout_completions WHERE isDemo = 0")
+    suspend fun deleteRealWorkoutCompletions()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTrainingPlans(plans: List<TrainingPlanEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDailyPlans(plans: List<DailyPlanEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDailySlots(slots: List<DailySlotEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWorkoutRuns(runs: List<WorkoutRunEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWorkoutCompletions(completions: List<WorkoutCompletionEntity>)
+
+    /**
+     * Атомарная замена реальных тренировочных данных и романа (v1.2 п. 2).
+     * Демонстрационные данные не затрагиваются; все реальные данные перезаписываются
+     * в рамках одной Room-транзакции без частичных состояний.
+     */
+    @Transaction
+    suspend fun restoreUserDataAtomically(
+        plans: List<TrainingPlanEntity>,
+        assignments: List<PlanAssignmentEntity>,
+        dailyPlans: List<DailyPlanEntity>,
+        slots: List<DailySlotEntity>,
+        runs: List<WorkoutRunEntity>,
+        completions: List<WorkoutCompletionEntity>,
+        novel: ImportedNovelEntity?,
+        chapters: List<NovelChapterEntity>,
+        blocks: List<NovelBlockEntity>,
+        progress: NovelReadingProgressEntity?
+    ) {
+        deleteRealWorkoutCompletions()
+        deleteRealWorkoutRuns()
+        deleteRealDailySlots()
+        deleteRealDailyPlans()
+        deleteRealPlanAssignments()
+        deleteRealTrainingPlans()
+
+        if (plans.isNotEmpty()) insertTrainingPlans(plans)
+        if (assignments.isNotEmpty()) upsertPlanAssignments(assignments)
+        if (dailyPlans.isNotEmpty()) insertDailyPlans(dailyPlans)
+        if (slots.isNotEmpty()) insertDailySlots(slots)
+        if (runs.isNotEmpty()) insertWorkoutRuns(runs)
+        if (completions.isNotEmpty()) insertWorkoutCompletions(completions)
+
+        clearImportedNovelAtomically()
+        if (novel != null) {
+            upsertImportedNovel(novel)
+            if (chapters.isNotEmpty()) insertNovelChapters(chapters)
+            if (blocks.isNotEmpty()) insertNovelBlocks(blocks)
+            if (progress != null) upsertNovelReadingProgress(progress)
+        }
+    }
 }
