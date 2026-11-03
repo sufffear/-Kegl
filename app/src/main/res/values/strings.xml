@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Velaris</string>
+    <string name="tech_check_title">Velaris · Техническая проверка</string>
+    <string name="tech_check_stage_badge">Этап 0A · Проверка среды и сборки</string>
+    <string name="tech_check_version_format">Версия: %1$s (versionCode %2$d)</string>
+    <string name="tech_check_app_id_label">Идентификатор пакета (applicationId)</string>
+    <string name="tech_check_sdk_label">Версии Android SDK</string>
+    <string name="tech_check_device_section">Среда запуска (определено на устройстве)</string>
+    <string name="tech_check_offline_section">Автономность и безопасность (ТЗ v1.0)</string>
+    <string name="tech_check_offline_status">Полностью офлайн: без Firebase, API, аналитики и разрешения INTERNET</string>
+    <string name="tech_check_stage_notice">Демо-стенд этапа 0A. Тренировочный таймер и история не активированы до подтверждения установки APK на целевой телефон Samsung.</string>
+    <string name="mountain_illustration_desc">Декоративный силуэт гор на фоне рассвета</string>
+</resources>

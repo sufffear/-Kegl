@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Subtle luminous ring / dawn sun -->
+    <path
+        android:fillColor="#44F4C2D7"
+        android:pathData="M54,32A14,14 0 1,1 54,60A14,14 0 1,1 54,32Z" />
+    <!-- Bold mountain range silhouette inside 66dp safe zone -->
+    <path
+        android:fillColor="#F5EFFB"
+        android:pathData="M24,72 L43,44 L55,60 L66,47 L84,72 Z" />
+    <path
+        android:fillColor="#E8B4D4"
+        android:pathData="M34,72 L54,38 L74,72 Z" />
+</vector>

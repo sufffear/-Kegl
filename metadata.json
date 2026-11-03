@@ -1,0 +1,6 @@
+{
+  "name": "Velaris",
+  "description": "Спокойный офлайн-тренер и интерактивная история — техническая проверка (Этап 0A)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
