@@ -1,13 +1,17 @@
 <resources>
     <string name="app_name">Velaris</string>
-    <string name="tech_check_title">Velaris · Техническая проверка</string>
-    <string name="tech_check_stage_badge">Этап 0A · Проверка среды и сборки</string>
+    <string name="tech_check_title">Velaris · Технический стенд 0B</string>
+    <string name="tech_check_stage_badge">Этап 0B · Фоновый таймер и сигналы</string>
     <string name="tech_check_version_format">Версия: %1$s (versionCode %2$d)</string>
-    <string name="tech_check_app_id_label">Идентификатор пакета (applicationId)</string>
-    <string name="tech_check_sdk_label">Версии Android SDK</string>
-    <string name="tech_check_device_section">Среда запуска (определено на устройстве)</string>
-    <string name="tech_check_offline_section">Автономность и безопасность (ТЗ v1.0)</string>
-    <string name="tech_check_offline_status">Полностью офлайн: без Firebase, API, аналитики и разрешения INTERNET</string>
-    <string name="tech_check_stage_notice">Демо-стенд этапа 0A. Тренировочный таймер и история не активированы до подтверждения установки APK на целевой телефон Samsung.</string>
+    <string name="demo_safety_banner_title">Демо — не выполняйте упражнения по этим сигналам</string>
+    <string name="demo_safety_banner_body">Этот стенд предназначен исключительно для технической проверки фоновой службы, звука, вибрации, паузы и прерываний на Samsung. Значения интервалов тестовые и не являются программой тренировок.</string>
+    <string name="notification_channel_name">Сессия таймера Velaris</string>
+    <string name="notification_channel_desc">Уведомление активной или приостановленной сессии таймера с кнопкой паузы</string>
+    <string name="notification_title">Velaris · Сессия</string>
+    <string name="notification_action_pause">Пауза</string>
+    <string name="stop_dialog_title">Завершить без зачёта?</string>
+    <string name="stop_dialog_body">Текущая тестовая последовательность будет остановлена. Нажмите «Остаться на паузе», если хотите продолжить позже.</string>
+    <string name="stop_dialog_confirm">Завершить</string>
+    <string name="stop_dialog_cancel">Остаться на паузе</string>
     <string name="mountain_illustration_desc">Декоративный силуэт гор на фоне рассвета</string>
 </resources>

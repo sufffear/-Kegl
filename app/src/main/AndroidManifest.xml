@@ -2,6 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Разрешения для фонового таймера, сигналов и уведомления (Этап 0B).
+         Разрешение INTERNET не запрашивается (100% офлайн). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -11,9 +19,11 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:label="@string/app_name"
             android:theme="@style/Theme.MyApplication">
             <intent-filter>
@@ -22,6 +32,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Foreground Service для этапа 0B: интервальный таймер фаз со звуковыми и тактильными
+             (вибрационными) сигналами при выключенном экране.
+             Тип specialUse обоснован тем, что сервис работает как в звуковом, так и в чисто
+             вибрационном режиме без датчиков здоровья (BODY_SENSORS) и без обходного
+             бесшумного аудиопотока. -->
+        <service
+            android:name=".service.BenchTimerService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-initiated interval phase timer providing real-time acoustic and haptic cues in both audio and silent vibration-only modes while the screen is off." />
+        </service>
     </application>
 
 </manifest>

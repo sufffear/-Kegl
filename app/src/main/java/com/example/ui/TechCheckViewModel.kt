@@ -1,41 +1,119 @@
 package com.example.ui
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.example.data.AppBuildInfoRepository
+import com.example.data.AudioHardwareStatus
+import com.example.data.BenchSignalSettings
 import com.example.domain.AppBuildInfo
+import com.example.domain.BenchEventLogEntry
+import com.example.domain.DemoProtocolConfig
+import com.example.domain.PhaseEngineSnapshot
+import com.example.domain.SignalType
+import com.example.service.BenchSessionCoordinator
+import com.example.service.BenchTimerService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-sealed interface TechCheckUiState {
-    data object Loading : TechCheckUiState
-    data class Ready(val buildInfo: AppBuildInfo) : TechCheckUiState
-}
-
 /**
- * ViewModel экрана технической проверки (этап 0A).
- * Однонаправленный поток данных через StateFlow.
+ * ViewModel технического стенда этапа 0B.
+ * Подключается к единому координатору BenchSessionCoordinator и управляет командами BenchTimerService.
  */
 class TechCheckViewModel(
+    private val appContext: Context,
     private val repository: AppBuildInfoRepository
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<TechCheckUiState>(TechCheckUiState.Loading)
-    val uiState: StateFlow<TechCheckUiState> = _uiState.asStateFlow()
+    private val _buildInfo = MutableStateFlow(repository.loadBuildInfo())
+    val buildInfo: StateFlow<AppBuildInfo> = _buildInfo.asStateFlow()
+
+    val engineSnapshot: StateFlow<PhaseEngineSnapshot> = BenchSessionCoordinator.engineSnapshot
+    val settings: StateFlow<BenchSignalSettings> = BenchSessionCoordinator.settings
+    val hardwareStatus: StateFlow<AudioHardwareStatus> = BenchSessionCoordinator.hardwareStatus
+    val eventLog: StateFlow<List<BenchEventLogEntry>> = BenchSessionCoordinator.eventLog
+    val isWakeLockHeld: StateFlow<Boolean> = BenchSessionCoordinator.isWakeLockHeld
+    val isServiceForeground: StateFlow<Boolean> = BenchSessionCoordinator.isServiceForeground
+
+    val availableProtocols: List<DemoProtocolConfig> = BenchSessionCoordinator.availableProtocols
 
     init {
-        refresh()
+        BenchSessionCoordinator.ensureInitialized(appContext)
+        BenchSessionCoordinator.refreshHardwareStatus()
     }
 
-    fun refresh() {
-        _uiState.value = TechCheckUiState.Ready(repository.loadBuildInfo())
+    fun selectProtocol(protocol: DemoProtocolConfig) {
+        BenchSessionCoordinator.selectProtocol(protocol)
     }
 
-    class Factory(private val repository: AppBuildInfoRepository) : ViewModelProvider.Factory {
+    fun startDemo() {
+        BenchTimerService.sendCommand(appContext, BenchTimerService.ACTION_START_DEMO)
+    }
+
+    fun pauseDemo() {
+        BenchTimerService.sendCommand(appContext, BenchTimerService.ACTION_PAUSE_MANUAL)
+    }
+
+    fun resumeDemo() {
+        BenchTimerService.sendCommand(appContext, BenchTimerService.ACTION_RESUME_MANUAL)
+    }
+
+    fun requestStopDemo() {
+        BenchTimerService.sendCommand(appContext, BenchTimerService.ACTION_REQUEST_STOP)
+    }
+
+    fun cancelStopDialog() {
+        BenchSessionCoordinator.cancelStopConfirmation()
+    }
+
+    fun confirmStopDemo() {
+        BenchTimerService.sendCommand(appContext, BenchTimerService.ACTION_CONFIRM_STOP)
+    }
+
+    fun resetDemo() {
+        BenchSessionCoordinator.resetToIdle()
+    }
+
+    fun playSample(signal: SignalType) {
+        BenchSessionCoordinator.playSampleSignal(signal)
+    }
+
+    fun setSoundEnabled(enabled: Boolean) {
+        BenchSessionCoordinator.updateSettings { it.copy(soundEnabled = enabled) }
+    }
+
+    fun setVibrationEnabled(enabled: Boolean) {
+        BenchSessionCoordinator.updateSettings { it.copy(vibrationEnabled = enabled) }
+    }
+
+    fun setMetronomeEnabled(enabled: Boolean) {
+        BenchSessionCoordinator.updateSettings { it.copy(metronomeEnabled = enabled) }
+    }
+
+    fun setSignalVolume(volume: Float) {
+        BenchSessionCoordinator.updateSettings { it.copy(signalVolume = volume.coerceIn(0f, 1f)) }
+    }
+
+    fun setMetronomeVolume(volume: Float) {
+        BenchSessionCoordinator.updateSettings { it.copy(metronomeVolume = volume.coerceIn(0f, 1f)) }
+    }
+
+    fun refreshHardwareStatus() {
+        BenchSessionCoordinator.refreshHardwareStatus()
+    }
+
+    fun clearEventLog() {
+        BenchSessionCoordinator.clearLog()
+    }
+
+    class Factory(
+        private val appContext: Context,
+        private val repository: AppBuildInfoRepository
+    ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return TechCheckViewModel(repository) as T
+            return TechCheckViewModel(appContext, repository) as T
         }
     }
 }
