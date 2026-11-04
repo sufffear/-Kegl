@@ -12,6 +12,7 @@ import com.example.data.BackupPreviewInfo
 import com.example.data.BackupRestoreManager
 import com.example.data.BenchSignalSettings
 import com.example.data.DailySlotWithCompletion
+import com.example.data.FreeIntervalTemplateEntity
 import com.example.data.PreferencesRepository
 import com.example.data.StoryReaderUiState
 import com.example.data.StoryRepository
@@ -96,6 +97,9 @@ object BenchSessionCoordinator {
 
     private val _storyState = MutableStateFlow(StoryReaderUiState())
     val storyState: StateFlow<StoryReaderUiState> = _storyState.asStateFlow()
+
+    private val _freeTemplates = MutableStateFlow<List<FreeIntervalTemplateEntity>>(emptyList())
+    val freeTemplates: StateFlow<List<FreeIntervalTemplateEntity>> = _freeTemplates.asStateFlow()
 
     private val _pendingRestorePreview = MutableStateFlow<BackupPreviewInfo?>(null)
     val pendingRestorePreview: StateFlow<BackupPreviewInfo?> = _pendingRestorePreview.asStateFlow()
@@ -225,6 +229,10 @@ object BenchSessionCoordinator {
             // Загружаем офлайн-читалку независимо (ошибки читалки изолированы внутри StoryRepository)
             _storyState.value = storyRepo.loadReaderState()
 
+            // Инициализируем 5 слотов свободного режима
+            repo.ensureFreeTemplatesSeeded()
+            _freeTemplates.value = repo.getAllFreeTemplates()
+
             val firstTargetSlot = slots.firstOrNull { !it.isCompleted }?.slot ?: slots.firstOrNull()?.slot
             if (firstTargetSlot != null) {
                 val proto = repo.slotToProtocolConfig(firstTargetSlot)
@@ -256,6 +264,7 @@ object BenchSessionCoordinator {
                         startDate = recovered.startDate,
                         zoneId = recovered.zoneId,
                         isDemo = recovered.isDemo,
+                        isFreeMode = recovered.isFreeMode,
                         soundPackSnapshot = SoundPack.fromId(recovered.soundPackIdSnapshot),
                         metronomeStyleSnapshot = MetronomeTickStyle.fromId(recovered.metronomeStyleIdSnapshot),
                         currentRepetition = recovered.currentRepetition,
@@ -618,6 +627,7 @@ object BenchSessionCoordinator {
                             _demoCompletionsCount.value = repo.countDemoCompletions()
                             _realCompletionsCount.value = repo.countRealCompletions()
                             _weeklyOverview.value = repo.loadWeeklyOverview(timeProvider.currentLocalDate())
+                            _freeTemplates.value = repo.getAllFreeTemplates()
                         }
                         val storyRepo = storyRepository
                         if (storyRepo != null) {
@@ -676,6 +686,7 @@ object BenchSessionCoordinator {
                 _demoCompletionsCount.value = repo.countDemoCompletions()
                 _realCompletionsCount.value = repo.countRealCompletions()
                 _weeklyOverview.value = repo.loadWeeklyOverview(timeProvider.currentLocalDate())
+                _freeTemplates.value = repo.getAllFreeTemplates()
             }
             storyRepository?.let { storyRepo ->
                 _storyState.value = storyRepo.loadReaderState()
@@ -872,6 +883,84 @@ object BenchSessionCoordinator {
             metronomeStyleSnapshot = currentSettings.metronomeTickStyle
         )
         _engineSnapshot.value = phaseEngine.currentSnapshot()
+        return started
+    }
+
+    fun saveFreeTemplate(template: FreeIntervalTemplateEntity) {
+        val repo = persistenceRepository ?: return
+        coordinatorScope.launch {
+            repo.saveFreeTemplate(template)
+            _freeTemplates.value = repo.getAllFreeTemplates()
+            appendLog(
+                "TEMPLATE",
+                "Сохранён шаблон «${template.name}» (слот ${template.slotIndex}: ${template.targetDurationMinutes}м ${template.targetDurationSeconds}с, удержание ${template.contractionSec}с, расслабление ${template.relaxationSec}с)"
+            )
+        }
+    }
+
+    @Synchronized
+    fun startFreeSession(template: FreeIntervalTemplateEntity): Boolean {
+        if (phaseEngine.currentSnapshot().isActiveOrPaused) {
+            appendLog(
+                "GUARD",
+                "Нельзя запустить свободный подход: уже активна или приостановлена другая попытка (${phaseEngine.currentSnapshot().status})"
+            )
+            return false
+        }
+        if (!template.isValid) {
+            appendLog("GUARD", "Попытка запуска незаполненного или некорректного шаблона «${template.name}» заблокирована")
+            return false
+        }
+
+        refreshHardwareStatus()
+        val hw = _hardwareStatus.value
+        if (_settings.value.soundEnabled && (!hw.isSilentOrVibrateRinger || hw.isHeadphonesConnected)) {
+            val focusGranted = audioVibrationEngine?.requestSessionAudioFocus() ?: true
+            if (!focusGranted) {
+                appendLog(
+                    "WARN",
+                    "Аудиофокус недоступен при старте (активен звонок или внешний поток). Старт со звуком отклонён."
+                )
+                return false
+            }
+        }
+
+        val proto = DemoProtocolConfig(
+            id = "free_slot_${template.slotIndex}",
+            titleRu = "Свободный · ${template.name}",
+            contractionMs = template.contractionSec * 1000L,
+            relaxationMs = template.relaxationSec * 1000L,
+            repetitions = template.calculatedCycles,
+            isLastInGroup = true,
+            group = PlanGroup.MORNING
+        )
+
+        val runId = "free_run_${UUID.randomUUID()}"
+        val slotId = "free_${template.slotIndex}_${UUID.randomUUID()}"
+        val startDate = timeProvider.currentLocalDate()
+        val zoneId = timeProvider.currentZoneId()
+        val currentSettings = _settings.value
+        val isDemoRun = !_settings.value.isRealProgramEnabled
+        _lastCompletedSlotDifficulty.value = null
+
+        val started = phaseEngine.start(
+            protocol = proto,
+            runId = runId,
+            slotId = slotId,
+            startDate = startDate,
+            zoneId = zoneId,
+            isDemo = isDemoRun,
+            isFreeMode = true,
+            soundPackSnapshot = currentSettings.soundPack,
+            metronomeStyleSnapshot = currentSettings.metronomeTickStyle
+        )
+        _engineSnapshot.value = phaseEngine.currentSnapshot()
+        if (started) {
+            appendLog(
+                "FREE_START",
+                "Запущен свободный подход «${template.name}» (${proto.repetitions} циклов по ${template.contractionSec}с/${template.relaxationSec}с, факт=${template.actualDurationSec}с, demo=$isDemoRun)"
+            )
+        }
         return started
     }
 

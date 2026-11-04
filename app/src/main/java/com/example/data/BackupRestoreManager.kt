@@ -74,6 +74,7 @@ class BackupRestoreManager(
             val chapters = if (activeNovel != null) dao.getNovelChapters(activeNovel.bookId) else emptyList()
             val blocks = if (activeNovel != null) dao.getNovelBlocksForBook(activeNovel.bookId) else emptyList()
             val progress = if (activeNovel != null) dao.getNovelReadingProgress(activeNovel.bookId) else null
+            val freeTemplates = dao.getAllFreeTemplates()
 
             val novelSourceBytes = if (activeNovel != null) {
                 storyRepository.readStoredOriginalBytes()
@@ -110,7 +111,8 @@ class BackupRestoreManager(
                 novel = activeNovel,
                 novelChapters = chapters,
                 novelBlocks = blocks,
-                novelReadingProgress = progress
+                novelReadingProgress = progress,
+                freeTemplates = freeTemplates
             )
 
             val dbBytes = dbSnapshot.toJson().toByteArray(Charsets.UTF_8)
@@ -381,8 +383,13 @@ class BackupRestoreManager(
                 novel = preparedNovelEntity,
                 chapters = dbSnapshot.novelChapters,
                 blocks = dbSnapshot.novelBlocks,
-                progress = dbSnapshot.novelReadingProgress
+                progress = dbSnapshot.novelReadingProgress,
+                freeTemplates = dbSnapshot.freeTemplates
             )
+
+            if (dao.getAllFreeTemplates().isEmpty()) {
+                dao.upsertFreeTemplates(FreeIntervalTemplateEntity.createInitialDefaults())
+            }
 
             // 8. Обновляем настройки в DataStore
             preferencesRepository.updateSettings(

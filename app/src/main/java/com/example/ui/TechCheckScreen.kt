@@ -131,6 +131,7 @@ fun TechCheckScreen(
     isWakeLockHeld: Boolean,
     isServiceForeground: Boolean,
     dailySlots: List<DailySlotWithCompletion>,
+    freeTemplates: List<com.example.data.FreeIntervalTemplateEntity> = emptyList(),
     isZeroSlotDemoMode: Boolean,
     demoCompletionsCount: Int,
     realCompletionsCount: Int,
@@ -142,6 +143,8 @@ fun TechCheckScreen(
     onSelectProtocol: (DemoProtocolConfig) -> Unit,
     onSelectDailySlot: (DailySlotWithCompletion) -> Unit,
     onStartSlotAndOpenWorkout: (DailySlotWithCompletion) -> Unit,
+    onStartFreeWorkout: (com.example.data.FreeIntervalTemplateEntity) -> Unit = {},
+    onSaveFreeTemplate: (com.example.data.FreeIntervalTemplateEntity) -> Unit = {},
     onZeroSlotDemoModeChange: (Boolean) -> Unit,
     onStartDemo: () -> Unit,
     onPauseDemo: () -> Unit,
@@ -342,12 +345,15 @@ fun TechCheckScreen(
                                 snapshot = snapshot,
                                 settings = settings,
                                 dailySlots = dailySlots,
+                                freeTemplates = freeTemplates,
                                 isZeroSlotDemoMode = isZeroSlotDemoMode,
                                 demoCompletionsCount = demoCompletionsCount,
                                 realCompletionsCount = realCompletionsCount,
                                 databaseErrorMessage = databaseErrorMessage,
                                 onSelectDailySlot = onSelectDailySlot,
                                 onStartSelectedSlot = onStartSlotAndOpenWorkout,
+                                onStartFreeWorkout = onStartFreeWorkout,
+                                onSaveFreeTemplate = onSaveFreeTemplate,
                                 onReturnToActiveWorkout = { onNavigate(VelarisNavDestination.WORKOUT) }
                             )
                         }

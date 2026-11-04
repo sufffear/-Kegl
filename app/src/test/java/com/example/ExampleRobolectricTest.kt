@@ -13,6 +13,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.data.StoryRepository
 import com.example.data.VelarisDatabase
 import com.example.data.WorkoutPersistenceRepository
+import com.example.domain.DemoProtocolConfig
 import com.example.domain.MarkdownNovelParser
 import com.example.domain.MetronomeTickStyle
 import com.example.domain.NeutralTestMarkdownFactory
@@ -55,12 +56,12 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify v1_2 versionCode 5, applicationId and offline manifest`() {
+    fun `verify v1_3 versionCode 6, applicationId and offline manifest`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         assertEquals("Velaris", context.getString(R.string.app_name))
         assertEquals("com.velaris.app", BuildConfig.APPLICATION_ID)
-        assertEquals("0.5.0-v1.2", BuildConfig.VERSION_NAME)
-        assertEquals(5, BuildConfig.VERSION_CODE)
+        assertEquals("0.6.0-v1.3", BuildConfig.VERSION_NAME)
+        assertEquals(6, BuildConfig.VERSION_CODE)
 
         @Suppress("DEPRECATION")
         val packageInfo = context.packageManager.getPackageInfo(
@@ -79,12 +80,12 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify v1_2 full interface navigation across Home, Plan, Workout, Reader, Settings and Diagnostics`() {
+    fun `verify v1_3 full interface navigation across Home, Plan, Workout, Reader, Settings and Diagnostics`() {
         composeTestRule.waitForIdle()
 
-        // 1. Главная: карточка Тренировка, карточка История («Добавить книгу» когда книга не импортирована), 7-дневный обзор, предупреждение Демо и версия 0.5.0-v1.2
+        // 1. Главная: карточка Тренировка, карточка История, 7-дневный обзор, предупреждение Демо и версия 0.6.0-v1.3
         composeTestRule.onNodeWithTag("demo_safety_banner").assertExists()
-        composeTestRule.onNodeWithText("Версия: 0.5.0-v1.2 (versionCode 5)").assertExists()
+        composeTestRule.onNodeWithText("Версия: 0.6.0-v1.3 (versionCode 6)").assertExists()
         composeTestRule.onNodeWithTag("home_workout_card").assertExists()
         composeTestRule.onNodeWithTag("home_story_card").assertExists()
         composeTestRule.onNodeWithTag("weekly_overview_card").assertExists()
@@ -752,5 +753,203 @@ class ExampleRobolectricTest {
         assertEquals(1, restoredDb.completions.size)
         assertEquals("run_101", restoredDb.completions.first().runId)
         assertFalse(restoredDb.completions.first().isDemo)
+    }
+
+    @Test
+    fun `five free interval templates are seeded in Room and can be edited and persisted`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = Room.inMemoryDatabaseBuilder(context, VelarisDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val clock = FakeControllableTimeProvider(localDate = "2026-11-03")
+            val repo = WorkoutPersistenceRepository(db.velarisDao(), clock)
+
+            // Проверяем начальное заполнение 5 шаблонов
+            repo.ensureFreeTemplatesSeeded()
+            val templates = repo.getAllFreeTemplates()
+            assertEquals(5, templates.size)
+            assertEquals("Быстрый", templates[0].name)
+            assertEquals("Медленный", templates[1].name)
+            assertEquals("Длительное удержание", templates[2].name)
+            assertEquals("Мой вариант 4", templates[3].name)
+            assertEquals("Мой вариант 5", templates[4].name)
+
+            // Редактируем шаблон #1 (индекс 0)
+            val updated = templates[0].copy(
+                name = "Мой быстрый спринт",
+                targetDurationMinutes = 4,
+                targetDurationSeconds = 30,
+                contractionSec = 6,
+                relaxationSec = 4
+            )
+            repo.saveFreeTemplate(updated)
+
+            val reloaded = repo.getAllFreeTemplates()
+            val savedSlot0 = reloaded.first { it.slotIndex == 0 }
+            assertEquals("Мой быстрый спринт", savedSlot0.name)
+            assertEquals(4, savedSlot0.targetMinutes)
+            assertEquals(30, savedSlot0.targetSeconds)
+            assertEquals(6, savedSlot0.contractionSec)
+            assertEquals(4, savedSlot0.relaxationSec)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun `backup and restore preserves free interval templates with backward compatibility`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = Room.inMemoryDatabaseBuilder(context, VelarisDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val clock = FakeControllableTimeProvider(localDate = "2026-11-03")
+            val repo = WorkoutPersistenceRepository(db.velarisDao(), clock)
+
+            // 1. Создаём снимок с кастомным шаблоном
+            repo.ensureFreeTemplatesSeeded()
+            val customTemplate = repo.getAllFreeTemplates()[0].copy(name = "Спец-шаблон")
+            repo.saveFreeTemplate(customTemplate)
+
+            val snapshot = com.example.data.BackupDatabaseSnapshot(
+                plans = emptyList(),
+                runs = emptyList(),
+                completions = emptyList(),
+                freeTemplates = repo.getAllFreeTemplates()
+            )
+            val json = snapshot.toJson()
+
+            // 2. Десериализуем и проверяем, что кастомный шаблон сохранился
+            val restoredSnapshot = com.example.data.BackupDatabaseSnapshot.fromJson(json)
+            assertEquals(5, restoredSnapshot.freeTemplates.size)
+            assertEquals("Спец-шаблон", restoredSnapshot.freeTemplates[0].name)
+
+            // 3. Обратная совместимость: снимок старой версии без freeTemplates
+            val legacyJson = """{"plans":[],"runs":[],"completions":[]}"""
+            val restoredLegacy = com.example.data.BackupDatabaseSnapshot.fromJson(legacyJson)
+            assertTrue(restoredLegacy.freeTemplates.isEmpty())
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun `weekly overview separates planned and free workout completions`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = Room.inMemoryDatabaseBuilder(context, VelarisDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val clock = FakeControllableTimeProvider(localDate = "2026-11-03")
+            val repo = WorkoutPersistenceRepository(db.velarisDao(), clock)
+
+            // Завершаем 2 плановых подхода (isFreeMode = false, isDemo = false)
+            val planSlots = repo.getOrCreateDailySlots(
+                localDate = "2026-11-03",
+                planId = WorkoutPersistenceRepository.REAL_PLAN_STANDARD_3,
+                isDemo = false
+            )
+            val slot0 = planSlots[0].slot
+            val proto0 = repo.slotToProtocolConfig(slot0)
+            val snap0 = PhaseEngineSnapshot(
+                status = RunStatus.COMPLETED,
+                protocol = proto0,
+                currentRepetition = proto0.repetitions,
+                totalRepetitions = proto0.repetitions,
+                currentPhase = PhaseType.RELAXATION,
+                phaseRemainingMs = 0L,
+                phaseDurationMs = proto0.relaxationMs,
+                prepRemainingMs = 0L,
+                confirmedActiveMs = proto0.totalActiveDurationMs,
+                totalActiveDurationMs = proto0.totalActiveDurationMs,
+                snapshotElapsedRealtimeMs = clock.elapsedMs,
+                runId = "run_planned_0",
+                slotId = slot0.id,
+                startDate = "2026-11-03",
+                zoneId = "Europe/Moscow",
+                isDemo = false,
+                isFreeMode = false
+            )
+            assertTrue(repo.completeRunAtomically(snap0))
+
+            val slot1 = planSlots[1].slot
+            val proto1 = repo.slotToProtocolConfig(slot1)
+            val snap1 = snap0.copy(
+                protocol = proto1,
+                runId = "run_planned_1",
+                slotId = slot1.id
+            )
+            assertTrue(repo.completeRunAtomically(snap1))
+
+            // Завершаем 1 свободный подход (isFreeMode = true, isDemo = false)
+            val freeProto = DemoProtocolConfig(
+                id = "free_proto_1",
+                titleRu = "Свободный 1",
+                contractionMs = 5000L,
+                relaxationMs = 5000L,
+                repetitions = 3
+            )
+            val freeSnap = PhaseEngineSnapshot(
+                status = RunStatus.COMPLETED,
+                protocol = freeProto,
+                currentRepetition = 3,
+                totalRepetitions = 3,
+                currentPhase = PhaseType.RELAXATION,
+                phaseRemainingMs = 0L,
+                phaseDurationMs = 5000L,
+                prepRemainingMs = 0L,
+                confirmedActiveMs = 30000L,
+                totalActiveDurationMs = 30000L,
+                snapshotElapsedRealtimeMs = clock.elapsedMs,
+                runId = "run_free_1",
+                slotId = "free_slot_1",
+                startDate = "2026-11-03",
+                zoneId = "Europe/Moscow",
+                isDemo = false,
+                isFreeMode = true
+            )
+            assertTrue(repo.completeRunAtomically(freeSnap))
+
+            val overview = repo.loadWeeklyOverview(todayDateStr = "2026-11-03")
+            val todaySummary = overview.days.first { it.isToday }
+            assertEquals(3, todaySummary.completedCount)
+            assertEquals(2, todaySummary.plannedCompletedCount)
+            assertEquals(1, todaySummary.freeCompletedCount)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun `verify switching to free intervals tab and displaying 5 templates with disclaimer`() {
+        composeTestRule.waitForIdle()
+
+        // Переходим на экран План
+        composeTestRule.onNodeWithTag("nav_plan").performClick()
+        composeTestRule.waitForIdle()
+
+        // Переключаемся на вкладку «Свободный режим»
+        composeTestRule.onNodeWithTag("plan_tab_free").performClick()
+        composeTestRule.waitForIdle()
+
+        // Проверяем наличие секции шаблонов и обязательной подписи ТЗ v1.3
+        composeTestRule.onNodeWithTag("free_interval_templates_section").assertExists()
+        composeTestRule.onNodeWithTag("free_intervals_disclaimer_caption").assertExists()
+        composeTestRule.onNodeWithText("Ваши интервалы. Приложение не оценивает подходящую нагрузку").assertExists()
+
+        // Проверяем наличие всех 5 карточек шаблонов и их кнопок действий
+        for (i in 0..4) {
+            composeTestRule.onNodeWithTag("free_template_card_$i").assertExists()
+            composeTestRule.onNodeWithTag("btn_start_free_$i").assertExists()
+            composeTestRule.onNodeWithTag("btn_edit_free_$i").assertExists()
+        }
+
+        // Проверяем имена шаблонов по умолчанию
+        composeTestRule.onNodeWithText("Быстрый").assertExists()
+        composeTestRule.onNodeWithText("Медленный").assertExists()
+        composeTestRule.onNodeWithText("Длительное удержание").assertExists()
+        composeTestRule.onNodeWithText("Мой вариант 4").assertExists()
+        composeTestRule.onNodeWithText("Мой вариант 5").assertExists()
     }
 }

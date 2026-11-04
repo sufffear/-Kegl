@@ -110,7 +110,8 @@ data class BackupDatabaseSnapshot(
     val novel: ImportedNovelEntity? = null,
     val novelChapters: List<NovelChapterEntity> = emptyList(),
     val novelBlocks: List<NovelBlockEntity> = emptyList(),
-    val novelReadingProgress: NovelReadingProgressEntity? = null
+    val novelReadingProgress: NovelReadingProgressEntity? = null,
+    val freeTemplates: List<FreeIntervalTemplateEntity> = emptyList()
 ) {
     fun toJson(): String {
         val root = JSONObject()
@@ -202,6 +203,7 @@ data class BackupDatabaseSnapshot(
                 put("bootSessionId", r.bootSessionId)
                 if (r.interruptionReason != null) put("interruptionReason", r.interruptionReason)
                 put("isDemo", r.isDemo)
+                put("isFreeMode", r.isFreeMode)
             })
         }
         root.put("runs", runsArr)
@@ -215,6 +217,7 @@ data class BackupDatabaseSnapshot(
                 put("completedAtEpochMs", c.completedAtEpochMs)
                 if (c.optionalDifficulty != null) put("optionalDifficulty", c.optionalDifficulty)
                 put("isDemo", c.isDemo)
+                put("isFreeMode", c.isFreeMode)
             })
         }
         root.put("completions", completionsArr)
@@ -286,6 +289,21 @@ data class BackupDatabaseSnapshot(
                 root.put("novelReadingProgress", progressObj)
             }
         }
+
+        val ftArr = JSONArray()
+        freeTemplates.forEach { t ->
+            ftArr.put(JSONObject().apply {
+                put("slotIndex", t.slotIndex)
+                put("name", t.name)
+                put("targetDurationMinutes", t.targetDurationMinutes)
+                put("targetDurationSeconds", t.targetDurationSeconds)
+                put("contractionSec", t.contractionSec)
+                put("relaxationSec", t.relaxationSec)
+                put("isConfigured", t.isConfigured)
+                put("updatedAtEpochMs", t.updatedAtEpochMs)
+            })
+        }
+        root.put("freeTemplates", ftArr)
 
         return root.toString()
     }
@@ -395,7 +413,8 @@ data class BackupDatabaseSnapshot(
                         checkpointWallEpochMs = obj.optLong("checkpointWallEpochMs", 0L),
                         bootSessionId = obj.optString("bootSessionId", ""),
                         interruptionReason = if (obj.has("interruptionReason") && !obj.isNull("interruptionReason")) obj.getString("interruptionReason") else null,
-                        isDemo = obj.optBoolean("isDemo", false)
+                        isDemo = obj.optBoolean("isDemo", false),
+                        isFreeMode = obj.optBoolean("isFreeMode", false)
                     )
                 )
             }
@@ -411,7 +430,8 @@ data class BackupDatabaseSnapshot(
                         localDate = obj.getString("localDate"),
                         completedAtEpochMs = obj.getLong("completedAtEpochMs"),
                         optionalDifficulty = if (obj.has("optionalDifficulty") && !obj.isNull("optionalDifficulty")) obj.getString("optionalDifficulty") else null,
-                        isDemo = obj.optBoolean("isDemo", false)
+                        isDemo = obj.optBoolean("isDemo", false),
+                        isFreeMode = obj.optBoolean("isFreeMode", false)
                     )
                 )
             }
@@ -494,6 +514,26 @@ data class BackupDatabaseSnapshot(
                 null
             }
 
+            val freeTemplates = mutableListOf<FreeIntervalTemplateEntity>()
+            val ftArr = root.optJSONArray("freeTemplates")
+            if (ftArr != null) {
+                for (i in 0 until ftArr.length()) {
+                    val obj = ftArr.getJSONObject(i)
+                    freeTemplates.add(
+                        FreeIntervalTemplateEntity(
+                            slotIndex = obj.getInt("slotIndex"),
+                            name = obj.getString("name"),
+                            targetDurationMinutes = obj.optInt("targetDurationMinutes", 3),
+                            targetDurationSeconds = obj.optInt("targetDurationSeconds", 0),
+                            contractionSec = obj.optInt("contractionSec", 0),
+                            relaxationSec = obj.optInt("relaxationSec", 0),
+                            isConfigured = obj.optBoolean("isConfigured", false),
+                            updatedAtEpochMs = obj.optLong("updatedAtEpochMs", 0L)
+                        )
+                    )
+                }
+            }
+
             return BackupDatabaseSnapshot(
                 plans = plans,
                 assignments = assignments,
@@ -504,7 +544,8 @@ data class BackupDatabaseSnapshot(
                 novel = novel,
                 novelChapters = chapters,
                 novelBlocks = blocks,
-                novelReadingProgress = progress
+                novelReadingProgress = progress,
+                freeTemplates = freeTemplates
             )
         }
     }

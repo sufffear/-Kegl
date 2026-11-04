@@ -17,6 +17,8 @@ data class WeeklyDaySummary(
     val isToday: Boolean,
     val completedCount: Int,
     val assignedCount: Int,
+    val plannedCompletedCount: Int,
+    val freeCompletedCount: Int,
     val completedTitlesRu: List<String>
 )
 
@@ -231,8 +233,14 @@ class WorkoutPersistenceRepository(
             val key = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
             val daySlots = realSlotsByDate[key].orEmpty()
             val dayCompletions = realCompletionsByDate[key].orEmpty()
+            val plannedCompletions = dayCompletions.filter { !it.isFreeMode }
+            val freeCompletions = dayCompletions.filter { it.isFreeMode }
             val completedTitles = dayCompletions.map { comp ->
-                allSlotsMap[comp.slotId]?.titleRu ?: "Подход выполнен"
+                if (comp.isFreeMode) {
+                    "Свободный подход"
+                } else {
+                    allSlotsMap[comp.slotId]?.titleRu ?: "Подход выполнен"
+                }
             }
             WeeklyDaySummary(
                 localDate = key,
@@ -241,6 +249,8 @@ class WorkoutPersistenceRepository(
                 isToday = (key == todayDateStr),
                 completedCount = dayCompletions.size,
                 assignedCount = daySlots.size,
+                plannedCompletedCount = plannedCompletions.size,
+                freeCompletedCount = freeCompletions.size,
                 completedTitlesRu = completedTitles
             )
         }
@@ -280,6 +290,28 @@ class WorkoutPersistenceRepository(
         return dao.getCompletionForSlot(slotId) != null
     }
 
+    suspend fun ensureFreeTemplatesSeeded() {
+        val existing = dao.getAllFreeTemplates()
+        if (existing.isEmpty()) {
+            dao.upsertFreeTemplates(FreeIntervalTemplateEntity.createInitialDefaults())
+        }
+    }
+
+    suspend fun getAllFreeTemplates(): List<FreeIntervalTemplateEntity> {
+        val list = dao.getAllFreeTemplates()
+        return if (list.isEmpty()) {
+            val defaults = FreeIntervalTemplateEntity.createInitialDefaults()
+            dao.upsertFreeTemplates(defaults)
+            defaults
+        } else {
+            list
+        }
+    }
+
+    suspend fun saveFreeTemplate(template: FreeIntervalTemplateEntity) {
+        dao.upsertFreeTemplate(template.copy(updatedAtEpochMs = timeProvider.currentWallTimeMs()))
+    }
+
     suspend fun saveRunCheckpoint(snapshot: PhaseEngineSnapshot) {
         val runId = snapshot.runId ?: return
         val slotId = snapshot.slotId ?: return
@@ -309,7 +341,8 @@ class WorkoutPersistenceRepository(
             checkpointWallEpochMs = nowWall,
             bootSessionId = timeProvider.bootSessionId(),
             interruptionReason = snapshot.interruptionReason,
-            isDemo = snapshot.isDemo
+            isDemo = snapshot.isDemo,
+            isFreeMode = snapshot.isFreeMode
         )
         if (existing == null) {
             dao.insertRun(entity)

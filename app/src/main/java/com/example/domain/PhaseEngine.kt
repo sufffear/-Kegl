@@ -71,7 +71,8 @@ class PhaseEngine(
         zoneId: String = "UTC",
         soundPackSnapshot: SoundPack = SoundPack.SOFT,
         metronomeStyleSnapshot: MetronomeTickStyle = MetronomeTickStyle.SOFT,
-        isDemo: Boolean = true
+        isDemo: Boolean = true,
+        isFreeMode: Boolean = false
     ): Boolean {
         if (snapshot.isActiveOrPaused) {
             onLog("GUARD", "Повторный быстрый старт заблокирован: уже активно состояние ${snapshot.status}")
@@ -106,7 +107,8 @@ class PhaseEngine(
             interruptionReason = null,
             lastSchedulerDriftMs = 0L,
             maxSchedulerDriftMs = 0L,
-            isDemo = isDemo
+            isDemo = isDemo,
+            isFreeMode = isFreeMode
         )
         onLog(
             "STATE",
@@ -134,7 +136,8 @@ class PhaseEngine(
         currentPhase: PhaseType,
         phaseRemainingMs: Long,
         interruptionReason: String,
-        isDemo: Boolean = true
+        isDemo: Boolean = true,
+        isFreeMode: Boolean = false
     ): PhaseEngineSnapshot {
         val now = clock.elapsedRealtimeMs()
         lastTickRealtimeMs = now
@@ -168,7 +171,8 @@ class PhaseEngine(
             snapshotElapsedRealtimeMs = now,
             isStopDialogVisible = false,
             interruptionReason = interruptionReason,
-            isDemo = isDemo
+            isDemo = isDemo,
+            isFreeMode = isFreeMode
         )
         onLog(
             "RECOVERY",

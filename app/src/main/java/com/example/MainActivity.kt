@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
             val demoCompletionsCount by viewModel.demoCompletionsCount.collectAsStateWithLifecycle()
             val realCompletionsCount by viewModel.realCompletionsCount.collectAsStateWithLifecycle()
             val weeklyOverview by viewModel.weeklyOverview.collectAsStateWithLifecycle()
+            val freeTemplates by viewModel.freeTemplates.collectAsStateWithLifecycle()
             val storyState by viewModel.storyState.collectAsStateWithLifecycle()
             val pendingRestorePreview by viewModel.pendingRestorePreview.collectAsStateWithLifecycle()
             val backupOperationBanner by viewModel.backupOperationBanner.collectAsStateWithLifecycle()
@@ -57,6 +58,7 @@ class MainActivity : ComponentActivity() {
                     isWakeLockHeld = isWakeLockHeld,
                     isServiceForeground = isServiceForeground,
                     dailySlots = dailySlots,
+                    freeTemplates = freeTemplates,
                     isZeroSlotDemoMode = isZeroSlotDemoMode,
                     demoCompletionsCount = demoCompletionsCount,
                     realCompletionsCount = realCompletionsCount,
@@ -71,6 +73,8 @@ class MainActivity : ComponentActivity() {
                     onSelectProtocol = viewModel::selectProtocol,
                     onSelectDailySlot = viewModel::selectDailySlot,
                     onStartSlotAndOpenWorkout = viewModel::startSlotAndOpenWorkout,
+                    onStartFreeWorkout = viewModel::startFreeWorkoutAndOpenWorkout,
+                    onSaveFreeTemplate = viewModel::saveFreeTemplate,
                     onZeroSlotDemoModeChange = viewModel::setZeroSlotDemoMode,
                     onStartDemo = viewModel::startDemo,
                     onPauseDemo = viewModel::pauseDemo,

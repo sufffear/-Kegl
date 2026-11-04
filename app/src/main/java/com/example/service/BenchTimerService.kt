@@ -111,6 +111,13 @@ class BenchTimerService : Service() {
                 }
             }
 
+            ACTION_START_FREE -> {
+                val snap = BenchSessionCoordinator.engineSnapshot.value
+                promoteToForeground(snap)
+                acquireWakeLockForActiveRun()
+                startMonotonicLoop()
+            }
+
             ACTION_PAUSE_FROM_NOTIFICATION,
             ACTION_PAUSE_MANUAL -> {
                 val reason = if (intent.action == ACTION_PAUSE_FROM_NOTIFICATION) {
@@ -316,8 +323,10 @@ class BenchTimerService : Service() {
                 }
             }
             if (wakeLock?.isHeld == false) {
-                // Ограниченный таймаут WakeLock (максимум 10 минут) согласно ТЗ п. 8
-                wakeLock?.acquire(10 * 60 * 1000L)
+                // Динамический таймаут WakeLock, согласованный с оставшейся продолжительностью подхода (Итерация v1.3 п. 6)
+                val remainingActiveMs = BenchSessionCoordinator.engineSnapshot.value.remainingActiveMs
+                val lockTimeoutMs = (remainingActiveMs + 60_000L).coerceAtLeast(5 * 60 * 1000L)
+                wakeLock?.acquire(lockTimeoutMs)
                 BenchSessionCoordinator.setWakeLockHeld(true)
             }
         } catch (e: Exception) {
@@ -420,6 +429,7 @@ class BenchTimerService : Service() {
         const val NOTIFICATION_ID = 1001
 
         const val ACTION_START_DEMO = "com.velaris.app.action.START_DEMO"
+        const val ACTION_START_FREE = "com.velaris.app.action.START_FREE"
         const val ACTION_PAUSE_MANUAL = "com.velaris.app.action.PAUSE_MANUAL"
         const val ACTION_PAUSE_FROM_NOTIFICATION = "com.velaris.app.action.PAUSE_FROM_NOTIFICATION"
         const val ACTION_RESUME_MANUAL = "com.velaris.app.action.RESUME_MANUAL"
@@ -430,7 +440,7 @@ class BenchTimerService : Service() {
             val intent = Intent(context, BenchTimerService::class.java).apply {
                 this.action = action
             }
-            if (action == ACTION_START_DEMO || action == ACTION_RESUME_MANUAL) {
+            if (action == ACTION_START_DEMO || action == ACTION_START_FREE || action == ACTION_RESUME_MANUAL) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     context.startForegroundService(intent)
                 } else {

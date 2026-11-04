@@ -126,14 +126,14 @@ data class DemoProtocolConfig(
     val group: PlanGroup = PlanGroup.MORNING
 ) {
     init {
-        require(contractionMs in 1_000L..60_000L) {
-            "Длительность фазы сокращения должна быть положительной (1..60 сек)"
+        require(contractionMs in 1_000L..120_000L) {
+            "Длительность фазы сокращения должна быть положительной (1..120 сек)"
         }
-        require(relaxationMs in 1_000L..60_000L) {
-            "Длительность фазы расслабления должна быть положительной (1..60 сек)"
+        require(relaxationMs in 1_000L..120_000L) {
+            "Длительность фазы расслабления должна быть положительной (1..120 сек)"
         }
-        require(repetitions in 1..50) {
-            "Число повторов должно быть целым положительным числом (1..50)"
+        require(repetitions in 1..300) {
+            "Число повторов должно быть целым положительным числом (1..300)"
         }
     }
 
@@ -142,6 +142,107 @@ data class DemoProtocolConfig(
 
     val totalActiveDurationMs: Long
         get() = singleRepDurationMs * repetitions
+}
+
+/**
+ * Расчёт параметров свободного интервального подхода (Итерация v1.3 п. 2–3).
+ * Цикл: сокращение -> расслабление.
+ * Подход не обрывает фазу mid-cycle.
+ * Число циклов = floor(желаемое время / длительность цикла).
+ * Фактическое время = число циклов * длительность цикла.
+ */
+data class FreeIntervalCalculation(
+    val desiredTotalSec: Int,
+    val cycleSec: Int,
+    val cycles: Int,
+    val actualTotalSec: Int,
+    val isValid: Boolean,
+    val errorMessageRu: String?
+) {
+    val discrepancySec: Int get() = (desiredTotalSec - actualTotalSec).coerceAtLeast(0)
+    val completedCycles: Int get() = cycles
+    val actualDurationSec: Int get() = actualTotalSec
+    val unusedRemainderSec: Int get() = discrepancySec
+
+    val summaryRu: String
+        get() {
+            if (!isValid) return errorMessageRu ?: "Некорректные параметры"
+            val desiredMin = desiredTotalSec / 60
+            val desiredSec = desiredTotalSec % 60
+            val desiredStr = String.format(java.util.Locale.US, "%d:%02d", desiredMin, desiredSec)
+
+            val actualMin = actualTotalSec / 60
+            val actualSec = actualTotalSec % 60
+            val actualStr = String.format(java.util.Locale.US, "%d:%02d", actualMin, actualSec)
+
+            return if (desiredTotalSec == actualTotalSec) {
+                "Выбрано $desiredStr. $cycles полных циклов, ровно $actualStr"
+            } else {
+                "Выбрано $desiredStr. Получится $cycles полных циклов, $actualStr"
+            }
+        }
+}
+
+fun calculateFreeCycles(
+    desiredDurationSec: Int,
+    contractionSec: Int,
+    relaxationSec: Int
+): FreeIntervalCalculation = calculateFreeCycles(
+    targetMinutes = desiredDurationSec / 60,
+    targetSeconds = desiredDurationSec % 60,
+    contractionSec = contractionSec,
+    relaxationSec = relaxationSec
+)
+
+fun calculateFreeCycles(
+    targetMinutes: Int,
+    targetSeconds: Int,
+    contractionSec: Int,
+    relaxationSec: Int
+): FreeIntervalCalculation {
+    val desiredSec = (targetMinutes * 60 + targetSeconds).coerceAtLeast(0)
+    val cycleSec = contractionSec + relaxationSec
+    if (contractionSec <= 0 || relaxationSec <= 0) {
+        return FreeIntervalCalculation(
+            desiredTotalSec = desiredSec,
+            cycleSec = cycleSec,
+            cycles = 0,
+            actualTotalSec = 0,
+            isValid = false,
+            errorMessageRu = "Укажите секунды сокращения и расслабления больше 0"
+        )
+    }
+    if (desiredSec <= 0) {
+        return FreeIntervalCalculation(
+            desiredTotalSec = desiredSec,
+            cycleSec = cycleSec,
+            cycles = 0,
+            actualTotalSec = 0,
+            isValid = false,
+            errorMessageRu = "Продолжительность подхода должна быть больше 0 с"
+        )
+    }
+    val rawCycles = desiredSec / cycleSec
+    val cycles = rawCycles.coerceAtMost(300)
+    val actualSec = cycles * cycleSec
+    if (cycles == 0) {
+        return FreeIntervalCalculation(
+            desiredTotalSec = desiredSec,
+            cycleSec = cycleSec,
+            cycles = 0,
+            actualTotalSec = 0,
+            isValid = false,
+            errorMessageRu = "Длительность меньше одного цикла. Увеличьте общее время или уменьшите интервалы."
+        )
+    }
+    return FreeIntervalCalculation(
+        desiredTotalSec = desiredSec,
+        cycleSec = cycleSec,
+        cycles = cycles,
+        actualTotalSec = actualSec,
+        isValid = true,
+        errorMessageRu = null
+    )
 }
 
 /**
@@ -172,7 +273,8 @@ data class PhaseEngineSnapshot(
     val interruptionReason: String? = null,
     val lastSchedulerDriftMs: Long = 0L,
     val maxSchedulerDriftMs: Long = 0L,
-    val isDemo: Boolean = true
+    val isDemo: Boolean = true,
+    val isFreeMode: Boolean = false
 ) {
     val isActiveOrPaused: Boolean
         get() = status == RunStatus.PREPARING ||

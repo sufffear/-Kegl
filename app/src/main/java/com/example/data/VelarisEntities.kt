@@ -118,17 +118,21 @@ data class WorkoutRunEntity(
     val checkpointWallEpochMs: Long,
     val bootSessionId: String,
     val interruptionReason: String?,
-    val isDemo: Boolean
+    val isDemo: Boolean,
+    val isFreeMode: Boolean = false
 )
 
 /**
- * Завершение слота (ТЗ п. 9):
- * WorkoutCompletion(runId, slotId UNIQUE, completedAt, optionalDifficulty).
+ * Завершение слота (ТЗ п. 9, Итерация v1.3 п. 4):
+ * WorkoutCompletion(runId, slotId UNIQUE, completedAt, optionalDifficulty, isDemo, isFreeMode).
  * Уникальный индекс по `slotId` гарантирует отсутствие двойного зачёта одного и того же слота.
  */
 @Entity(
     tableName = "workout_completions",
-    indices = [Index(value = ["slotId"], unique = true)]
+    indices = [
+        Index(value = ["slotId"], unique = true),
+        Index(value = ["localDate", "isDemo", "isFreeMode"])
+    ]
 )
 data class WorkoutCompletionEntity(
     @PrimaryKey val runId: String,
@@ -136,8 +140,65 @@ data class WorkoutCompletionEntity(
     val localDate: String,
     val completedAtEpochMs: Long,
     val optionalDifficulty: String?,
-    val isDemo: Boolean
+    val isDemo: Boolean,
+    val isFreeMode: Boolean = false
 )
+
+/**
+ * Шаблон свободного интервального режима (Итерация v1.3 п. 2).
+ * 5 слотов настроек (1..5): «Быстрый», «Медленный», «Длительное удержание», «Мой вариант 4», «Мой вариант 5».
+ */
+@Entity(tableName = "free_interval_templates")
+data class FreeIntervalTemplateEntity(
+    @PrimaryKey val slotIndex: Int,
+    val name: String,
+    val targetDurationMinutes: Int = 3,
+    val targetDurationSeconds: Int = 0,
+    val contractionSec: Int = 0,
+    val relaxationSec: Int = 0,
+    val isConfigured: Boolean = false,
+    val updatedAtEpochMs: Long = 0L
+) {
+    val targetMinutes: Int get() = targetDurationMinutes
+    val targetSeconds: Int get() = targetDurationSeconds
+    val targetDurationSec: Int get() = totalDesiredSec
+    val totalDesiredSec: Int get() = (targetDurationMinutes * 60 + targetDurationSeconds).coerceAtLeast(0)
+    val cycleSec: Int get() = contractionSec + relaxationSec
+    val calculatedCycles: Int get() = if (cycleSec > 0) totalDesiredSec / cycleSec else 0
+    val actualDurationSec: Int get() = calculatedCycles * cycleSec
+    val isValid: Boolean get() = name.isNotBlank() && contractionSec > 0 && relaxationSec > 0 && calculatedCycles > 0
+
+    companion object {
+        val DEFAULT_INITIAL_NAMES = listOf(
+            "Быстрый",
+            "Медленный",
+            "Длительное удержание",
+            "Мой вариант 4",
+            "Мой вариант 5"
+        )
+
+        fun createInitialDefaults(): List<FreeIntervalTemplateEntity> {
+            return DEFAULT_INITIAL_NAMES.mapIndexed { idx, title ->
+                val (cSec, rSec) = when (idx) {
+                    0 -> 3 to 3
+                    1 -> 10 to 10
+                    2 -> 20 to 10
+                    else -> 5 to 5
+                }
+                FreeIntervalTemplateEntity(
+                    slotIndex = idx,
+                    name = title,
+                    targetDurationMinutes = 3,
+                    targetDurationSeconds = 0,
+                    contractionSec = cSec,
+                    relaxationSec = rSec,
+                    isConfigured = true,
+                    updatedAtEpochMs = 0L
+                )
+            }
+        }
+    }
+}
 
 /**
  * Представление слота дневного плана вместе со статусом его завершения.

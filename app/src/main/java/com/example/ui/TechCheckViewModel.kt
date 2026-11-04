@@ -71,6 +71,7 @@ class TechCheckViewModel(
     val isServiceForeground: StateFlow<Boolean> = BenchSessionCoordinator.isServiceForeground
 
     val dailySlots: StateFlow<List<DailySlotWithCompletion>> = BenchSessionCoordinator.dailySlots
+    val freeTemplates: StateFlow<List<com.example.data.FreeIntervalTemplateEntity>> = BenchSessionCoordinator.freeTemplates
     val isZeroSlotDemoMode: StateFlow<Boolean> = BenchSessionCoordinator.isZeroSlotDemoMode
     val demoCompletionsCount: StateFlow<Int> = BenchSessionCoordinator.demoCompletionsCount
     val realCompletionsCount: StateFlow<Int> = BenchSessionCoordinator.realCompletionsCount
@@ -105,6 +106,18 @@ class TechCheckViewModel(
         BenchSessionCoordinator.selectDailySlot(slot)
         _currentDestination.value = VelarisNavDestination.WORKOUT
         startDemo()
+    }
+
+    fun startFreeWorkoutAndOpenWorkout(template: com.example.data.FreeIntervalTemplateEntity) {
+        val started = BenchSessionCoordinator.startFreeSession(template)
+        if (started) {
+            _currentDestination.value = VelarisNavDestination.WORKOUT
+            BenchTimerService.sendCommand(appContext, BenchTimerService.ACTION_START_FREE)
+        }
+    }
+
+    fun saveFreeTemplate(template: com.example.data.FreeIntervalTemplateEntity) {
+        BenchSessionCoordinator.saveFreeTemplate(template)
     }
 
     fun setZeroSlotDemoMode(enabled: Boolean) {

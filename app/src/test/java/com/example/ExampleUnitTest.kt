@@ -15,6 +15,7 @@ import com.example.domain.RunStatus
 import com.example.domain.SignalType
 import com.example.domain.SoundPack
 import com.example.domain.SoundSynthesisSpec
+import com.example.domain.calculateFreeCycles
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -506,6 +507,97 @@ class ExampleUnitTest {
 
         val emptyResult = MarkdownNovelParser.parseMarkdownNovel("   \n\n  ".toByteArray(Charsets.UTF_8), "empty.md")
         assertTrue(emptyResult.isFailure)
+    }
+
+    @Test
+    fun `calculateFreeCycles exact cycles division`() {
+        // Выбрано 5:00 = 300 с. Сокращение 20 с, отдых 10 с. Цикл = 30 с.
+        // Полных циклов: 10. Фактическое время: 300 с (5:00). Остаток: 0 с.
+        val calc = calculateFreeCycles(desiredDurationSec = 300, contractionSec = 20, relaxationSec = 10)
+        assertTrue(calc.isValid)
+        assertEquals(30, calc.cycleSec)
+        assertEquals(10, calc.completedCycles)
+        assertEquals(300, calc.actualDurationSec)
+        assertEquals(0, calc.unusedRemainderSec)
+        assertEquals("Выбрано 5:00. 10 полных циклов, ровно 5:00", calc.summaryRu)
+    }
+
+    @Test
+    fun `calculateFreeCycles non-exact cycles division`() {
+        // Выбрано 3:00 = 180 с. Сокращение 20 с, отдых 15 с. Цикл = 35 с.
+        // Полных циклов: 5 (175 с = 2:55). Остаток: 5 с.
+        val calc = calculateFreeCycles(desiredDurationSec = 180, contractionSec = 20, relaxationSec = 15)
+        assertTrue(calc.isValid)
+        assertEquals(35, calc.cycleSec)
+        assertEquals(5, calc.completedCycles)
+        assertEquals(175, calc.actualDurationSec)
+        assertEquals(5, calc.unusedRemainderSec)
+        assertEquals("Выбрано 3:00. Получится 5 полных циклов, 2:55", calc.summaryRu)
+    }
+
+    @Test
+    fun `calculateFreeCycles duration too short for even one cycle returns invalid with clear explanation`() {
+        // Выбрано 30 с. Сокращение 20 с, отдых 15 с. Цикл = 35 с.
+        // 0 полных циклов.
+        val calc = calculateFreeCycles(desiredDurationSec = 30, contractionSec = 20, relaxationSec = 15)
+        assertFalse(calc.isValid)
+        assertEquals(0, calc.completedCycles)
+        assertEquals(0, calc.actualDurationSec)
+        assertEquals("Длительность меньше одного цикла. Увеличьте общее время или уменьшите интервалы.", calc.summaryRu)
+    }
+
+    @Test
+    fun `calculateFreeCycles technical limits verification up to 90 minutes and 300 cycles`() {
+        // 90 минут = 5400 с. 1 с сокращение + 1 с отдых = 2 с цикл.
+        // 5400 / 2 = 2700 циклов > 300 -> должно быть ограничено 300 циклами
+        val calcCapped = calculateFreeCycles(desiredDurationSec = 5400, contractionSec = 1, relaxationSec = 1)
+        assertTrue(calcCapped.isValid)
+        assertEquals(300, calcCapped.completedCycles)
+        assertEquals(600, calcCapped.actualDurationSec)
+
+        // 120 с сокращение + 120 с отдых = 240 с цикл.
+        // 30 минут = 1800 с -> 7 циклов (1680 с = 28:00)
+        val calcLargeIntervals = calculateFreeCycles(desiredDurationSec = 1800, contractionSec = 120, relaxationSec = 120)
+        assertTrue(calcLargeIntervals.isValid)
+        assertEquals(240, calcLargeIntervals.cycleSec)
+        assertEquals(7, calcLargeIntervals.completedCycles)
+        assertEquals(1680, calcLargeIntervals.actualDurationSec)
+        assertEquals("Выбрано 30:00. Получится 7 полных циклов, 28:00", calcLargeIntervals.summaryRu)
+    }
+
+    @Test
+    fun `free mode run preserves snapshot parameters when template is modified after launch`() {
+        var nowMs = 0L
+        val engine = PhaseEngine(clock = { nowMs })
+
+        val templateProto = DemoProtocolConfig(
+            id = "free_proto_snap",
+            titleRu = "Свободный исходный",
+            contractionMs = 5_000L,
+            relaxationMs = 5_000L,
+            repetitions = 3
+        )
+
+        assertTrue(engine.start(protocol = templateProto, isFreeMode = true))
+        val activeSnap = engine.currentSnapshot()
+        assertTrue(activeSnap.isFreeMode)
+        assertEquals("free_proto_snap", activeSnap.protocol.id)
+        assertEquals(5_000L, activeSnap.protocol.contractionMs)
+
+        // Попытка запустить вторую тренировку или изменить протокол во время работы должна быть отклонена
+        val modifiedProto = DemoProtocolConfig(
+            id = "free_proto_snap",
+            titleRu = "Свободный изменённый",
+            contractionMs = 20_000L,
+            relaxationMs = 20_000L,
+            repetitions = 10
+        )
+        assertFalse(engine.start(protocol = modifiedProto, isFreeMode = true))
+        assertFalse(engine.selectProtocolIfIdle(modifiedProto))
+
+        // Протокол в активной попытке остаётся исходным
+        assertEquals(5_000L, engine.currentSnapshot().protocol.contractionMs)
+        assertEquals(3, engine.currentSnapshot().protocol.repetitions)
     }
 }
 

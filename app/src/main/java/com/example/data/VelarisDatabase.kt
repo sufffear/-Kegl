@@ -24,9 +24,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NovelChapterEntity::class,
         NovelBlockEntity::class,
         NovelReadingProgressEntity::class,
-        ReadingProgressEntity::class
+        ReadingProgressEntity::class,
+        FreeIntervalTemplateEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class VelarisDatabase : RoomDatabase() {
@@ -145,6 +146,29 @@ abstract class VelarisDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `free_interval_templates` (
+                        `slotIndex` INTEGER NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `targetDurationMinutes` INTEGER NOT NULL,
+                        `targetDurationSeconds` INTEGER NOT NULL,
+                        `contractionSec` INTEGER NOT NULL,
+                        `relaxationSec` INTEGER NOT NULL,
+                        `isConfigured` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`slotIndex`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("ALTER TABLE `workout_runs` ADD COLUMN `isFreeMode` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `workout_completions` ADD COLUMN `isFreeMode` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_workout_completions_localDate_isDemo_isFreeMode` ON `workout_completions` (`localDate`, `isDemo`, `isFreeMode`)")
+            }
+        }
+
         fun getInstance(context: Context): VelarisDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -152,7 +176,7 @@ abstract class VelarisDatabase : RoomDatabase() {
                     VelarisDatabase::class.java,
                     "velaris_local.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { INSTANCE = it }
             }

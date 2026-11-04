@@ -116,11 +116,29 @@ interface VelarisDao {
                 localDate = completionDate,
                 completedAtEpochMs = completedAtEpochMs,
                 optionalDifficulty = optionalDifficulty,
-                isDemo = run.isDemo
+                isDemo = run.isDemo,
+                isFreeMode = run.isFreeMode
             )
         )
         return rowId != -1L
     }
+
+    // --- Шаблоны свободного интервального режима (Итерация v1.3 п. 2, 5) ---
+
+    @Query("SELECT * FROM free_interval_templates ORDER BY slotIndex ASC")
+    suspend fun getAllFreeTemplates(): List<FreeIntervalTemplateEntity>
+
+    @Query("SELECT * FROM free_interval_templates WHERE slotIndex = :slotIndex LIMIT 1")
+    suspend fun getFreeTemplateBySlot(slotIndex: Int): FreeIntervalTemplateEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertFreeTemplate(template: FreeIntervalTemplateEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertFreeTemplates(templates: List<FreeIntervalTemplateEntity>)
+
+    @Query("DELETE FROM free_interval_templates")
+    suspend fun deleteAllFreeTemplates()
 
     // --- Универсальный офлайн-читатель линейного романа из Markdown (Update v1.1 п. 5–7) ---
 
@@ -264,7 +282,8 @@ interface VelarisDao {
         novel: ImportedNovelEntity?,
         chapters: List<NovelChapterEntity>,
         blocks: List<NovelBlockEntity>,
-        progress: NovelReadingProgressEntity?
+        progress: NovelReadingProgressEntity?,
+        freeTemplates: List<FreeIntervalTemplateEntity> = emptyList()
     ) {
         deleteRealWorkoutCompletions()
         deleteRealWorkoutRuns()
@@ -286,6 +305,11 @@ interface VelarisDao {
             if (chapters.isNotEmpty()) insertNovelChapters(chapters)
             if (blocks.isNotEmpty()) insertNovelBlocks(blocks)
             if (progress != null) upsertNovelReadingProgress(progress)
+        }
+
+        if (freeTemplates.isNotEmpty()) {
+            deleteAllFreeTemplates()
+            upsertFreeTemplates(freeTemplates)
         }
     }
 }
