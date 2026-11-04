@@ -1,41 +1,114 @@
 package com.example.ui.theme
 
-import androidx.compose.material3.ColorScheme
+import android.animation.ValueAnimator
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.SnapSpec
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
 
-val LocalVelarisPalette = staticCompositionLocalOf { VelarisDawnPalette }
+val LocalVelarisPalette = staticCompositionLocalOf { DawnPalette }
 
-private fun VelarisPalette.toMaterialColorScheme(): ColorScheme = darkColorScheme(
-    primary = primaryAccent,
-    onPrimary = onPrimaryAccent,
-    secondary = secondaryAccent,
-    onSecondary = onSecondaryAccent,
-    tertiary = successAccent,
-    background = backgroundTop,
-    onBackground = textPrimary,
-    surface = surface,
-    onSurface = textPrimary,
-    surfaceVariant = surfaceVariant,
-    onSurfaceVariant = textSecondary,
-    outline = outline,
-    error = errorAccent
-)
+@Composable
+private fun animatePaletteColor(target: Color, animatorsEnabled: Boolean): Color {
+    val spec = if (animatorsEnabled) tween<Color>(durationMillis = 160) else SnapSpec()
+    val animated by animateColorAsState(targetValue = target, animationSpec = spec, label = "velaris_color")
+    return animated
+}
 
-/**
- * Тема Velaris с поддержкой 5 заранее проверенных контрастных палитр:
- * «Рассвет» (по умолчанию), «Небо», «Северное сияние», «Закат», «Сакура».
- */
 @Composable
 fun VelarisTheme(
     themeId: VelarisThemeId = VelarisThemeId.DAWN,
     content: @Composable () -> Unit
 ) {
-    val palette = paletteForTheme(themeId)
-    val colorScheme = palette.toMaterialColorScheme()
+    val targetPalette = remember(themeId) { paletteForTheme(themeId) }
+    val animatorsEnabled = remember {
+        runCatching { ValueAnimator.areAnimatorsEnabled() }.getOrDefault(true)
+    }
+
+    val backgroundTop = animatePaletteColor(targetPalette.backgroundTop, animatorsEnabled)
+    val backgroundMid = animatePaletteColor(targetPalette.backgroundMid, animatorsEnabled)
+    val backgroundBottom = animatePaletteColor(targetPalette.backgroundBottom, animatorsEnabled)
+    val surface = animatePaletteColor(targetPalette.surface, animatorsEnabled)
+    val surfaceElevated = animatePaletteColor(targetPalette.surfaceElevated, animatorsEnabled)
+    val surfaceVariant = animatePaletteColor(targetPalette.surfaceVariant, animatorsEnabled)
+    val readerSurface = animatePaletteColor(targetPalette.readerSurface, animatorsEnabled)
+    val primaryAccent = animatePaletteColor(targetPalette.primaryAccent, animatorsEnabled)
+    val secondaryAccent = animatePaletteColor(targetPalette.secondaryAccent, animatorsEnabled)
+    val onPrimaryAccent = animatePaletteColor(targetPalette.onPrimaryAccent, animatorsEnabled)
+    val heroGradientStart = animatePaletteColor(targetPalette.heroGradientStart, animatorsEnabled)
+    val heroGradientEnd = animatePaletteColor(targetPalette.heroGradientEnd, animatorsEnabled)
+    val buttonGradientStart = animatePaletteColor(targetPalette.buttonGradientStart, animatorsEnabled)
+    val buttonGradientEnd = animatePaletteColor(targetPalette.buttonGradientEnd, animatorsEnabled)
+    val selectedContainer = animatePaletteColor(targetPalette.selectedContainer, animatorsEnabled)
+    val selectedBorder = animatePaletteColor(targetPalette.selectedBorder, animatorsEnabled)
+
+    val palette = remember(
+        targetPalette,
+        backgroundTop,
+        backgroundMid,
+        backgroundBottom,
+        surface,
+        surfaceElevated,
+        surfaceVariant,
+        readerSurface,
+        primaryAccent,
+        secondaryAccent,
+        onPrimaryAccent,
+        heroGradientStart,
+        heroGradientEnd,
+        buttonGradientStart,
+        buttonGradientEnd,
+        selectedContainer,
+        selectedBorder
+    ) {
+        targetPalette.copy(
+            backgroundTop = backgroundTop,
+            backgroundMid = backgroundMid,
+            backgroundBottom = backgroundBottom,
+            surface = surface,
+            surfaceElevated = surfaceElevated,
+            surfaceVariant = surfaceVariant,
+            readerSurface = readerSurface,
+            primaryAccent = primaryAccent,
+            secondaryAccent = secondaryAccent,
+            onPrimaryAccent = onPrimaryAccent,
+            heroGradientStart = heroGradientStart,
+            heroGradientEnd = heroGradientEnd,
+            buttonGradientStart = buttonGradientStart,
+            buttonGradientEnd = buttonGradientEnd,
+            selectedContainer = selectedContainer,
+            selectedBorder = selectedBorder
+        )
+    }
+
+    val colorScheme = remember(palette) {
+        darkColorScheme(
+            primary = palette.primaryAccent,
+            onPrimary = palette.onPrimaryAccent,
+            primaryContainer = palette.selectedContainer,
+            onPrimaryContainer = palette.textPrimary,
+            secondary = palette.secondaryAccent,
+            onSecondary = palette.onPrimaryAccent,
+            secondaryContainer = palette.surfaceElevated,
+            onSecondaryContainer = palette.textPrimary,
+            tertiary = palette.warningAccent,
+            background = palette.backgroundTop,
+            onBackground = palette.textPrimary,
+            surface = palette.surface,
+            onSurface = palette.textPrimary,
+            surfaceVariant = palette.surfaceVariant,
+            onSurfaceVariant = palette.textSecondary,
+            outline = palette.outline,
+            error = palette.errorAccent
+        )
+    }
 
     CompositionLocalProvider(LocalVelarisPalette provides palette) {
         MaterialTheme(

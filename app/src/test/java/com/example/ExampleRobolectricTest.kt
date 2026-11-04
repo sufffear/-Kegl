@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextReplacement
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.StoryRepository
@@ -56,12 +57,12 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify v1_3 versionCode 6, applicationId and offline manifest`() {
+    fun `verify v1_4 versionCode 7, applicationId and offline manifest`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         assertEquals("Velaris", context.getString(R.string.app_name))
         assertEquals("com.velaris.app", BuildConfig.APPLICATION_ID)
-        assertEquals("0.6.0-v1.3", BuildConfig.VERSION_NAME)
-        assertEquals(6, BuildConfig.VERSION_CODE)
+        assertEquals("0.7.0-v1.4", BuildConfig.VERSION_NAME)
+        assertEquals(7, BuildConfig.VERSION_CODE)
 
         @Suppress("DEPRECATION")
         val packageInfo = context.packageManager.getPackageInfo(
@@ -80,35 +81,37 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify v1_3 full interface navigation across Home, Plan, Workout, Reader, Settings and Diagnostics`() {
+    fun `verify v1_4 4-tab navigation, clean Home without versionCode clutter, and Diagnostics in Settings`() {
         composeTestRule.waitForIdle()
 
-        // 1. Главная: карточка Тренировка, карточка История, 7-дневный обзор, предупреждение Демо и версия 0.6.0-v1.3
+        // 1. В нижней навигации ровно 4 основных раздела: Главная, Тренировки, Книга, Настройки
+        composeTestRule.onNodeWithTag("nav_home").assertExists()
+        composeTestRule.onNodeWithTag("nav_plan").assertExists()
+        composeTestRule.onNodeWithTag("nav_reader").assertExists()
+        composeTestRule.onNodeWithTag("nav_settings").assertExists()
+        composeTestRule.onNodeWithTag("nav_workout").assertDoesNotExist()
+
+        // На Главной нет технического номера сборки (versionCode), но есть компактный знак демо-режима и карточки
         composeTestRule.onNodeWithTag("demo_safety_banner").assertExists()
-        composeTestRule.onNodeWithText("Версия: 0.6.0-v1.3 (versionCode 6)").assertExists()
+        composeTestRule.onNodeWithText("Версия: 0.7.0-v1.4 (versionCode 7)").assertDoesNotExist()
         composeTestRule.onNodeWithTag("home_workout_card").assertExists()
         composeTestRule.onNodeWithTag("home_story_card").assertExists()
         composeTestRule.onNodeWithTag("weekly_overview_card").assertExists()
 
-        // 2. Переход в План
+        // 2. Переход в Тренировки
         composeTestRule.onNodeWithTag("nav_plan").performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("daily_plan_persistence_card").assertExists()
 
-        // 3. Переход в Активный подход
-        composeTestRule.onNodeWithTag("nav_workout").performClick()
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("smooth_timer_ring").assertExists()
-        composeTestRule.onNodeWithTag("btn_start_demo").assertExists()
-
-        // 4. Переход в Чтение (пустое состояние «Открыть книгу из файла» до импорта)
+        // 3. Переход в Книгу (спокойный экран чтения без горной шапки, кнопка «Добавить книгу»)
         composeTestRule.onNodeWithTag("nav_reader").performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("story_reader_screen").assertExists()
         composeTestRule.onNodeWithTag("reader_empty_import_card").assertExists()
         composeTestRule.onNodeWithTag("btn_open_book_from_file").assertExists()
+        composeTestRule.onNodeWithText("Добавить книгу").assertExists()
 
-        // 5. Переход в Настройки (5 тем, данные, резервные копии и 3 набора звуков) -> Диагностика
+        // 4. Переход в Настройки (5 тем, звук, чтение, данные, о приложении -> Диагностика)
         composeTestRule.onNodeWithTag("nav_settings").performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("theme_selector_card").assertExists()
@@ -121,7 +124,7 @@ class ExampleRobolectricTest {
         composeTestRule.onNodeWithTag("sound_pack_chimes").assertExists()
         composeTestRule.onNodeWithTag("sound_pack_crisp").assertExists()
 
-        // Кнопки резервного копирования и восстановления в «Настройки → Данные» (v1.2 п. 1)
+        // Кнопки резервного копирования и восстановления в «Настройки → Данные»
         composeTestRule.onNodeWithTag("btn_create_backup")
             .performScrollTo()
             .assertExists()
@@ -129,12 +132,16 @@ class ExampleRobolectricTest {
             .performScrollTo()
             .assertExists()
 
+        // Технические сведения находятся строго в «Настройки → О приложении → Диагностика»
         composeTestRule.onNodeWithTag("btn_open_diagnostics")
             .performScrollTo()
             .performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("diagnostics_screen").assertExists()
         composeTestRule.onNodeWithTag("audio_diagnostics_card").assertExists()
+        composeTestRule.onNodeWithTag("diagnostics_build_info_card")
+            .performScrollTo()
+            .assertExists()
     }
 
     @Test
@@ -922,34 +929,98 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify switching to free intervals tab and displaying 5 templates with disclaimer`() {
+    fun `verify switching to free intervals tab, 5 templates, 300-cycle limit error, and unsaved changes confirmation`() {
         composeTestRule.waitForIdle()
 
-        // Переходим на экран План
+        // Переходим на экран Тренировки
         composeTestRule.onNodeWithTag("nav_plan").performClick()
         composeTestRule.waitForIdle()
 
-        // Переключаемся на вкладку «Свободный режим»
+        // Переключаемся на вкладку «Мои интервалы»
         composeTestRule.onNodeWithTag("plan_tab_free").performClick()
         composeTestRule.waitForIdle()
 
-        // Проверяем наличие секции шаблонов и обязательной подписи ТЗ v1.3
+        // Проверяем наличие секции шаблонов и обязательной подписи
         composeTestRule.onNodeWithTag("free_interval_templates_section").assertExists()
         composeTestRule.onNodeWithTag("free_intervals_disclaimer_caption").assertExists()
         composeTestRule.onNodeWithText("Ваши интервалы. Приложение не оценивает подходящую нагрузку").assertExists()
 
         // Проверяем наличие всех 5 карточек шаблонов и их кнопок действий
         for (i in 0..4) {
-            composeTestRule.onNodeWithTag("free_template_card_$i").assertExists()
+            composeTestRule.onNodeWithTag("free_template_card_$i")
+                .performScrollTo()
+                .assertExists()
             composeTestRule.onNodeWithTag("btn_start_free_$i").assertExists()
             composeTestRule.onNodeWithTag("btn_edit_free_$i").assertExists()
         }
 
-        // Проверяем имена шаблонов по умолчанию
+        // Открываем редактор первого шаблона
+        composeTestRule.onNodeWithTag("btn_edit_free_0")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("free_template_editor_dialog").assertExists()
+
+        // Вводим 90 минут при 1 с удержания и 1 с отдыха -> 2700 циклов > 300 -> ошибка без молчаливого сброса
+        composeTestRule.onNodeWithTag("edit_template_minutes_input").performTextReplacement("90")
+        composeTestRule.onNodeWithTag("edit_template_contraction_input").performTextReplacement("1")
+        composeTestRule.onNodeWithTag("edit_template_relaxation_input").performTextReplacement("1")
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("free_template_validation_error").assertExists()
+
+        // Проверяем защиту от случайной потери несохранённых правок при нажатии «Отмена»
+        composeTestRule.onNodeWithTag("btn_cancel_free_template")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("unsaved_changes_confirm_bar").assertExists()
+
+        // Закрываем без сохранения и убеждаемся, что исходное имя шаблона не потерялось
+        composeTestRule.onNodeWithTag("btn_discard_unsaved_template").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("free_template_editor_dialog").assertDoesNotExist()
         composeTestRule.onNodeWithText("Быстрый").assertExists()
-        composeTestRule.onNodeWithText("Медленный").assertExists()
-        composeTestRule.onNodeWithText("Длительное удержание").assertExists()
-        composeTestRule.onNodeWithText("Мой вариант 4").assertExists()
-        composeTestRule.onNodeWithText("Мой вариант 5").assertExists()
+    }
+
+    @Test
+    fun `verify compact active workout bar appears on other screens and returns to workout without duplicate timer`() {
+        composeTestRule.waitForIdle()
+
+        // Запускаем свободный подход из «Тренировки → Мои интервалы»
+        composeTestRule.onNodeWithTag("nav_plan").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("plan_tab_free").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("btn_start_free_0")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Открылся экран активной тренировки
+        composeTestRule.onNodeWithTag("active_workout_screen").assertExists()
+        composeTestRule.onNodeWithTag("smooth_timer_ring").assertExists()
+        val initialRunId = com.example.service.BenchSessionCoordinator.engineSnapshot.value.runId
+        assertNotNull(initialRunId)
+
+        // Переходим на экран Книги -> должна появиться компактная плашка текущей тренировки над нижней навигацией
+        composeTestRule.onNodeWithTag("nav_reader").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("active_session_return_banner").assertExists()
+        composeTestRule.onNodeWithTag("btn_return_to_workout").assertExists()
+
+        // Переходим на Главную -> плашка тоже видна, а runId не изменился (второй таймер не создан)
+        composeTestRule.onNodeWithTag("nav_home").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("active_session_return_banner").assertExists()
+        assertEquals(initialRunId, com.example.service.BenchSessionCoordinator.engineSnapshot.value.runId)
+
+        // Возвращаемся к тренировке по нажатию на кнопку в компактной плашке
+        composeTestRule.onNodeWithTag("btn_return_to_workout").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("active_workout_screen").assertExists()
+
+        // Останавливаем и сбрасываем тренировку, чтобы очистить состояние
+        com.example.service.BenchSessionCoordinator.resetToIdle()
+        composeTestRule.waitForIdle()
     }
 }

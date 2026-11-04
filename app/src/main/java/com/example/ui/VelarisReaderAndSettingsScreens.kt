@@ -176,12 +176,6 @@ fun VelarisReaderScreen(
             .testTag("story_reader_screen"),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        if (snapshot.isActiveOrPaused) {
-            ActiveSessionReturnBanner(
-                snapshot = snapshot,
-                onReturnToWorkout = onReturnToWorkout
-            )
-        }
 
         // Баннер статуса или ошибки импорта (прежняя книга при ошибке сохраняется)
         if (storyState.errorMessageRu != null) {
@@ -232,12 +226,12 @@ fun VelarisReaderScreen(
         }
 
         if (!storyState.hasImportedBook) {
-            // Состояние, когда книга ещё не импортирована
+            // Состояние, когда книга ещё не добавлена
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("reader_empty_import_card"),
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = palette.surface)
             ) {
                 Column(
@@ -255,15 +249,15 @@ fun VelarisReaderScreen(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Линейный роман (Markdown)",
+                            text = "Чтение книги",
                             style = MaterialTheme.typography.titleMedium,
                             color = palette.textPrimary,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.ExtraBold
                         )
                     }
 
                     Text(
-                        text = "Выберите готовый файл романа (.md или .markdown) на телефоне. Приложение проверит кодировку UTF-8 и структуру актов/глав, сохранит неизменную копию во внутреннем хранилище и обеспечит полностью офлайн-чтение в режимах «Книга» и «Пошаговый».",
+                        text = "Выберите файл книги на телефоне (.md или .markdown). Текст книги сохранится для спокойного чтения без интернета в режимах «Книга» и «Пошаговый».",
                         style = MaterialTheme.typography.bodyMedium,
                         color = palette.textSecondary
                     )
@@ -281,7 +275,7 @@ fun VelarisReaderScreen(
                     ) {
                         Icon(Icons.Default.FileOpen, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Открыть книгу из файла", fontWeight = FontWeight.Bold)
+                        Text("Добавить книгу", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -336,7 +330,7 @@ fun VelarisReaderScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Открыть книгу из файла",
+                                text = "Добавить книгу",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = palette.textPrimary
                             )
@@ -697,7 +691,7 @@ fun VelarisReaderScreen(
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "История прочитана",
+                                            text = "Книга прочитана",
                                             style = MaterialTheme.typography.titleSmall,
                                             color = palette.successAccent,
                                             fontWeight = FontWeight.Bold
@@ -831,7 +825,7 @@ private fun MarkdownImportPreviewCard(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Контрольная сумма SHA-256 совпадает с уже установленной книгой. Повторный импорт не создаст дубликат и не сбросит сохранённую позицию чтения.",
+                        text = "Эта книга уже открыта в приложении. Повторное добавление не создаст дубликат и сохранит текущее место чтения.",
                         style = MaterialTheme.typography.bodySmall,
                         color = palette.successAccent,
                         modifier = Modifier.padding(12.dp)
@@ -1368,19 +1362,12 @@ fun VelarisSettingsScreen(
             .testTag("settings_screen"),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        if (snapshot.isActiveOrPaused) {
-            ActiveSessionReturnBanner(
-                snapshot = snapshot,
-                onReturnToWorkout = onReturnToWorkout
-            )
-        }
-
-        // 1. Темы
+        // 1. Оформление (5 палитр с мгновенным сохранением и наглядным превью)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("theme_selector_card"),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(22.dp),
             colors = CardDefaults.cardColors(containerColor = palette.surface)
         ) {
             Column(
@@ -1398,10 +1385,10 @@ fun VelarisSettingsScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Темы оформления (5 палитр)",
+                        text = "Оформление",
                         style = MaterialTheme.typography.titleMedium,
                         color = palette.textPrimary,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.ExtraBold
                     )
                 }
 
@@ -1411,17 +1398,17 @@ fun VelarisSettingsScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(16.dp))
                             .background(
-                                if (isSelected) palette.surfaceVariant else palette.backgroundTop.copy(alpha = 0.55f)
+                                if (isSelected) palette.selectedContainer else palette.surfaceElevated
                             )
                             .border(
-                                width = if (isSelected) 1.5.dp else 1.dp,
-                                color = if (isSelected) palette.primaryAccent else palette.outline.copy(alpha = 0.35f),
-                                shape = RoundedCornerShape(14.dp)
+                                width = if (isSelected) 2.dp else 1.dp,
+                                color = if (isSelected) palette.selectedBorder else palette.outline.copy(alpha = 0.35f),
+                                shape = RoundedCornerShape(16.dp)
                             )
                             .clickable { onThemeChange(themeOption) }
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .padding(horizontal = 12.dp, vertical = 12.dp)
                             .testTag("theme_option_${themeOption.id}"),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -1443,7 +1430,7 @@ fun VelarisSettingsScreen(
                                     text = themeOption.titleRu,
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = palette.textPrimary,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.Bold
                                 )
                                 Text(
                                     text = themeOption.subtitleRu,
@@ -1456,20 +1443,20 @@ fun VelarisSettingsScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Box(
                                 modifier = Modifier
-                                    .size(18.dp)
+                                    .size(20.dp)
                                     .clip(CircleShape)
                                     .background(previewPalette.backgroundMid)
                                     .border(1.dp, previewPalette.outline, CircleShape)
                             )
                             Box(
                                 modifier = Modifier
-                                    .size(18.dp)
+                                    .size(20.dp)
                                     .clip(CircleShape)
                                     .background(previewPalette.primaryAccent)
                             )
                             Box(
                                 modifier = Modifier
-                                    .size(18.dp)
+                                    .size(20.dp)
                                     .clip(CircleShape)
                                     .background(previewPalette.secondaryAccent)
                             )
@@ -2043,7 +2030,7 @@ fun VelarisSettingsScreen(
                 )
 
                 Text(
-                    text = "Локальная книга в Markdown",
+                    text = "Книга",
                     style = MaterialTheme.typography.labelLarge,
                     color = palette.textPrimary,
                     fontWeight = FontWeight.Bold
@@ -2051,24 +2038,19 @@ fun VelarisSettingsScreen(
 
                 if (storyState.hasImportedBook) {
                     Text(
-                        text = "Установлена книга: ${storyState.displayTitleRu} (${storyState.fileName})",
+                        text = "Открыта книга: ${storyState.displayTitleRu}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = palette.textPrimary,
                         fontWeight = FontWeight.SemiBold
                     )
-                    val integrityLabel = if (storyState.originalBytesChecksumVerified) {
-                        "SHA-256 оригинала проверен (${storyState.sha256Hex.take(12)}…)"
-                    } else {
-                        "SHA-256: ${storyState.sha256Hex.take(12)}…"
-                    }
                     Text(
-                        text = "Структура: актов — ${storyState.actCount}, глав — ${storyState.chapterCount} · $integrityLabel",
+                        text = "Структура: актов — ${storyState.actCount}, глав — ${storyState.chapterCount}",
                         style = MaterialTheme.typography.bodySmall,
                         color = palette.textSecondary
                     )
                 } else {
                     Text(
-                        text = "Книга ещё не импортирована. Выберите файл .md или .markdown через системный выбор документа.",
+                        text = "Книга ещё не добавлена. Выберите текстовый файл книги (.md или .markdown) на телефоне.",
                         style = MaterialTheme.typography.bodySmall,
                         color = palette.textSecondary
                     )
@@ -2087,7 +2069,7 @@ fun VelarisSettingsScreen(
                 ) {
                     Icon(Icons.Default.FileOpen, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Открыть книгу из файла", fontWeight = FontWeight.SemiBold)
+                    Text("Добавить книгу", fontWeight = FontWeight.Bold)
                 }
 
                 if (storyState.hasImportedBook) {
@@ -2105,32 +2087,58 @@ fun VelarisSettingsScreen(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Удалить импортированную книгу", color = palette.errorAccent)
+                        Text("Удалить книгу", color = palette.errorAccent)
                     }
                 }
             }
         }
 
-        // 6. Переход во вложенный экран «Настройки → Диагностика»
-        OutlinedButton(
-            onClick = onOpenDiagnostics,
+        // 6. О приложении и переход во вложенный экран «Настройки → О приложении → Диагностика»
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 52.dp)
-                .testTag("btn_open_diagnostics")
+                .testTag("about_app_card"),
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = palette.surface)
         ) {
-            Icon(
-                imageVector = Icons.Default.Build,
-                contentDescription = null,
-                tint = palette.secondaryAccent,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Настройки → Диагностика (сборка, аудио-телеметрия, журнал)",
-                color = palette.textPrimary,
-                fontWeight = FontWeight.SemiBold
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "О приложении",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = palette.textPrimary,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = "Velaris — офлайн-приложение для интервальных тренировок по расписанию и своим шаблонам со спокойным чтением книг.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.textSecondary
+                )
+                OutlinedButton(
+                    onClick = onOpenDiagnostics,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 50.dp)
+                        .testTag("btn_open_diagnostics")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Build,
+                        contentDescription = null,
+                        tint = palette.secondaryAccent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Диагностика",
+                        color = palette.textPrimary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
         }
     }
 }

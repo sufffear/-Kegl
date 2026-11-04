@@ -1,25 +1,17 @@
 package com.example.ui
 
-import android.Manifest
 import android.animation.ValueAnimator
-import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Build
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -27,16 +19,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Headphones
@@ -46,8 +43,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -67,390 +63,357 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.compose.currentStateAsState
-import com.example.R
-import com.example.data.AudioDiagnosticEntry
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.AudioHardwareStatus
-import com.example.data.BackupPreviewInfo
-import com.example.data.BenchSignalSettings
-import com.example.data.DailySlotWithCompletion
-import com.example.data.StoryReaderUiState
-import com.example.data.WeeklyOverviewState
-import com.example.domain.AppBuildInfo
-import com.example.domain.BenchEventLogEntry
-import com.example.domain.DemoProtocolConfig
-import com.example.domain.MetronomeTickStyle
 import com.example.domain.PhaseEngineSnapshot
 import com.example.domain.PhaseType
-import com.example.domain.ReaderFontSize
-import com.example.domain.ReaderLineSpacing
-import com.example.domain.ReaderMode
 import com.example.domain.RunStatus
-import com.example.domain.SignalType
-import com.example.domain.SoundPack
 import com.example.domain.WorkoutDifficulty
 import com.example.ui.theme.LocalVelarisPalette
-import com.example.ui.theme.VelarisThemeId
-import kotlinx.coroutines.isActive
 import java.util.Locale
 
+private val MAIN_NAV_DESTINATIONS = listOf(
+    VelarisNavDestination.HOME,
+    VelarisNavDestination.PLAN,
+    VelarisNavDestination.READER,
+    VelarisNavDestination.SETTINGS
+)
+
+/**
+ * Корневой экран приложения Velaris (Итерация v1.4, версия 0.7.0-v1.4, versionCode 7).
+ * Реализует:
+ * - 4 основных раздела в нижней навигации: Главная, Тренировки, Книга, Настройки;
+ * - отдельный экран активной тренировки (WORKOUT) и компактную плашку текущей тренировки над нижней панелью;
+ * - отсутствие технического шума на пользовательских экранах (вся диагностика в «Настройки → Диагностика»);
+ * - спокойную однотонную поверхность чтения без горного силуэта и ярких градиентов под текстом.
+ */
 @Composable
 fun TechCheckScreen(
-    buildInfo: AppBuildInfo,
-    currentDestination: VelarisNavDestination,
-    onNavigate: (VelarisNavDestination) -> Unit,
-    snapshot: PhaseEngineSnapshot,
-    settings: BenchSignalSettings,
-    hardwareStatus: AudioHardwareStatus,
-    audioDiagnostics: List<AudioDiagnosticEntry>,
-    eventLog: List<BenchEventLogEntry>,
-    isWakeLockHeld: Boolean,
-    isServiceForeground: Boolean,
-    dailySlots: List<DailySlotWithCompletion>,
-    freeTemplates: List<com.example.data.FreeIntervalTemplateEntity> = emptyList(),
-    isZeroSlotDemoMode: Boolean,
-    demoCompletionsCount: Int,
-    realCompletionsCount: Int,
-    weeklyOverview: WeeklyOverviewState,
-    storyState: StoryReaderUiState,
-    lastCompletedSlotDifficulty: WorkoutDifficulty?,
-    databaseErrorMessage: String?,
-    availableProtocols: List<DemoProtocolConfig>,
-    onSelectProtocol: (DemoProtocolConfig) -> Unit,
-    onSelectDailySlot: (DailySlotWithCompletion) -> Unit,
-    onStartSlotAndOpenWorkout: (DailySlotWithCompletion) -> Unit,
-    onStartFreeWorkout: (com.example.data.FreeIntervalTemplateEntity) -> Unit = {},
-    onSaveFreeTemplate: (com.example.data.FreeIntervalTemplateEntity) -> Unit = {},
-    onZeroSlotDemoModeChange: (Boolean) -> Unit,
-    onStartDemo: () -> Unit,
-    onPauseDemo: () -> Unit,
-    onResumeDemo: () -> Unit,
-    onRequestStopDemo: () -> Unit,
-    onCancelStopDialog: () -> Unit,
-    onConfirmStopDemo: () -> Unit,
-    onResetDemo: () -> Unit,
-    onRateDifficulty: (WorkoutDifficulty?) -> Unit,
-    onSelectWeeklyDate: (String) -> Unit,
-    onImportMarkdownUri: (Uri) -> Unit,
-    onUpdatePreviewHeadingLevels: (Int, Int) -> Unit,
-    onConfirmPendingImport: () -> Unit,
-    onCancelPendingImport: () -> Unit,
-    onImportNeutralTestMarkdown: () -> Unit,
-    onNextStoryStep: () -> Unit,
-    onPreviousStoryStep: () -> Unit,
-    onNextStoryChapter: () -> Unit,
-    onPreviousStoryChapter: () -> Unit,
-    onSelectStoryChapter: (String) -> Unit,
-    onSaveStoryBlockPosition: (String) -> Unit,
-    onRestartStoryFromBeginning: () -> Unit,
-    onRemoveImportedBook: () -> Unit,
-    pendingRestorePreview: BackupPreviewInfo? = null,
-    backupOperationBanner: String? = null,
-    backupErrorMessage: String? = null,
-    onCreateBackupUri: (Uri) -> Unit = {},
-    onInspectBackupUri: (Uri) -> Unit = {},
-    onConfirmRestore: () -> Unit = {},
-    onCancelRestore: () -> Unit = {},
-    onDismissBackupBanners: () -> Unit = {},
-    onPlaySample: (SignalType) -> Unit,
-    onThemeChange: (VelarisThemeId) -> Unit,
-    onSoundPackChange: (SoundPack) -> Unit,
-    onMetronomeTickStyleChange: (MetronomeTickStyle) -> Unit,
-    onSoundEnabledChange: (Boolean) -> Unit,
-    onVibrationEnabledChange: (Boolean) -> Unit,
-    onMetronomeEnabledChange: (Boolean) -> Unit,
-    onSignalVolumeChange: (Float) -> Unit,
-    onMetronomeVolumeChange: (Float) -> Unit,
-    onReaderModeChange: (ReaderMode) -> Unit,
-    onReaderFontSizeChange: (ReaderFontSize) -> Unit,
-    onReaderLineSpacingChange: (ReaderLineSpacing) -> Unit,
-    onRealProgramEnabledChange: (Boolean) -> Unit = {},
-    onRefreshHardware: () -> Unit,
-    onClearAudioDiagnostics: () -> Unit,
-    onClearLog: () -> Unit,
+    viewModel: TechCheckViewModel,
     modifier: Modifier = Modifier
 ) {
-    val palette = LocalVelarisPalette.current
-    val backgroundBrush = Brush.verticalGradient(
-        colors = listOf(palette.backgroundTop, palette.backgroundMid, palette.backgroundBottom)
-    )
+    val buildInfo by viewModel.buildInfo.collectAsStateWithLifecycle()
+    val currentDestination by viewModel.currentDestination.collectAsStateWithLifecycle()
+    val snapshot by viewModel.engineSnapshot.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val hardwareStatus by viewModel.hardwareStatus.collectAsStateWithLifecycle()
+    val audioDiagnostics by viewModel.audioDiagnostics.collectAsStateWithLifecycle()
+    val eventLog by viewModel.eventLog.collectAsStateWithLifecycle()
+    val isWakeLockHeld by viewModel.isWakeLockHeld.collectAsStateWithLifecycle()
+    val isServiceForeground by viewModel.isServiceForeground.collectAsStateWithLifecycle()
+    val dailySlots by viewModel.dailySlots.collectAsStateWithLifecycle()
+    val freeTemplates by viewModel.freeTemplates.collectAsStateWithLifecycle()
+    val isZeroSlotDemoMode by viewModel.isZeroSlotDemoMode.collectAsStateWithLifecycle()
+    val demoCompletionsCount by viewModel.demoCompletionsCount.collectAsStateWithLifecycle()
+    val realCompletionsCount by viewModel.realCompletionsCount.collectAsStateWithLifecycle()
+    val weeklyOverview by viewModel.weeklyOverview.collectAsStateWithLifecycle()
+    val storyState by viewModel.storyState.collectAsStateWithLifecycle()
+    val pendingRestorePreview by viewModel.pendingRestorePreview.collectAsStateWithLifecycle()
+    val backupOperationBanner by viewModel.backupOperationBanner.collectAsStateWithLifecycle()
+    val backupErrorMessage by viewModel.backupErrorMessage.collectAsStateWithLifecycle()
+    val lastCompletedDifficulty by viewModel.lastCompletedSlotDifficulty.collectAsStateWithLifecycle()
+    val databaseErrorMessage by viewModel.databaseErrorMessage.collectAsStateWithLifecycle()
 
-    // Обработка кнопки «Назад» без остановки таймера
+    val palette = LocalVelarisPalette.current
+    val animatorsEnabled = remember {
+        runCatching { ValueAnimator.areAnimatorsEnabled() }.getOrDefault(true)
+    }
+
+    // Системная кнопка «Назад» предсказуемо возвращает пользователя без потери активного подхода
     BackHandler(enabled = currentDestination != VelarisNavDestination.HOME) {
         if (currentDestination == VelarisNavDestination.DIAGNOSTICS) {
-            onNavigate(VelarisNavDestination.SETTINGS)
+            viewModel.navigateTo(VelarisNavDestination.SETTINGS)
         } else {
-            onNavigate(VelarisNavDestination.HOME)
+            viewModel.navigateTo(VelarisNavDestination.HOME)
         }
     }
 
-    // Диалог остановки: «Завершить без зачёта?» -> «Завершить» / «Остаться на паузе» (ТЗ п. 7)
+    // Единый диалог подтверждения остановки (открывается поверх любого экрана, если запрошена остановка)
     if (snapshot.isStopDialogVisible) {
-        AlertDialog(
-            onDismissRequest = onCancelStopDialog,
-            containerColor = palette.surface,
-            titleContentColor = palette.textPrimary,
-            textContentColor = palette.textSecondary,
-            title = {
-                Text(
-                    text = stringResource(R.string.stop_dialog_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.testTag("stop_dialog_title")
-                )
-            },
-            text = {
-                Text(
-                    text = stringResource(R.string.stop_dialog_body),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = onConfirmStopDemo,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = palette.errorAccent,
-                        contentColor = palette.onPrimaryAccent
-                    ),
-                    modifier = Modifier
-                        .heightIn(min = 48.dp)
-                        .testTag("btn_confirm_stop")
-                ) {
-                    Text(
-                        text = stringResource(R.string.stop_dialog_confirm),
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = onCancelStopDialog,
-                    modifier = Modifier
-                        .heightIn(min = 48.dp)
-                        .testTag("btn_cancel_stop")
-                ) {
-                    Text(
-                        text = stringResource(R.string.stop_dialog_cancel),
-                        color = palette.textPrimary
-                    )
-                }
-            }
+        StopWorkoutConfirmDialog(
+            onStayPaused = { viewModel.cancelStopDialog() },
+            onConfirmStop = { viewModel.confirmStopDemo() }
         )
     }
+
+    val isReaderScreen = currentDestination == VelarisNavDestination.READER
+    val showCompactWorkoutBar = snapshot.isActiveOrPaused && currentDestination != VelarisNavDestination.WORKOUT
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets.safeDrawing,
-        containerColor = palette.backgroundTop,
+        containerColor = if (isReaderScreen) palette.readerSurface else palette.backgroundTop,
         bottomBar = {
-            NavigationBar(
-                containerColor = palette.surface,
-                contentColor = palette.textPrimary
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(palette.surface)
             ) {
-                val mainTabs = listOf(
-                    Triple(VelarisNavDestination.HOME, Icons.Default.Home, "Главная"),
-                    Triple(VelarisNavDestination.PLAN, Icons.Default.CalendarMonth, "План"),
-                    Triple(VelarisNavDestination.WORKOUT, Icons.Default.Timer, "Подход"),
-                    Triple(VelarisNavDestination.READER, Icons.Default.AutoStories, "Чтение"),
-                    Triple(VelarisNavDestination.SETTINGS, Icons.Default.Settings, "Настройки")
-                )
-                mainTabs.forEach { (dest, icon, label) ->
-                    val selected = currentDestination == dest ||
-                        (currentDestination == VelarisNavDestination.DIAGNOSTICS && dest == VelarisNavDestination.SETTINGS)
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = { onNavigate(dest) },
-                        icon = { Icon(icon, contentDescription = label) },
-                        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = palette.onPrimaryAccent,
-                            selectedTextColor = palette.primaryAccent,
-                            indicatorColor = palette.primaryAccent,
-                            unselectedIconColor = palette.textSecondary,
-                            unselectedTextColor = palette.textSecondary
-                        ),
-                        modifier = Modifier.testTag("nav_${dest.id}")
+                if (showCompactWorkoutBar) {
+                    CompactActiveWorkoutBar(
+                        snapshot = snapshot,
+                        onPauseWorkout = { viewModel.pauseDemo() },
+                        onResumeWorkout = { viewModel.resumeDemo() },
+                        onReturnToWorkout = { viewModel.navigateTo(VelarisNavDestination.WORKOUT) }
                     )
+                }
+
+                NavigationBar(
+                    containerColor = palette.surface,
+                    contentColor = palette.textPrimary,
+                    tonalElevation = 0.dp,
+                    modifier = Modifier.testTag("velaris_bottom_nav")
+                ) {
+                    MAIN_NAV_DESTINATIONS.forEach { dest ->
+                        val selected = currentDestination == dest ||
+                            (dest == VelarisNavDestination.SETTINGS && currentDestination == VelarisNavDestination.DIAGNOSTICS) ||
+                            (dest == VelarisNavDestination.PLAN && currentDestination == VelarisNavDestination.WORKOUT)
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = { viewModel.navigateTo(dest) },
+                            icon = {
+                                Icon(
+                                    imageVector = when (dest) {
+                                        VelarisNavDestination.HOME -> Icons.Default.Home
+                                        VelarisNavDestination.PLAN -> Icons.Default.CalendarMonth
+                                        VelarisNavDestination.READER -> Icons.AutoMirrored.Filled.MenuBook
+                                        VelarisNavDestination.SETTINGS -> Icons.Default.Settings
+                                        else -> Icons.Default.Home
+                                    },
+                                    contentDescription = dest.titleRu
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = dest.titleRu,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = palette.onPrimaryAccent,
+                                selectedTextColor = palette.primaryAccent,
+                                indicatorColor = palette.primaryAccent,
+                                unselectedIconColor = palette.textSecondary,
+                                unselectedTextColor = palette.textSecondary
+                            ),
+                            modifier = Modifier.testTag("nav_${dest.id}")
+                        )
+                    }
                 }
             }
         }
     ) { innerPadding ->
+        val bgModifier = if (isReaderScreen) {
+            Modifier.background(palette.readerSurface)
+        } else {
+            Modifier.background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        palette.backgroundTop,
+                        palette.backgroundMid,
+                        palette.backgroundBottom
+                    )
+                )
+            )
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(backgroundBrush)
-                .padding(innerPadding)
+                .then(bgModifier)
+                .padding(innerPadding),
+            contentAlignment = Alignment.TopCenter
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 18.dp, vertical = 14.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
+            Crossfade(
+                targetState = currentDestination,
+                animationSpec = tween(durationMillis = if (animatorsEnabled) 180 else 0),
+                label = "velaris_nav_crossfade"
+            ) { destination ->
+                val scrollState = rememberScrollState()
                 Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .widthIn(max = 600.dp),
+                        .fillMaxSize()
+                        .widthIn(max = 600.dp)
+                        .verticalScroll(scrollState)
+                        .navigationBarsPadding(),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    when (currentDestination) {
-                        VelarisNavDestination.HOME -> {
-                            VelarisHomeScreen(
-                                buildInfo = buildInfo,
-                                snapshot = snapshot,
-                                settings = settings,
-                                dailySlots = dailySlots,
-                                isZeroSlotDemoMode = isZeroSlotDemoMode,
-                                weeklyOverview = weeklyOverview,
-                                storyState = storyState,
-                                onStartOrOpenWorkout = {
-                                    onNavigate(VelarisNavDestination.WORKOUT)
-                                    if (!snapshot.isActiveOrPaused) {
-                                        onStartDemo()
-                                    }
-                                },
-                                onOpenPlan = { onNavigate(VelarisNavDestination.PLAN) },
-                                onOpenReader = { onNavigate(VelarisNavDestination.READER) },
-                                onOpenSettings = { onNavigate(VelarisNavDestination.SETTINGS) },
-                                onSelectWeeklyDate = onSelectWeeklyDate
-                            )
-                        }
-                        VelarisNavDestination.PLAN -> {
-                            VelarisPlanScreen(
-                                snapshot = snapshot,
-                                settings = settings,
-                                dailySlots = dailySlots,
-                                freeTemplates = freeTemplates,
-                                isZeroSlotDemoMode = isZeroSlotDemoMode,
-                                demoCompletionsCount = demoCompletionsCount,
-                                realCompletionsCount = realCompletionsCount,
-                                databaseErrorMessage = databaseErrorMessage,
-                                onSelectDailySlot = onSelectDailySlot,
-                                onStartSelectedSlot = onStartSlotAndOpenWorkout,
-                                onStartFreeWorkout = onStartFreeWorkout,
-                                onSaveFreeTemplate = onSaveFreeTemplate,
-                                onReturnToActiveWorkout = { onNavigate(VelarisNavDestination.WORKOUT) }
-                            )
-                        }
-                        VelarisNavDestination.WORKOUT -> {
-                            VelarisActiveWorkoutScreen(
-                                snapshot = snapshot,
-                                settings = settings,
-                                hardwareStatus = hardwareStatus,
-                                isZeroSlotDemoMode = isZeroSlotDemoMode,
-                                lastCompletedSlotDifficulty = lastCompletedSlotDifficulty,
-                                onStartDemo = onStartDemo,
-                                onPauseDemo = onPauseDemo,
-                                onResumeDemo = onResumeDemo,
-                                onRequestStopDemo = onRequestStopDemo,
-                                onResetDemo = onResetDemo,
-                                onRateDifficulty = onRateDifficulty,
-                                onOpenPlan = { onNavigate(VelarisNavDestination.PLAN) },
-                                onOpenReader = { onNavigate(VelarisNavDestination.READER) }
-                            )
-                        }
-                        VelarisNavDestination.READER -> {
-                            VelarisReaderScreen(
-                                storyState = storyState,
-                                settings = settings,
-                                snapshot = snapshot,
-                                onImportMarkdownUri = onImportMarkdownUri,
-                                onUpdatePreviewHeadingLevels = onUpdatePreviewHeadingLevels,
-                                onConfirmPendingImport = onConfirmPendingImport,
-                                onCancelPendingImport = onCancelPendingImport,
-                                onReaderModeChange = onReaderModeChange,
-                                onReaderFontSizeChange = onReaderFontSizeChange,
-                                onReaderLineSpacingChange = onReaderLineSpacingChange,
-                                onNextStep = onNextStoryStep,
-                                onPreviousStep = onPreviousStoryStep,
-                                onNextChapter = onNextStoryChapter,
-                                onPreviousChapter = onPreviousStoryChapter,
-                                onSelectChapter = onSelectStoryChapter,
-                                onSaveBlockPosition = onSaveStoryBlockPosition,
-                                onRestartFromBeginning = onRestartStoryFromBeginning,
-                                onReturnToWorkout = { onNavigate(VelarisNavDestination.WORKOUT) }
-                            )
-                        }
-                        VelarisNavDestination.SETTINGS -> {
-                            VelarisSettingsScreen(
-                                settings = settings,
-                                snapshot = snapshot,
-                                storyState = storyState,
-                                availableProtocols = availableProtocols,
-                                onSelectProtocol = onSelectProtocol,
-                                onThemeChange = onThemeChange,
-                                onSoundPackChange = onSoundPackChange,
-                                onMetronomeTickStyleChange = onMetronomeTickStyleChange,
-                                onSoundEnabledChange = onSoundEnabledChange,
-                                onVibrationEnabledChange = onVibrationEnabledChange,
-                                onMetronomeEnabledChange = onMetronomeEnabledChange,
-                                onSignalVolumeChange = onSignalVolumeChange,
-                                onMetronomeVolumeChange = onMetronomeVolumeChange,
-                                onPlaySample = onPlaySample,
-                                onReaderModeChange = onReaderModeChange,
-                                onReaderFontSizeChange = onReaderFontSizeChange,
-                                onReaderLineSpacingChange = onReaderLineSpacingChange,
-                                onImportMarkdownUri = onImportMarkdownUri,
-                                onRemoveImportedBook = onRemoveImportedBook,
-                                pendingRestorePreview = pendingRestorePreview,
-                                backupOperationBanner = backupOperationBanner,
-                                backupErrorMessage = backupErrorMessage,
-                                onCreateBackupUri = onCreateBackupUri,
-                                onInspectBackupUri = onInspectBackupUri,
-                                onConfirmRestore = onConfirmRestore,
-                                onCancelRestore = onCancelRestore,
-                                onDismissBackupBanners = onDismissBackupBanners,
-                                onOpenDiagnostics = { onNavigate(VelarisNavDestination.DIAGNOSTICS) },
-                                onReturnToWorkout = { onNavigate(VelarisNavDestination.WORKOUT) }
-                            )
-                        }
-                        VelarisNavDestination.DIAGNOSTICS -> {
-                            VelarisDiagnosticsScreen(
-                                buildInfo = buildInfo,
-                                snapshot = snapshot,
-                                hardwareStatus = hardwareStatus,
-                                audioDiagnostics = audioDiagnostics,
-                                eventLog = eventLog,
-                                isWakeLockHeld = isWakeLockHeld,
-                                isServiceForeground = isServiceForeground,
-                                isZeroSlotDemoMode = isZeroSlotDemoMode,
-                                demoCompletionsCount = demoCompletionsCount,
-                                realCompletionsCount = realCompletionsCount,
-                                onZeroSlotDemoModeChange = onZeroSlotDemoModeChange,
-                                onImportNeutralTestMarkdown = onImportNeutralTestMarkdown,
-                                onRefreshHardware = onRefreshHardware,
-                                onClearAudioDiagnostics = onClearAudioDiagnostics,
-                                onClearEventLog = onClearLog,
-                                onBackToSettings = { onNavigate(VelarisNavDestination.SETTINGS) }
-                            )
-                        }
+                    // Спокойный горный силуэт показывается на основных экранах, но НЕ на экране чтения книги
+                    if (destination != VelarisNavDestination.READER) {
+                        VelarisMountainHeader(
+                            subtitleRu = destination.titleRu,
+                            isDemoActive = !settings.isRealProgramEnabled
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.height(6.dp))
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        if (databaseErrorMessage != null) {
+                            DatabaseWarningBanner(message = databaseErrorMessage!!)
+                        }
+
+                        when (destination) {
+                            VelarisNavDestination.HOME -> {
+                                VelarisHomeScreen(
+                                    snapshot = snapshot,
+                                    settings = settings,
+                                    dailySlots = dailySlots,
+                                    freeTemplates = freeTemplates,
+                                    weeklyOverview = weeklyOverview,
+                                    storyState = storyState,
+                                    onOpenWorkout = { viewModel.navigateTo(VelarisNavDestination.WORKOUT) },
+                                    onStartNextSlot = { slot -> viewModel.startSlotAndOpenWorkout(slot) },
+                                    onStartFreeTemplate = { template -> viewModel.startFreeWorkoutAndOpenWorkout(template) },
+                                    onOpenPlan = { viewModel.navigateTo(VelarisNavDestination.PLAN) },
+                                    onOpenReader = { viewModel.navigateTo(VelarisNavDestination.READER) },
+                                    onSelectOverviewDay = { dateStr -> viewModel.selectWeeklyOverviewDate(dateStr) }
+                                )
+                            }
+
+                            VelarisNavDestination.PLAN -> {
+                                VelarisPlanScreen(
+                                    snapshot = snapshot,
+                                    settings = settings,
+                                    dailySlots = dailySlots,
+                                    freeTemplates = freeTemplates,
+                                    onStartSlot = { slot -> viewModel.startSlotAndOpenWorkout(slot) },
+                                    onSelectSlot = { slot -> viewModel.selectDailySlot(slot) },
+                                    onStartFreeTemplate = { template -> viewModel.startFreeWorkoutAndOpenWorkout(template) },
+                                    onSaveFreeTemplate = { template -> viewModel.saveFreeTemplate(template) },
+                                    onReturnToWorkout = { viewModel.navigateTo(VelarisNavDestination.WORKOUT) }
+                                )
+                            }
+
+                            VelarisNavDestination.WORKOUT -> {
+                                VelarisActiveWorkoutScreen(
+                                    snapshot = snapshot,
+                                    hardwareStatus = hardwareStatus,
+                                    soundEnabled = settings.soundEnabled,
+                                    lastCompletedDifficulty = lastCompletedDifficulty,
+                                    onStart = { viewModel.startDemo() },
+                                    onPause = { viewModel.pauseDemo() },
+                                    onResume = { viewModel.resumeDemo() },
+                                    onRequestStop = { viewModel.requestStopDemo() },
+                                    onReset = { viewModel.resetDemo() },
+                                    onRateDifficulty = { diff -> viewModel.rateLastCompletedSlotDifficulty(diff) },
+                                    onNavigateToPlan = { viewModel.navigateTo(VelarisNavDestination.PLAN) },
+                                    onNavigateToReader = { viewModel.navigateTo(VelarisNavDestination.READER) }
+                                )
+                            }
+
+                            VelarisNavDestination.READER -> {
+                                VelarisReaderScreen(
+                                    storyState = storyState,
+                                    settings = settings,
+                                    snapshot = snapshot,
+                                    onImportMarkdownUri = { uri -> viewModel.importMarkdownFromUri(uri) },
+                                    onUpdatePreviewHeadingLevels = { actLvl, chLvl ->
+                                        viewModel.updateImportPreviewHeadingLevels(actLvl, chLvl)
+                                    },
+                                    onConfirmPendingImport = { viewModel.confirmPendingMarkdownImport() },
+                                    onCancelPendingImport = { viewModel.cancelPendingMarkdownImport() },
+                                    onReaderModeChange = { viewModel.setReaderMode(it) },
+                                    onReaderFontSizeChange = { viewModel.setReaderFontSize(it) },
+                                    onReaderLineSpacingChange = { viewModel.setReaderLineSpacing(it) },
+                                    onNextStep = { viewModel.nextStoryStep() },
+                                    onPreviousStep = { viewModel.previousStoryStep() },
+                                    onNextChapter = { viewModel.nextStoryChapter() },
+                                    onPreviousChapter = { viewModel.previousStoryChapter() },
+                                    onSelectChapter = { viewModel.selectStoryChapter(it) },
+                                    onSaveBlockPosition = { viewModel.saveStoryBlockPosition(it) },
+                                    onRestartFromBeginning = { viewModel.restartStoryFromBeginning() },
+                                    onReturnToWorkout = { viewModel.navigateTo(VelarisNavDestination.WORKOUT) }
+                                )
+                            }
+
+                            VelarisNavDestination.SETTINGS -> {
+                                VelarisSettingsScreen(
+                                    settings = settings,
+                                    snapshot = snapshot,
+                                    storyState = storyState,
+                                    pendingRestorePreview = pendingRestorePreview,
+                                    backupOperationBanner = backupOperationBanner,
+                                    backupErrorMessage = backupErrorMessage,
+                                    availableProtocols = viewModel.availableProtocols,
+                                    onThemeChange = { viewModel.setThemeId(it) },
+                                    onSoundPackChange = { viewModel.setSoundPack(it) },
+                                    onMetronomeTickStyleChange = { viewModel.setMetronomeTickStyle(it) },
+                                    onSoundEnabledChange = { viewModel.setSoundEnabled(it) },
+                                    onVibrationEnabledChange = { viewModel.setVibrationEnabled(it) },
+                                    onMetronomeEnabledChange = { viewModel.setMetronomeEnabled(it) },
+                                    onSignalVolumeChange = { viewModel.setSignalVolume(it) },
+                                    onMetronomeVolumeChange = { viewModel.setMetronomeVolume(it) },
+                                    onPlaySample = { viewModel.playSample(it) },
+                                    onReaderModeChange = { viewModel.setReaderMode(it) },
+                                    onReaderFontSizeChange = { viewModel.setReaderFontSize(it) },
+                                    onReaderLineSpacingChange = { viewModel.setReaderLineSpacing(it) },
+                                    onSelectProtocol = { viewModel.selectProtocol(it) },
+                                    onImportMarkdownUri = { uri -> viewModel.importMarkdownFromUri(uri) },
+                                    onRemoveImportedBook = { viewModel.removeImportedBook() },
+                                    onCreateBackupUri = { uri -> viewModel.createBackupToUri(uri) },
+                                    onInspectBackupUri = { uri -> viewModel.inspectBackupFromUri(uri) },
+                                    onConfirmRestore = { viewModel.confirmPendingRestore() },
+                                    onCancelRestore = { viewModel.cancelPendingRestore() },
+                                    onDismissBackupBanners = { viewModel.dismissBackupBanners() },
+                                    onOpenDiagnostics = { viewModel.navigateTo(VelarisNavDestination.DIAGNOSTICS) },
+                                    onReturnToWorkout = { viewModel.navigateTo(VelarisNavDestination.WORKOUT) }
+                                )
+                            }
+
+                            VelarisNavDestination.DIAGNOSTICS -> {
+                                VelarisDiagnosticsScreen(
+                                    buildInfo = buildInfo,
+                                    snapshot = snapshot,
+                                    hardwareStatus = hardwareStatus,
+                                    audioDiagnostics = audioDiagnostics,
+                                    eventLog = eventLog,
+                                    isWakeLockHeld = isWakeLockHeld,
+                                    isServiceForeground = isServiceForeground,
+                                    isZeroSlotDemoMode = isZeroSlotDemoMode,
+                                    demoCompletionsCount = demoCompletionsCount,
+                                    realCompletionsCount = realCompletionsCount,
+                                    onZeroSlotDemoModeChange = { viewModel.setZeroSlotDemoMode(it) },
+                                    onImportNeutralTestMarkdown = { viewModel.importNeutralTestMarkdown() },
+                                    onRefreshHardware = { viewModel.refreshHardwareStatus() },
+                                    onClearAudioDiagnostics = { viewModel.clearAudioDiagnostics() },
+                                    onClearEventLog = { viewModel.clearEventLog() },
+                                    onBackToSettings = { viewModel.navigateTo(VelarisNavDestination.SETTINGS) }
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(18.dp))
+                    }
                 }
             }
         }
@@ -458,115 +421,369 @@ fun TechCheckScreen(
 }
 
 /**
- * Экран 3: Активный подход и экран завершения (Update v1.1 п. 2).
- * - Крупное плавное кольцо постоянного размера (`268.dp`), целые секунды без десятых долей
- *   и без «прыжков» ширины текста (`FontFamily.Monospace` + `tnum`).
- * - Текущая фаза «Сокращение» или «Расслабление», счётчик повторов и оставшееся активное время.
- * - Крупные кнопки «Пауза» и «Остановить», небольшой индикатор аудиомаршрута.
- * - После завершения: спокойная отметка, необязательная оценка ощущения, кнопки «К плану» и «Почитать».
+ * Компактная плашка текущей тренировки над нижней панелью навигации (Итерация v1.4 п. 3).
+ * Никогда не перекрывает текст книги, кнопки или системные отступы.
+ * Показывает текущую фазу/паузу, оставшееся время вживую, кнопку паузы и возврат к таймеру.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun VelarisActiveWorkoutScreen(
+fun CompactActiveWorkoutBar(
     snapshot: PhaseEngineSnapshot,
-    settings: BenchSignalSettings,
-    hardwareStatus: AudioHardwareStatus,
-    isZeroSlotDemoMode: Boolean,
-    lastCompletedSlotDifficulty: WorkoutDifficulty?,
-    onStartDemo: () -> Unit,
-    onPauseDemo: () -> Unit,
-    onResumeDemo: () -> Unit,
-    onRequestStopDemo: () -> Unit,
-    onResetDemo: () -> Unit,
-    onRateDifficulty: (WorkoutDifficulty?) -> Unit,
-    onOpenPlan: () -> Unit,
-    onOpenReader: () -> Unit,
+    onPauseWorkout: () -> Unit,
+    onResumeWorkout: () -> Unit,
+    onReturnToWorkout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalVelarisPalette.current
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
-    val isResumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
-    val isDemoMode = !settings.isRealProgramEnabled || isZeroSlotDemoMode
-
-    var hasNotificationPermission by remember {
-        mutableStateOf(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED
-            } else {
-                true
-            }
-        )
+    val animatorsEnabled = remember {
+        runCatching { ValueAnimator.areAnimatorsEnabled() }.getOrDefault(true) &&
+            !android.os.Build.FINGERPRINT.equals("robolectric", ignoreCase = true)
     }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        hasNotificationPermission = granted
-        onStartDemo()
-    }
-
-    var renderNowElapsedMs by remember(snapshot.snapshotElapsedRealtimeMs, snapshot.status) {
+    var frameNowMs by remember(snapshot.runId, snapshot.status, snapshot.snapshotElapsedRealtimeMs) {
         mutableLongStateOf(snapshot.snapshotElapsedRealtimeMs)
     }
 
-    val animationsEnabled = remember(isResumed) {
-        try {
-            ValueAnimator.areAnimatorsEnabled()
-        } catch (_: Throwable) {
-            true
+    LaunchedEffect(snapshot.isRunningOrPreparing, snapshot.snapshotElapsedRealtimeMs, animatorsEnabled) {
+        if (snapshot.isRunningOrPreparing && animatorsEnabled) {
+            val baseEngineMs = snapshot.snapshotElapsedRealtimeMs
+            val baseLocalMs = SystemClock.elapsedRealtime()
+            while (true) {
+                withFrameMillis {
+                    val elapsedSinceSnapshot = (SystemClock.elapsedRealtime() - baseLocalMs).coerceAtLeast(0L)
+                    frameNowMs = baseEngineMs + elapsedSinceSnapshot
+                }
+            }
+        } else {
+            frameNowMs = snapshot.snapshotElapsedRealtimeMs
         }
     }
 
-    LaunchedEffect(
-        isResumed,
-        snapshot.isRunningOrPreparing,
-        snapshot.snapshotElapsedRealtimeMs,
-        animationsEnabled
+    val phaseSec = snapshot.computeDisplayWholeSeconds(frameNowMs)
+    val phaseBadgeColor = when (snapshot.status) {
+        RunStatus.PREPARING -> palette.phasePrepAccent
+        RunStatus.RUNNING -> if (snapshot.currentPhase == PhaseType.CONTRACTION) {
+            palette.phaseHoldAccent
+        } else {
+            palette.phaseRelaxAccent
+        }
+        else -> palette.phasePauseAccent
+    }
+    val statusTitle = when (snapshot.status) {
+        RunStatus.PREPARING -> "Подготовка · ${phaseSec} с"
+        RunStatus.RUNNING -> "${snapshot.currentPhase.labelRu} · ${phaseSec} с"
+        else -> "Пауза — расслабьтесь"
+    }
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .border(1.5.dp, phaseBadgeColor.copy(alpha = 0.7f), RoundedCornerShape(16.dp))
+            .clickable { onReturnToWorkout() }
+            .testTag("active_session_return_banner"),
+        color = palette.surfaceElevated,
+        shape = RoundedCornerShape(16.dp)
     ) {
-        renderNowElapsedMs = SystemClock.elapsedRealtime()
-        if (isResumed && snapshot.isRunningOrPreparing && animationsEnabled) {
-            while (isActive) {
-                withInfiniteAnimationFrameMillis {
-                    renderNowElapsedMs = SystemClock.elapsedRealtime()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(phaseBadgeColor)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = statusTitle,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                        color = palette.textPrimary,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "Цикл ${snapshot.currentRepetition} из ${snapshot.totalRepetitions} · Осталось ${formatDurationCompact(snapshot.remainingActiveMs)}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                        color = palette.textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (snapshot.isRunningOrPreparing) {
+                    FilledTonalButton(
+                        onClick = onPauseWorkout,
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = palette.surfaceVariant,
+                            contentColor = palette.textPrimary
+                        ),
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .testTag("btn_compact_pause")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Pause,
+                            contentDescription = "Пауза",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                } else {
+                    FilledTonalButton(
+                        onClick = onResumeWorkout,
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = palette.surfaceVariant,
+                            contentColor = palette.primaryAccent
+                        ),
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .testTag("btn_compact_resume")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Продолжить",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = onReturnToWorkout,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = palette.primaryAccent,
+                        contentColor = palette.onPrimaryAccent
+                    ),
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .testTag("btn_return_to_workout")
+                ) {
+                    Text(
+                        text = "Вернуться к тренировке",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
                 }
             }
         }
     }
+}
 
-    val visualProgress = snapshot.computeVisualRingProgress(renderNowElapsedMs)
-    val visualRemainingMs = snapshot.computeVisualRemainingMs(renderNowElapsedMs)
-    val displaySeconds = ((visualRemainingMs + 999L) / 1000L).coerceAtLeast(0L)
+/**
+ * Спокойная декоративная шапка в стиле горного пейзажа в сумерках (Итерация v1.4 п. 2, п. 8).
+ * Статичный силуэт гор без параллакса и без технических сведений о сборке.
+ */
+@Composable
+fun VelarisMountainHeader(
+    subtitleRu: String,
+    isDemoActive: Boolean
+) {
+    val palette = LocalVelarisPalette.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(124.dp)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(palette.heroGradientStart, palette.heroGradientEnd)
+                )
+            )
+    ) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .semantics { contentDescription = "Декоративный горный пейзаж Velaris" }
+        ) {
+            val w = size.width
+            val h = size.height
 
-    val activeElapsedVisualMs = when (snapshot.status) {
-        RunStatus.RUNNING -> {
-            val delta = (renderNowElapsedMs - snapshot.snapshotElapsedRealtimeMs).coerceIn(0L, 2_500L)
-            (snapshot.confirmedActiveMs + delta).coerceAtMost(snapshot.totalActiveDurationMs)
+            val farMountain = Path().apply {
+                moveTo(0f, h * 0.78f)
+                lineTo(w * 0.22f, h * 0.34f)
+                lineTo(w * 0.45f, h * 0.64f)
+                lineTo(w * 0.72f, h * 0.28f)
+                lineTo(w, h * 0.68f)
+                lineTo(w, h)
+                lineTo(0f, h)
+                close()
+            }
+            drawPath(farMountain, color = palette.mountainFar)
+
+            val midMountain = Path().apply {
+                moveTo(0f, h * 0.85f)
+                lineTo(w * 0.15f, h * 0.56f)
+                lineTo(w * 0.38f, h * 0.76f)
+                lineTo(w * 0.61f, h * 0.44f)
+                lineTo(w * 0.86f, h * 0.72f)
+                lineTo(w, h * 0.54f)
+                lineTo(w, h)
+                lineTo(0f, h)
+                close()
+            }
+            drawPath(midMountain, color = palette.mountainMid)
+
+            val nearMountain = Path().apply {
+                moveTo(0f, h * 0.90f)
+                lineTo(w * 0.28f, h * 0.66f)
+                lineTo(w * 0.53f, h * 0.84f)
+                lineTo(w * 0.80f, h * 0.62f)
+                lineTo(w, h * 0.82f)
+                lineTo(w, h)
+                lineTo(0f, h)
+                close()
+            }
+            drawPath(nearMountain, color = palette.mountainNear)
         }
-        else -> snapshot.confirmedActiveMs
-    }
-    val activeRemainingTotalSec =
-        ((snapshot.totalActiveDurationMs - activeElapsedVisualMs + 999L) / 1000L).coerceAtLeast(0L)
 
-    val targetRingColor = when (snapshot.status) {
-        RunStatus.PREPARING -> palette.warningAccent
-        RunStatus.RUNNING -> if (snapshot.currentPhase == PhaseType.CONTRACTION) {
-            palette.primaryAccent
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
+        ) {
+            Column {
+                Text(
+                    text = "Velaris",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = palette.textPrimary,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = subtitleRu,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = palette.secondaryAccent,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            if (isDemoActive) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = palette.warningAccent.copy(alpha = 0.20f),
+                    modifier = Modifier
+                        .border(1.dp, palette.warningAccent.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
+                        .testTag("demo_safety_banner")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = palette.warningAccent,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Демо-режим",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = palette.warningAccent,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DatabaseWarningBanner(message: String) {
+    val palette = LocalVelarisPalette.current
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = palette.errorAccent.copy(alpha = 0.16f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("db_error_banner")
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = palette.errorAccent,
+            modifier = Modifier.padding(12.dp)
+        )
+    }
+}
+
+/**
+ * Отдельный экран активной тренировки с плавным кольцом и крупными секундами (Итерация v1.4 п. 6).
+ */
+@Composable
+fun VelarisActiveWorkoutScreen(
+    snapshot: PhaseEngineSnapshot,
+    hardwareStatus: AudioHardwareStatus,
+    soundEnabled: Boolean,
+    lastCompletedDifficulty: WorkoutDifficulty?,
+    onStart: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onRequestStop: () -> Unit,
+    onReset: () -> Unit,
+    onRateDifficulty: (WorkoutDifficulty?) -> Unit,
+    onNavigateToPlan: () -> Unit,
+    onNavigateToReader: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalVelarisPalette.current
+    val animatorsEnabled = remember {
+        runCatching { ValueAnimator.areAnimatorsEnabled() }.getOrDefault(true) &&
+            !android.os.Build.FINGERPRINT.equals("robolectric", ignoreCase = true)
+    }
+
+    var frameNowMs by remember(snapshot.runId, snapshot.status, snapshot.snapshotElapsedRealtimeMs) {
+        mutableLongStateOf(snapshot.snapshotElapsedRealtimeMs)
+    }
+
+    LaunchedEffect(snapshot.isRunningOrPreparing, snapshot.snapshotElapsedRealtimeMs, animatorsEnabled) {
+        if (snapshot.isRunningOrPreparing && animatorsEnabled) {
+            val baseEngineMs = snapshot.snapshotElapsedRealtimeMs
+            val baseLocalMs = SystemClock.elapsedRealtime()
+            while (true) {
+                withFrameMillis {
+                    val elapsedSinceSnapshot = (SystemClock.elapsedRealtime() - baseLocalMs).coerceAtLeast(0L)
+                    frameNowMs = baseEngineMs + elapsedSinceSnapshot
+                }
+            }
         } else {
-            palette.secondaryAccent
+            frameNowMs = snapshot.snapshotElapsedRealtimeMs
         }
-        RunStatus.PAUSED, RunStatus.INTERRUPTED -> palette.warningAccent
-        RunStatus.COMPLETED -> palette.successAccent
-        RunStatus.STOPPED, RunStatus.IDLE -> palette.outline
     }
-    val ringColor by animateColorAsState(
-        targetValue = targetRingColor,
-        animationSpec = tween(durationMillis = if (animationsEnabled) 260 else 0),
-        label = "WorkoutRingColor"
-    )
+
+    val ringProgress = snapshot.computeVisualRingProgress(frameNowMs)
+    val displayWholeSeconds = snapshot.computeDisplayWholeSeconds(frameNowMs)
+
+    val ringColor = when (snapshot.status) {
+        RunStatus.IDLE -> palette.outline
+        RunStatus.PREPARING -> palette.phasePrepAccent
+        RunStatus.RUNNING -> if (snapshot.currentPhase == PhaseType.CONTRACTION) {
+            palette.phaseHoldAccent
+        } else {
+            palette.phaseRelaxAccent
+        }
+        RunStatus.PAUSED,
+        RunStatus.INTERRUPTED -> palette.phasePauseAccent
+        RunStatus.COMPLETED -> palette.successAccent
+        RunStatus.STOPPED -> palette.errorAccent
+    }
 
     Column(
         modifier = modifier
@@ -574,115 +791,95 @@ fun VelarisActiveWorkoutScreen(
             .testTag("active_workout_screen"),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        if (isDemoMode) {
-            DemoSafetyBanner()
-        }
+        // Компактный индикатор звука и предупреждение о беззвучном режиме
+        CompactAudioStatusRow(
+            hardwareStatus = hardwareStatus,
+            soundEnabled = soundEnabled
+        )
 
+        // Основная карточка таймера (не скачет при смене цифр, фазы или заголовка)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("timer_display_card"),
-            shape = RoundedCornerShape(22.dp),
+                .testTag("timer_state_card"),
+            shape = RoundedCornerShape(26.dp),
             colors = CardDefaults.cardColors(containerColor = palette.surface)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Верхняя строка: статус + небольшой индикатор аудиомаршрута
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = palette.surfaceVariant
+                    Text(
+                        text = snapshot.protocol.titleRu,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = palette.textSecondary,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    OutlinedButton(
+                        onClick = onNavigateToPlan,
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .testTag("btn_minimize_workout")
                     ) {
-                        Text(
-                            text = snapshot.status.labelRu,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = ringColor,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                                .testTag("run_status_badge")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "К списку тренировок",
+                            modifier = Modifier.size(16.dp)
                         )
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = palette.surfaceVariant,
-                        modifier = Modifier.testTag("workout_audio_route_badge")
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = if (hardwareStatus.isHeadphonesConnected) {
-                                    Icons.Default.Headphones
-                                } else {
-                                    Icons.Default.VolumeUp
-                                },
-                                contentDescription = null,
-                                tint = palette.textSecondary,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(
-                                text = if (hardwareStatus.isHeadphonesConnected) "Наушники" else "Динамик",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = palette.textSecondary
-                            )
-                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("К тренировкам", style = MaterialTheme.typography.labelSmall)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text(
-                    text = snapshot.protocol.titleRu,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = palette.textPrimary,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // Крупное плавное кольцо постоянного размера (268.dp)
-                val phaseTitle = when (snapshot.status) {
-                    RunStatus.IDLE -> "Готов к старту"
-                    RunStatus.PREPARING -> "Подготовка"
-                    RunStatus.RUNNING, RunStatus.PAUSED, RunStatus.INTERRUPTED -> snapshot.currentPhase.labelRu
-                    RunStatus.COMPLETED -> "Подход завершён"
-                    RunStatus.STOPPED -> "Остановлено без зачёта"
+                // Фиксированный по высоте блок заголовка фазы (не вызывает скачков вёрстки)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 52.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = snapshot.headlineCommandRu,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = ringColor,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("headline_command_text")
+                    )
                 }
 
+                // Непрерывное кольцо неизменного размера 268.dp
                 Box(
                     modifier = Modifier
                         .size(268.dp)
-                        .semantics {
-                            liveRegion = LiveRegionMode.Polite
-                            contentDescription = "Фаза: $phaseTitle, осталось $displaySeconds секунд"
-                        }
+                        .padding(6.dp)
                         .testTag("smooth_timer_ring"),
                     contentAlignment = Alignment.Center
                 ) {
-                    val trackColor = palette.surfaceVariant
+                    val trackColor = palette.surfaceElevated
                     Canvas(modifier = Modifier.fillMaxSize()) {
-                        val strokePx = 15.dp.toPx()
-                        val glowStrokePx = 24.dp.toPx()
-                        val inset = glowStrokePx / 2f + 4.dp.toPx()
-                        val arcSize = Size(size.width - inset * 2f, size.height - inset * 2f)
-                        val topLeft = Offset(inset, inset)
+                        val strokePx = 18.dp.toPx()
+                        val diameter = size.minDimension - strokePx
+                        val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
+                        val arcSize = Size(diameter, diameter)
 
                         drawArc(
                             color = trackColor,
-                            startAngle = -90f,
+                            startAngle = 0f,
                             sweepAngle = 360f,
                             useCenter = false,
                             topLeft = topLeft,
@@ -690,314 +887,495 @@ fun VelarisActiveWorkoutScreen(
                             style = Stroke(width = strokePx, cap = StrokeCap.Round)
                         )
 
-                        val sweep = (visualProgress.coerceIn(0f, 1f) * 360f)
-                        if (sweep > 0.5f) {
-                            drawArc(
-                                color = ringColor.copy(alpha = 0.20f),
-                                startAngle = -90f,
-                                sweepAngle = sweep,
-                                useCenter = false,
-                                topLeft = topLeft,
-                                size = arcSize,
-                                style = Stroke(width = glowStrokePx, cap = StrokeCap.Round)
-                            )
-                            drawArc(
-                                color = ringColor,
-                                startAngle = -90f,
-                                sweepAngle = sweep,
-                                useCenter = false,
-                                topLeft = topLeft,
-                                size = arcSize,
-                                style = Stroke(width = strokePx, cap = StrokeCap.Round)
-                            )
-                        }
+                        drawArc(
+                            color = ringColor,
+                            startAngle = -90f,
+                            sweepAngle = 360f * ringProgress.coerceIn(0f, 1f),
+                            useCenter = false,
+                            topLeft = topLeft,
+                            size = arcSize,
+                            style = Stroke(width = strokePx, cap = StrokeCap.Round)
+                        )
                     }
 
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(horizontal = 24.dp)
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            text = phaseTitle,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = ringColor,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.testTag("phase_title_text")
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Text(
-                            text = String.format(Locale.US, "%02d с", displaySeconds),
-                            style = MaterialTheme.typography.displayMedium.copy(
-                                fontFamily = FontFamily.Monospace,
-                                fontFeatureSettings = "tnum"
+                            text = String.format(Locale.US, "%d", displayWholeSeconds),
+                            style = MaterialTheme.typography.displayLarge.merge(
+                                TextStyle(
+                                    fontFamily = FontFamily.SansSerif,
+                                    fontFeatureSettings = "tnum"
+                                )
                             ),
                             color = palette.textPrimary,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.testTag("countdown_seconds_text")
+                            fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier.testTag("timer_whole_seconds")
                         )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
                         Text(
-                            text = "Повтор ${snapshot.currentRepetition} / ${snapshot.totalRepetitions}",
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontFamily = FontFamily.Monospace,
-                                fontFeatureSettings = "tnum"
-                            ),
-                            color = palette.textSecondary,
-                            modifier = Modifier.testTag("repetition_counter_text")
+                            text = "секунд",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = palette.textSecondary
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = palette.surfaceElevated
+                        ) {
+                            Text(
+                                text = "Цикл ${snapshot.currentRepetition} из ${snapshot.totalRepetitions}",
+                                style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                                color = palette.secondaryAccent,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Осталось всего: ${formatDurationCompact(snapshot.remainingActiveMs)}",
+                            style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                            color = palette.textSecondary
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Text(
-                    text = "Осталось активного времени: $activeRemainingTotalSec с · Выполнено: ${snapshot.confirmedActiveMs / 1000} / ${snapshot.totalActiveDurationMs / 1000} с",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                        fontFeatureSettings = "tnum"
-                    ),
-                    color = palette.textSecondary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.testTag("confirmed_active_time_text")
-                )
-
                 if (snapshot.interruptionReason != null) {
-                    Spacer(modifier = Modifier.height(10.dp))
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = palette.warningAccent.copy(alpha = 0.16f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("interruption_reason_banner")
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
                             text = snapshot.interruptionReason,
                             style = MaterialTheme.typography.bodySmall,
                             color = palette.warningAccent,
-                            modifier = Modifier.padding(12.dp)
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .padding(10.dp)
+                                .testTag("interruption_reason_text")
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                // Кнопки управления подходом (высота >= 56.dp для удобного нажатия)
+                WorkoutControlButtons(
+                    status = snapshot.status,
+                    onStart = onStart,
+                    onPause = onPause,
+                    onResume = onResume,
+                    onRequestStop = onRequestStop,
+                    onReset = onReset
+                )
+            }
+        }
 
-                // Крупные кнопки управления сессией
-                when (snapshot.status) {
-                    RunStatus.IDLE, RunStatus.STOPPED -> {
-                        Button(
-                            onClick = {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
-                                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                } else {
-                                    onStartDemo()
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = palette.primaryAccent,
-                                contentColor = palette.onPrimaryAccent
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 54.dp)
-                                .testTag("btn_start_demo")
-                        ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Начать подход",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+        // Спокойный экран завершения подхода с понятным итогом и переходами «К тренировкам» и «Почитать»
+        if (snapshot.status == RunStatus.COMPLETED) {
+            WorkoutCompletionRewardCard(
+                snapshot = snapshot,
+                selectedDifficulty = lastCompletedDifficulty,
+                onSelectDifficulty = onRateDifficulty,
+                onNavigateToPlan = onNavigateToPlan,
+                onNavigateToReader = onNavigateToReader
+            )
+        }
+    }
+}
 
-                    RunStatus.PREPARING, RunStatus.RUNNING -> {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Button(
-                                onClick = onPauseDemo,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = palette.warningAccent,
-                                    contentColor = palette.onPrimaryAccent
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .heightIn(min = 54.dp)
-                                    .testTag("btn_pause_demo")
-                            ) {
-                                Icon(Icons.Default.Pause, contentDescription = null)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Пауза", fontWeight = FontWeight.Bold)
-                            }
+@Composable
+private fun CompactAudioStatusRow(
+    hardwareStatus: AudioHardwareStatus,
+    soundEnabled: Boolean
+) {
+    val palette = LocalVelarisPalette.current
+    val showSilentWarning = soundEnabled &&
+        hardwareStatus.isSilentOrVibrateRinger &&
+        !hardwareStatus.isHeadphonesConnected
 
-                            OutlinedButton(
-                                onClick = onRequestStopDemo,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .heightIn(min = 54.dp)
-                                    .testTag("btn_stop_demo")
-                            ) {
-                                Icon(
-                                    Icons.Default.Stop,
-                                    contentDescription = null,
-                                    tint = palette.errorAccent
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Остановить", color = palette.errorAccent, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = palette.surfaceElevated,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("compact_audio_status_chip")
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = when {
+                            !soundEnabled -> Icons.AutoMirrored.Filled.VolumeOff
+                            hardwareStatus.isHeadphonesConnected -> Icons.Default.Headphones
+                            else -> Icons.AutoMirrored.Filled.VolumeUp
+                        },
+                        contentDescription = null,
+                        tint = palette.secondaryAccent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (soundEnabled) {
+                            "Звук: ${hardwareStatus.outputRouteLabelRu}"
+                        } else {
+                            "Звук выключен (вибрация)"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = palette.textPrimary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
 
-                    RunStatus.PAUSED, RunStatus.INTERRUPTED -> {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Button(
-                                onClick = onResumeDemo,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = palette.successAccent,
-                                    contentColor = palette.onPrimaryAccent
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .heightIn(min = 54.dp)
-                                    .testTag("btn_resume_demo")
-                            ) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Продолжить", fontWeight = FontWeight.Bold)
-                            }
+                Text(
+                    text = hardwareStatus.ringerModeLabelRu,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = palette.textSecondary
+                )
+            }
+        }
 
-                            OutlinedButton(
-                                onClick = onRequestStopDemo,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .heightIn(min = 54.dp)
-                                    .testTag("btn_stop_demo")
-                            ) {
-                                Icon(
-                                    Icons.Default.Stop,
-                                    contentDescription = null,
-                                    tint = palette.errorAccent
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Остановить", color = palette.errorAccent, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                    }
-
-                    RunStatus.COMPLETED -> {
-                        // Состояние завершения (Update v1.1 п. 2):
-                        // спокойная отметка, необязательная оценка ощущения, кнопки «К плану» и «Почитать»
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, palette.successAccent.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
-                                .padding(14.dp)
-                                .testTag("workout_completion_card"),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = palette.successAccent,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Подход спокойно зачтён",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = palette.successAccent,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Text(
-                                text = "Необязательная оценка ощущения:",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = palette.textSecondary
-                            )
-
-                            FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                WorkoutDifficulty.entries.forEach { diff ->
-                                    val selected = lastCompletedSlotDifficulty == diff
-                                    FilledTonalButton(
-                                        onClick = {
-                                            onRateDifficulty(if (selected) null else diff)
-                                        },
-                                        colors = ButtonDefaults.filledTonalButtonColors(
-                                            containerColor = if (selected) palette.primaryAccent else palette.surfaceVariant,
-                                            contentColor = if (selected) palette.onPrimaryAccent else palette.textPrimary
-                                        ),
-                                        modifier = Modifier
-                                            .heightIn(min = 48.dp)
-                                            .testTag("btn_rate_${diff.code.lowercase(Locale.ROOT)}")
-                                    ) {
-                                        Text(
-                                            text = diff.labelRu,
-                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                                        )
-                                    }
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = onOpenPlan,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .heightIn(min = 48.dp)
-                                        .testTag("btn_completion_to_plan")
-                                ) {
-                                    Text("К плану", color = palette.textPrimary, fontWeight = FontWeight.SemiBold)
-                                }
-                                Button(
-                                    onClick = onOpenReader,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = palette.primaryAccent,
-                                        contentColor = palette.onPrimaryAccent
-                                    ),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .heightIn(min = 48.dp)
-                                        .testTag("btn_completion_to_reader")
-                                ) {
-                                    Text("Почитать", fontWeight = FontWeight.Bold)
-                                }
-                            }
-
-                            OutlinedButton(
-                                onClick = onResetDemo,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 48.dp)
-                                    .testTag("btn_reset_demo")
-                            ) {
-                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("К следующему свободному подходу", color = palette.textSecondary)
-                            }
-                        }
-                    }
+        if (showSilentWarning) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = palette.warningAccent.copy(alpha = 0.18f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("silent_mode_warning")
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = palette.warningAccent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Телефон в режиме «Без звука» или «Вибрация» без наушников: ориентируйтесь на вибрацию или включите звук.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = palette.warningAccent
+                    )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun WorkoutCompletionRewardCard(
+    snapshot: PhaseEngineSnapshot,
+    selectedDifficulty: WorkoutDifficulty?,
+    onSelectDifficulty: (WorkoutDifficulty?) -> Unit,
+    onNavigateToPlan: () -> Unit,
+    onNavigateToReader: () -> Unit
+) {
+    val palette = LocalVelarisPalette.current
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.5.dp, palette.successAccent.copy(alpha = 0.6f), RoundedCornerShape(22.dp))
+            .testTag("workout_completion_card"),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = palette.surfaceElevated)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = palette.successAccent,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = "Тренировка завершена",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = palette.successAccent,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = "Выполнено: ${formatDurationCompact(snapshot.totalActiveDurationMs)} · Циклов: ${snapshot.totalRepetitions}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = palette.textPrimary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            Text(
+                text = "Как ощущалась нагрузка? (по желанию)",
+                style = MaterialTheme.typography.labelMedium,
+                color = palette.textSecondary
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                WorkoutDifficulty.entries.forEach { diff ->
+                    val isSelected = selectedDifficulty == diff
+                    FilledTonalButton(
+                        onClick = {
+                            onSelectDifficulty(if (isSelected) null else diff)
+                        },
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = if (isSelected) palette.primaryAccent else palette.surfaceVariant,
+                            contentColor = if (isSelected) palette.onPrimaryAccent else palette.textPrimary
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .testTag("difficulty_btn_${diff.code.lowercase(Locale.ROOT)}")
+                    ) {
+                        Text(
+                            text = diff.labelRu,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onNavigateToPlan,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 50.dp)
+                        .testTag("btn_completion_to_plan")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarMonth,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("К тренировкам", color = palette.textPrimary, fontWeight = FontWeight.SemiBold)
+                }
+
+                Button(
+                    onClick = onNavigateToReader,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = palette.secondaryAccent,
+                        contentColor = palette.onPrimaryAccent
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 50.dp)
+                        .testTag("btn_completion_to_reader")
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Почитать", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkoutControlButtons(
+    status: RunStatus,
+    onStart: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onRequestStop: () -> Unit,
+    onReset: () -> Unit
+) {
+    val palette = LocalVelarisPalette.current
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        when (status) {
+            RunStatus.IDLE,
+            RunStatus.COMPLETED,
+            RunStatus.STOPPED -> {
+                Button(
+                    onClick = onStart,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = palette.primaryAccent,
+                        contentColor = palette.onPrimaryAccent
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                        .testTag("btn_start_demo")
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Начать тренировку",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                if (status == RunStatus.COMPLETED || status == RunStatus.STOPPED) {
+                    OutlinedButton(
+                        onClick = onReset,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("btn_reset_demo")
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Сбросить таймер", color = palette.textPrimary)
+                    }
+                }
+            }
+
+            RunStatus.PREPARING,
+            RunStatus.RUNNING -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = onPause,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = palette.phasePauseAccent,
+                            contentColor = palette.onPrimaryAccent
+                        ),
+                        modifier = Modifier
+                            .weight(1.25f)
+                            .heightIn(min = 56.dp)
+                            .testTag("btn_pause_demo")
+                    ) {
+                        Icon(Icons.Default.Pause, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Пауза",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = onRequestStop,
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 56.dp)
+                            .testTag("btn_stop_demo")
+                    ) {
+                        Icon(Icons.Default.Stop, contentDescription = null, tint = palette.errorAccent)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Остановить", color = palette.errorAccent, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+
+            RunStatus.PAUSED,
+            RunStatus.INTERRUPTED -> {
+                Button(
+                    onClick = onResume,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = palette.primaryAccent,
+                        contentColor = palette.onPrimaryAccent
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                        .testTag("btn_resume_demo")
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Продолжить (через 3 сигнала)",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = onRequestStop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 52.dp)
+                        .testTag("btn_stop_demo")
+                ) {
+                    Icon(Icons.Default.Stop, contentDescription = null, tint = palette.errorAccent)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Остановить без зачёта", color = palette.errorAccent, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StopWorkoutConfirmDialog(
+    onStayPaused: () -> Unit,
+    onConfirmStop: () -> Unit
+) {
+    val palette = LocalVelarisPalette.current
+    AlertDialog(
+        onDismissRequest = onStayPaused,
+        title = {
+            Text(
+                text = "Завершить без зачёта?",
+                fontWeight = FontWeight.Bold,
+                color = palette.textPrimary
+            )
+        },
+        text = {
+            Text(
+                text = "Тренировка сейчас на паузе («Пауза — расслабьтесь»). При остановке текущая попытка не будет засчитана в выполненные.",
+                color = palette.textSecondary
+            )
+        },
+        containerColor = palette.surfaceElevated,
+        confirmButton = {
+            Button(
+                onClick = onConfirmStop,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = palette.errorAccent,
+                    contentColor = palette.onPrimaryAccent
+                ),
+                modifier = Modifier.testTag("btn_confirm_stop")
+            ) {
+                Text("Завершить", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            OutlinedButton(
+                onClick = onStayPaused,
+                modifier = Modifier.testTag("btn_stay_paused")
+            ) {
+                Text("Остаться на паузе", color = palette.textPrimary)
+            }
+        },
+        modifier = Modifier.testTag("stop_confirm_dialog")
+    )
+}
+
+internal fun formatDurationCompact(ms: Long): String {
+    val totalSec = ((ms + 999L) / 1000L).coerceAtLeast(0L)
+    val min = totalSec / 60L
+    val sec = totalSec % 60L
+    return String.format(Locale.US, "%d:%02d", min, sec)
 }

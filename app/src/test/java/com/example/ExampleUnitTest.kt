@@ -548,14 +548,20 @@ class ExampleUnitTest {
 
     @Test
     fun `calculateFreeCycles technical limits verification up to 90 minutes and 300 cycles`() {
-        // 90 минут = 5400 с. 1 с сокращение + 1 с отдых = 2 с цикл.
-        // 5400 / 2 = 2700 циклов > 300 -> должно быть ограничено 300 циклами
-        val calcCapped = calculateFreeCycles(desiredDurationSec = 5400, contractionSec = 1, relaxationSec = 1)
-        assertTrue(calcCapped.isValid)
-        assertEquals(300, calcCapped.completedCycles)
-        assertEquals(600, calcCapped.actualDurationSec)
+        // 90 минут = 5400 с. 1 с удержание + 1 с отдых = 2 с цикл.
+        // 5400 / 2 = 2700 циклов > 300 -> не меняем введённые значения молча, возвращаем понятное объяснение (v1.4 п. 5)
+        val calcOver300 = calculateFreeCycles(desiredDurationSec = 5400, contractionSec = 1, relaxationSec = 1)
+        assertFalse(calcOver300.isValid)
+        assertEquals(2700, calcOver300.completedCycles)
+        assertTrue(calcOver300.summaryRu.contains("Превышен предел 300 циклов"))
 
-        // 120 с сокращение + 120 с отдых = 240 с цикл.
+        // Ровно 300 циклов (10 минут по 1 с + 1 с) -> допустимо
+        val calcExact300 = calculateFreeCycles(desiredDurationSec = 600, contractionSec = 1, relaxationSec = 1)
+        assertTrue(calcExact300.isValid)
+        assertEquals(300, calcExact300.completedCycles)
+        assertEquals(600, calcExact300.actualDurationSec)
+
+        // 120 с удержание + 120 с отдых = 240 с цикл.
         // 30 минут = 1800 с -> 7 циклов (1680 с = 28:00)
         val calcLargeIntervals = calculateFreeCycles(desiredDurationSec = 1800, contractionSec = 120, relaxationSec = 120)
         assertTrue(calcLargeIntervals.isValid)
@@ -572,7 +578,7 @@ class ExampleUnitTest {
 
         val templateProto = DemoProtocolConfig(
             id = "free_proto_snap",
-            titleRu = "Свободный исходный",
+            titleRu = "Мои интервалы · Быстрый",
             contractionMs = 5_000L,
             relaxationMs = 5_000L,
             repetitions = 3
@@ -583,11 +589,13 @@ class ExampleUnitTest {
         assertTrue(activeSnap.isFreeMode)
         assertEquals("free_proto_snap", activeSnap.protocol.id)
         assertEquals(5_000L, activeSnap.protocol.contractionMs)
+        assertEquals("Удержание", PhaseType.CONTRACTION.labelRu)
+        assertEquals("Отдых", PhaseType.RELAXATION.labelRu)
 
         // Попытка запустить вторую тренировку или изменить протокол во время работы должна быть отклонена
         val modifiedProto = DemoProtocolConfig(
             id = "free_proto_snap",
-            titleRu = "Свободный изменённый",
+            titleRu = "Мои интервалы · Изменённый",
             contractionMs = 20_000L,
             relaxationMs = 20_000L,
             repetitions = 10

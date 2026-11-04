@@ -14,11 +14,11 @@ enum class RunStatus(val labelRu: String) {
 }
 
 /**
- * Рабочие фазы внутри состояния RUNNING.
+ * Рабочие фазы внутри состояния RUNNING (Итерация v1.4 п. 6: «Удержание» / «Отдых»).
  */
 enum class PhaseType(val labelRu: String) {
-    CONTRACTION("Сокращение"),
-    RELAXATION("Расслабление")
+    CONTRACTION("Удержание"),
+    RELAXATION("Отдых")
 }
 
 /**
@@ -26,11 +26,11 @@ enum class PhaseType(val labelRu: String) {
  */
 enum class SignalType(val labelRu: String) {
     PREP_TICK("Сигнал подготовки (отсчёт)"),
-    CONTRACTION("Команда: Сокращение"),
-    RELAXATION("Команда: Расслабление"),
+    CONTRACTION("Команда: Удержание"),
+    RELAXATION("Команда: Отдых"),
     METRONOME_TICK("Тик метронома"),
     PAUSED("Пауза — расслабьтесь"),
-    SET_COMPLETED("Сигнал: Подход завершён"),
+    SET_COMPLETED("Сигнал: Тренировка завершена"),
     GROUP_COMPLETED("Сигнал: Группа завершена")
 }
 
@@ -127,13 +127,13 @@ data class DemoProtocolConfig(
 ) {
     init {
         require(contractionMs in 1_000L..120_000L) {
-            "Длительность фазы сокращения должна быть положительной (1..120 сек)"
+            "Длительность фазы удержания должна быть положительной (1..120 сек)"
         }
         require(relaxationMs in 1_000L..120_000L) {
-            "Длительность фазы расслабления должна быть положительной (1..120 сек)"
+            "Длительность фазы отдыха должна быть положительной (1..120 сек)"
         }
         require(repetitions in 1..300) {
-            "Число повторов должно быть целым положительным числом (1..300)"
+            "Число циклов должно быть целым положительным числом (1..300)"
         }
     }
 
@@ -145,11 +145,12 @@ data class DemoProtocolConfig(
 }
 
 /**
- * Расчёт параметров свободного интервального подхода (Итерация v1.3 п. 2–3).
- * Цикл: сокращение -> расслабление.
- * Подход не обрывает фазу mid-cycle.
+ * Расчёт параметров свободного интервального подхода («Мои интервалы», Итерация v1.3 / v1.4 п. 5).
+ * Цикл: удержание -> отдых.
+ * Подход не обрывает фазу посередине цикла.
  * Число циклов = floor(желаемое время / длительность цикла).
  * Фактическое время = число циклов * длительность цикла.
+ * Ограничение 300 циклов объясняется понятным сообщением без молчаливого изменения введённых значений.
  */
 data class FreeIntervalCalculation(
     val desiredTotalSec: Int,
@@ -166,7 +167,7 @@ data class FreeIntervalCalculation(
 
     val summaryRu: String
         get() {
-            if (!isValid) return errorMessageRu ?: "Некорректные параметры"
+            if (!isValid) return errorMessageRu ?: "Проверьте параметры интервалов"
             val desiredMin = desiredTotalSec / 60
             val desiredSec = desiredTotalSec % 60
             val desiredStr = String.format(java.util.Locale.US, "%d:%02d", desiredMin, desiredSec)
@@ -209,7 +210,17 @@ fun calculateFreeCycles(
             cycles = 0,
             actualTotalSec = 0,
             isValid = false,
-            errorMessageRu = "Укажите секунды сокращения и расслабления больше 0"
+            errorMessageRu = "Укажите секунды удержания и отдыха от 1 до 120 с"
+        )
+    }
+    if (contractionSec > 120 || relaxationSec > 120) {
+        return FreeIntervalCalculation(
+            desiredTotalSec = desiredSec,
+            cycleSec = cycleSec,
+            cycles = 0,
+            actualTotalSec = 0,
+            isValid = false,
+            errorMessageRu = "Интервал удержания или отдыха не может превышать 120 секунд"
         )
     }
     if (desiredSec <= 0) {
@@ -219,13 +230,21 @@ fun calculateFreeCycles(
             cycles = 0,
             actualTotalSec = 0,
             isValid = false,
-            errorMessageRu = "Продолжительность подхода должна быть больше 0 с"
+            errorMessageRu = "Продолжительность тренировки должна быть больше 0 с"
+        )
+    }
+    if (desiredSec > 5400) {
+        return FreeIntervalCalculation(
+            desiredTotalSec = desiredSec,
+            cycleSec = cycleSec,
+            cycles = 0,
+            actualTotalSec = 0,
+            isValid = false,
+            errorMessageRu = "Максимальная продолжительность тренировки — 90 минут"
         )
     }
     val rawCycles = desiredSec / cycleSec
-    val cycles = rawCycles.coerceAtMost(300)
-    val actualSec = cycles * cycleSec
-    if (cycles == 0) {
+    if (rawCycles == 0) {
         return FreeIntervalCalculation(
             desiredTotalSec = desiredSec,
             cycleSec = cycleSec,
@@ -235,10 +254,21 @@ fun calculateFreeCycles(
             errorMessageRu = "Длительность меньше одного цикла. Увеличьте общее время или уменьшите интервалы."
         )
     }
+    if (rawCycles > 300) {
+        return FreeIntervalCalculation(
+            desiredTotalSec = desiredSec,
+            cycleSec = cycleSec,
+            cycles = rawCycles,
+            actualTotalSec = rawCycles * cycleSec,
+            isValid = false,
+            errorMessageRu = "Превышен предел 300 циклов ($rawCycles). Уменьшите общее время или увеличьте секунды удержания и отдыха."
+        )
+    }
+    val actualSec = rawCycles * cycleSec
     return FreeIntervalCalculation(
         desiredTotalSec = desiredSec,
         cycleSec = cycleSec,
-        cycles = cycles,
+        cycles = rawCycles,
         actualTotalSec = actualSec,
         isValid = true,
         errorMessageRu = null
@@ -286,16 +316,16 @@ data class PhaseEngineSnapshot(
         get() = status == RunStatus.PREPARING || status == RunStatus.RUNNING
 
     /**
-     * На паузе или при прерывании никогда не оставляем команду сокращения как актуальную (ТЗ п. 7).
+     * На паузе или при прерывании никогда не оставляем команду удержания как актуальную (ТЗ п. 7, v1.4 п. 6).
      */
     val headlineCommandRu: String
         get() = when (status) {
-            RunStatus.IDLE -> "Готов к запуску (Демо)"
+            RunStatus.IDLE -> "Готов к запуску"
             RunStatus.PREPARING -> "Подготовка… Расслабьтесь"
             RunStatus.RUNNING -> currentPhase.labelRu
             RunStatus.PAUSED -> "Пауза — расслабьтесь"
-            RunStatus.INTERRUPTED -> "Пауза (прервано) — расслабьтесь"
-            RunStatus.COMPLETED -> "Подход завершён"
+            RunStatus.INTERRUPTED -> "Пауза — расслабьтесь"
+            RunStatus.COMPLETED -> "Тренировка завершена"
             RunStatus.STOPPED -> "Остановлено без зачёта"
         }
 

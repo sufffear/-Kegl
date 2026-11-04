@@ -166,7 +166,13 @@ data class FreeIntervalTemplateEntity(
     val cycleSec: Int get() = contractionSec + relaxationSec
     val calculatedCycles: Int get() = if (cycleSec > 0) totalDesiredSec / cycleSec else 0
     val actualDurationSec: Int get() = calculatedCycles * cycleSec
-    val isValid: Boolean get() = name.isNotBlank() && contractionSec > 0 && relaxationSec > 0 && calculatedCycles > 0
+    val isValid: Boolean
+        get() = isConfigured &&
+            name.isNotBlank() &&
+            contractionSec in 1..120 &&
+            relaxationSec in 1..120 &&
+            totalDesiredSec in 1..5400 &&
+            calculatedCycles in 1..300
 
     companion object {
         val DEFAULT_INITIAL_NAMES = listOf(

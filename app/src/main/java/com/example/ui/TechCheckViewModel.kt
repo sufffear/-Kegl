@@ -31,17 +31,18 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Навигационные разделы приложения Velaris (Итерация v1.1).
- * Вся техническая диагностика вынесена в отдельный вложенный экран `DIAGNOSTICS` («Настройки → Диагностика»).
+ * Навигационные разделы приложения Velaris (Итерация v1.4 п. 3).
+ * Нижняя навигация содержит ровно 4 раздела: Главная, Тренировки, Книга, Настройки.
+ * Экран активной тренировки (`WORKOUT`) и вложенный экран диагностики (`DIAGNOSTICS`) открываются отдельно.
  */
 enum class VelarisNavDestination(
     val id: String,
     val titleRu: String
 ) {
     HOME("home", "Главная"),
-    PLAN("plan", "План"),
-    WORKOUT("workout", "Подход"),
-    READER("reader", "Чтение"),
+    PLAN("plan", "Тренировки"),
+    WORKOUT("workout", "Текущая тренировка"),
+    READER("reader", "Книга"),
     SETTINGS("settings", "Настройки"),
     DIAGNOSTICS("diagnostics", "Диагностика")
 }

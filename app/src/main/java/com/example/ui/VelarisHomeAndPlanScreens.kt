@@ -1,525 +1,427 @@
 package com.example.ui
 
-import androidx.compose.foundation.Canvas
+import android.animation.ValueAnimator
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import com.example.R
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import com.example.data.BenchSignalSettings
 import com.example.data.DailySlotWithCompletion
 import com.example.data.FreeIntervalTemplateEntity
 import com.example.data.StoryReaderUiState
 import com.example.data.WeeklyDaySummary
 import com.example.data.WeeklyOverviewState
-import com.example.domain.AppBuildInfo
-import com.example.domain.FreeIntervalCalculation
 import com.example.domain.PhaseEngineSnapshot
 import com.example.domain.PlanGroup
 import com.example.domain.WorkoutDifficulty
 import com.example.domain.calculateFreeCycles
 import com.example.ui.theme.LocalVelarisPalette
+import java.util.Locale
 
-/**
- * Спокойная статичная шапка с тонкими силуэтами гор и умеренными световыми акцентами (ТЗ п. 4, Update v1.1 п. 2).
- * Без постоянных частиц, пульсирующего фона и тяжёлых эффектов.
- */
-@Composable
-fun VelarisMountainHeader(
-    buildInfo: AppBuildInfo,
-    subtitleRu: String,
-    onOpenSettings: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
-) {
-    val palette = LocalVelarisPalette.current
-    val mountainDesc = stringResource(R.string.mountain_illustration_desc)
-
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = palette.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(136.dp)
-                    .semantics { contentDescription = mountainDesc }
-            ) {
-                val w = size.width
-                val h = size.height
-
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            palette.backgroundTop,
-                            palette.backgroundMid,
-                            palette.backgroundBottom
-                        )
-                    )
-                )
-
-                // Мягкое статичное свечение горизонта
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            palette.primaryAccent.copy(alpha = 0.18f),
-                            palette.primaryAccent.copy(alpha = 0.0f)
-                        ),
-                        center = Offset(w * 0.76f, h * 0.34f),
-                        radius = w * 0.42f
-                    ),
-                    center = Offset(w * 0.76f, h * 0.34f),
-                    radius = w * 0.42f
-                )
-
-                // Несколько тонких статичных звёздных точек
-                val starColor = palette.textPrimary.copy(alpha = 0.40f)
-                drawCircle(color = starColor, radius = 1.6f, center = Offset(w * 0.18f, h * 0.22f))
-                drawCircle(color = starColor, radius = 2.1f, center = Offset(w * 0.46f, h * 0.16f))
-                drawCircle(color = starColor, radius = 1.8f, center = Offset(w * 0.82f, h * 0.20f))
-
-                // Дальний хребет
-                val backPath = Path().apply {
-                    moveTo(0f, h)
-                    lineTo(0f, h * 0.68f)
-                    lineTo(w * 0.22f, h * 0.44f)
-                    lineTo(w * 0.45f, h * 0.62f)
-                    lineTo(w * 0.72f, h * 0.36f)
-                    lineTo(w, h * 0.58f)
-                    lineTo(w, h)
-                    close()
-                }
-                drawPath(path = backPath, color = palette.mountainBackLayer)
-
-                // Средний хребет
-                val midPath = Path().apply {
-                    moveTo(0f, h)
-                    lineTo(0f, h * 0.78f)
-                    lineTo(w * 0.15f, h * 0.58f)
-                    lineTo(w * 0.38f, h * 0.74f)
-                    lineTo(w * 0.60f, h * 0.48f)
-                    lineTo(w * 0.86f, h * 0.68f)
-                    lineTo(w, h * 0.62f)
-                    lineTo(w, h)
-                    close()
-                }
-                drawPath(path = midPath, color = palette.mountainMidLayer)
-
-                // Ближний силуэт
-                val frontPath = Path().apply {
-                    moveTo(0f, h)
-                    lineTo(0f, h * 0.85f)
-                    lineTo(w * 0.28f, h * 0.70f)
-                    lineTo(w * 0.54f, h * 0.84f)
-                    lineTo(w * 0.80f, h * 0.66f)
-                    lineTo(w, h * 0.79f)
-                    lineTo(w, h)
-                    close()
-                }
-                drawPath(path = frontPath, color = palette.mountainFrontLayer)
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 18.dp, vertical = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Velaris",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = palette.textPrimary,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .semantics { heading() }
-                            .testTag("screen_title")
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = subtitleRu,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = palette.textSecondary
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = stringResource(
-                            R.string.tech_check_version_format,
-                            buildInfo.versionName,
-                            buildInfo.versionCode
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = palette.primaryAccent,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.testTag("version_subtitle")
-                    )
-                }
-
-                if (onOpenSettings != null) {
-                    IconButton(
-                        onClick = onOpenSettings,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(palette.surfaceVariant.copy(alpha = 0.75f))
-                            .testTag("btn_open_settings")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Открыть настройки",
-                            tint = palette.textPrimary
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun DemoSafetyBanner(modifier: Modifier = Modifier) {
-    val palette = LocalVelarisPalette.current
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .border(1.dp, palette.warningAccent.copy(alpha = 0.65f), RoundedCornerShape(16.dp))
-            .testTag("demo_safety_banner"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = palette.surfaceVariant)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Warning,
-                contentDescription = "Предупреждение о демо-режиме",
-                tint = palette.warningAccent,
-                modifier = Modifier.size(22.dp)
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            Column {
-                Text(
-                    text = stringResource(R.string.demo_safety_banner_title),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = palette.warningAccent,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "Активирован демонстрационный режим. В реальную недельную статистику демо-записи не включаются.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = palette.textSecondary
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ActiveSessionReturnBanner(
-    snapshot: PhaseEngineSnapshot,
-    onReturnToWorkout: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val palette = LocalVelarisPalette.current
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .border(1.5.dp, palette.primaryAccent, RoundedCornerShape(18.dp))
-            .testTag("active_session_return_banner"),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = palette.surfaceVariant)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Активная тренировка: ${snapshot.status.labelRu}",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = palette.primaryAccent,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "${snapshot.protocol.titleRu} · Повтор ${snapshot.currentRepetition}/${snapshot.totalRepetitions}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = palette.textPrimary
-                )
-            }
-            Spacer(modifier = Modifier.width(10.dp))
-            Button(
-                onClick = onReturnToWorkout,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = palette.primaryAccent,
-                    contentColor = palette.onPrimaryAccent
-                ),
-                modifier = Modifier
-                    .heightIn(min = 48.dp)
-                    .testTag("btn_return_to_workout")
-            ) {
-                Text("Вернуться к тренировке", fontWeight = FontWeight.SemiBold)
-            }
-        }
-    }
+private fun formatSecondsMinSec(totalSec: Int): String {
+    val clamped = totalSec.coerceAtLeast(0)
+    val min = clamped / 60
+    val sec = clamped % 60
+    return String.format(Locale.US, "%d:%02d", min, sec)
 }
 
 /**
- * Экран 1: Главная (Update v1.1 п. 2).
- * Показывает:
- * - карточку «Тренировка»: прогресс «Сегодня X из N» (или «Сегодня без тренировок» при N=0 без 0/0),
- *   пометку «Демонстрация» при невыбранной реальной программе, следующее упражнение и переход к плану/старту;
- * - карточку «История»: название главы, сохранённое место и кнопку «Продолжить»;
- * - компактный недельный обзор на 7 дней (только по реальным записям);
- * - переход в Настройки.
+ * Экран «Главная» (Итерация v1.4, раздел 4):
+ * - Блок тренировки (возврат к активной тренировке / прогресс плана на сегодня / запуск настроенного шаблона / день отдыха / переход к настройке);
+ * - Блок книги (добавить книгу / продолжить чтение с текущей главы / книга прочитана);
+ * - Недельный обзор за 7 дней (только реальные подходы, разделение «По плану» и «Мои интервалы», без `0/0` и без `0%`).
  */
 @Composable
 fun VelarisHomeScreen(
-    buildInfo: AppBuildInfo,
     snapshot: PhaseEngineSnapshot,
     settings: BenchSignalSettings,
     dailySlots: List<DailySlotWithCompletion>,
-    isZeroSlotDemoMode: Boolean,
+    freeTemplates: List<FreeIntervalTemplateEntity>,
     weeklyOverview: WeeklyOverviewState,
     storyState: StoryReaderUiState,
-    onStartOrOpenWorkout: () -> Unit,
+    onOpenWorkout: () -> Unit,
+    onStartNextSlot: (DailySlotWithCompletion) -> Unit,
+    onStartFreeTemplate: (FreeIntervalTemplateEntity) -> Unit,
     onOpenPlan: () -> Unit,
     onOpenReader: () -> Unit,
-    onOpenSettings: () -> Unit,
-    onSelectWeeklyDate: (String) -> Unit,
+    onSelectOverviewDay: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalVelarisPalette.current
     val totalSlots = dailySlots.size
     val completedSlots = dailySlots.count { it.isCompleted }
-    val nextSlot = dailySlots.firstOrNull { !it.isCompleted }
-    val isDemoMode = !settings.isRealProgramEnabled || isZeroSlotDemoMode
+    val nextAvailableSlot = dailySlots.firstOrNull { !it.isCompleted }
+    val firstConfiguredTemplate = freeTemplates.firstOrNull { it.isValid }
 
     Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("home_screen"),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        VelarisMountainHeader(
-            buildInfo = buildInfo,
-            subtitleRu = "Спокойный ритм тренировок и интерактивная история",
-            onOpenSettings = onOpenSettings
-        )
-
-        if (isDemoMode) {
-            DemoSafetyBanner()
-        }
-
-        if (snapshot.isActiveOrPaused) {
-            ActiveSessionReturnBanner(
-                snapshot = snapshot,
-                onReturnToWorkout = onStartOrOpenWorkout
-            )
-        }
-
-        // Карточка «Тренировка»
+        // 1. Главная карточка «Тренировка» с выразительным градиентом
         Card(
             modifier = Modifier
                 .fillMaxWidth()
+                .border(1.5.dp, palette.primaryAccent.copy(alpha = 0.45f), RoundedCornerShape(24.dp))
                 .testTag("home_workout_card"),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = palette.surface)
         ) {
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Тренировка",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = palette.textPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (isDemoMode) {
-                            palette.warningAccent.copy(alpha = 0.18f)
-                        } else {
-                            palette.successAccent.copy(alpha = 0.18f)
-                        }
-                    ) {
-                        Text(
-                            text = if (isDemoMode) "Демонстрация" else "Базовый план",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (isDemoMode) palette.warningAccent else palette.successAccent,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier
-                                .padding(horizontal = 10.dp, vertical = 5.dp)
-                                .testTag("home_workout_mode_badge")
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(palette.heroGradientStart, palette.heroGradientEnd)
                         )
-                    }
-                }
-
-                // Прогресс «Сегодня X из N» или «Сегодня без тренировок» без 0/0
-                val progressText = if (totalSlots == 0) {
-                    "Сегодня без тренировок"
-                } else {
-                    "Сегодня $completedSlots из $totalSlots"
-                }
-                Text(
-                    text = progressText,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = palette.primaryAccent,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.testTag("home_today_progress")
-                )
-
-                val nextSummary = when {
-                    totalSlots == 0 -> "На сегодня подходы не назначены. Спокойный день отдыха."
-                    nextSlot != null -> {
-                        val s = nextSlot.slot
-                        "Следующее: ${s.titleRu} · ${s.contractionMs / 1000}с / ${s.relaxationMs / 1000}с × ${s.repetitions}"
-                    }
-                    else -> "Все назначенные подходы на сегодня спокойно выполнены."
-                }
-                Text(
-                    text = nextSummary,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = palette.textSecondary
-                )
-
-                Row(
+                    )
+                    .padding(20.dp)
+            ) {
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    if (totalSlots > 0 && (nextSlot != null || snapshot.isActiveOrPaused)) {
-                        Button(
-                            onClick = onStartOrOpenWorkout,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = palette.primaryAccent,
-                                contentColor = palette.onPrimaryAccent
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 48.dp)
-                                .testTag("btn_home_start_workout")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(palette.primaryAccent.copy(alpha = 0.22f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.FitnessCenter,
+                                    contentDescription = null,
+                                    tint = palette.primaryAccent,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                text = if (snapshot.isActiveOrPaused) "К подходу" else "Начать подход",
+                                text = if (snapshot.isActiveOrPaused) "Текущая тренировка" else "Тренировка сегодня",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = palette.textPrimary,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (settings.isRealProgramEnabled) {
+                                palette.successAccent.copy(alpha = 0.20f)
+                            } else {
+                                palette.warningAccent.copy(alpha = 0.20f)
+                            }
+                        ) {
+                            Text(
+                                text = if (settings.isRealProgramEnabled) "Основной режим" else "Демо-режим",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (settings.isRealProgramEnabled) palette.successAccent else palette.warningAccent,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            )
+                        }
+                    }
+
+                    when {
+                        snapshot.isActiveOrPaused -> {
+                            Text(
+                                text = snapshot.protocol.titleRu,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = palette.textPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "${snapshot.headlineCommandRu} · Цикл ${snapshot.currentRepetition} из ${snapshot.totalRepetitions}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = palette.secondaryAccent,
                                 fontWeight = FontWeight.SemiBold
                             )
+                            Button(
+                                onClick = onOpenWorkout,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = palette.primaryAccent,
+                                    contentColor = palette.onPrimaryAccent
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 54.dp)
+                                    .testTag("btn_home_primary_workout")
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Вернуться к тренировке",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
-                    }
 
-                    OutlinedButton(
-                        onClick = onOpenPlan,
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 48.dp)
-                            .testTag("btn_open_plan")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CalendarMonth,
-                            contentDescription = null,
-                            tint = palette.secondaryAccent,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "К плану дня",
-                            color = palette.textPrimary,
-                            fontWeight = FontWeight.Medium
-                        )
+                        totalSlots == 0 -> {
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = palette.surfaceElevated.copy(alpha = 0.85f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("zero_slots_calm_message")
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = "Сегодня без тренировок",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = palette.secondaryAccent,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "По расписанию на сегодня назначен день отдыха.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = palette.textSecondary
+                                    )
+                                }
+                            }
+
+                            if (firstConfiguredTemplate != null) {
+                                Text(
+                                    text = "Мои интервалы: «${firstConfiguredTemplate.name}» · ${formatSecondsMinSec(firstConfiguredTemplate.actualDurationSec)} (${firstConfiguredTemplate.calculatedCycles} циклов)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = palette.textPrimary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Button(
+                                        onClick = { onStartFreeTemplate(firstConfiguredTemplate) },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = palette.primaryAccent,
+                                            contentColor = palette.onPrimaryAccent
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1.3f)
+                                            .heightIn(min = 52.dp)
+                                            .testTag("btn_home_primary_workout")
+                                    ) {
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Начать «${firstConfiguredTemplate.name}»",
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = onOpenPlan,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .heightIn(min = 52.dp)
+                                            .testTag("btn_home_open_plan")
+                                    ) {
+                                        Text("Все тренировки", color = palette.textPrimary)
+                                    }
+                                }
+                            } else {
+                                Button(
+                                    onClick = onOpenPlan,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = palette.primaryAccent,
+                                        contentColor = palette.onPrimaryAccent
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 52.dp)
+                                        .testTag("btn_home_primary_workout")
+                                ) {
+                                    Text("Настроить тренировку", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        else -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Выполнено сегодня: $completedSlots из $totalSlots",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = palette.textPrimary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = if (nextAvailableSlot != null) "Готово к старту" else "План дня выполнен",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (nextAvailableSlot != null) palette.secondaryAccent else palette.successAccent,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            if (nextAvailableSlot != null) {
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = palette.surfaceElevated.copy(alpha = 0.8f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                                    ) {
+                                        Text(
+                                            text = "Следующий подход:",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = palette.textSecondary
+                                        )
+                                        Text(
+                                            text = nextAvailableSlot.slot.titleRu,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = palette.textPrimary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "Удержание ${nextAvailableSlot.slot.contractionMs / 1000} с · Отдых ${nextAvailableSlot.slot.relaxationMs / 1000} с · Циклов: ${nextAvailableSlot.slot.repetitions}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = palette.secondaryAccent
+                                        )
+                                    }
+                                }
+                            } else if (firstConfiguredTemplate != null) {
+                                Text(
+                                    text = "Хотите позаниматься дополнительно? Доступен шаблон «${firstConfiguredTemplate.name}» (${formatSecondsMinSec(firstConfiguredTemplate.actualDurationSec)}).",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = palette.textSecondary
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        if (nextAvailableSlot != null) {
+                                            onStartNextSlot(nextAvailableSlot)
+                                        } else if (firstConfiguredTemplate != null) {
+                                            onStartFreeTemplate(firstConfiguredTemplate)
+                                        } else {
+                                            onOpenPlan()
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = palette.primaryAccent,
+                                        contentColor = palette.onPrimaryAccent
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1.35f)
+                                        .heightIn(min = 54.dp)
+                                        .testTag("btn_home_primary_workout")
+                                ) {
+                                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = when {
+                                            nextAvailableSlot != null -> "Начать по плану"
+                                            firstConfiguredTemplate != null -> "Начать «${firstConfiguredTemplate.name}»"
+                                            else -> "К тренировкам"
+                                        },
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                OutlinedButton(
+                                    onClick = onOpenPlan,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 54.dp)
+                                        .testTag("btn_home_open_plan")
+                                ) {
+                                    Text("Тренировки", color = palette.textPrimary, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // Карточка «История» (Update v1.1 п. 3, п. 7: если книга не импортирована — «Добавить книгу»)
+        // 2. Карточка «Книга»
         Card(
             modifier = Modifier
                 .fillMaxWidth()
+                .border(1.dp, palette.outline.copy(alpha = 0.5f), RoundedCornerShape(22.dp))
                 .testTag("home_story_card"),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.surface)
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = palette.surfaceElevated)
         ) {
             Column(
                 modifier = Modifier
@@ -533,113 +435,134 @@ fun VelarisHomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.AutoStories,
-                            contentDescription = null,
-                            tint = palette.secondaryAccent,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(palette.secondaryAccent.copy(alpha = 0.20f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                                contentDescription = null,
+                                tint = palette.secondaryAccent,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "История",
+                            text = "Книга",
                             style = MaterialTheme.typography.titleMedium,
                             color = palette.textPrimary,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.ExtraBold
                         )
                     }
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = palette.surfaceVariant
-                    ) {
-                        Text(
-                            text = if (storyState.hasImportedBook) {
-                                "${storyState.chapterCount} гл."
+
+                    if (storyState.hasImportedBook) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (storyState.isCompleted) {
+                                palette.successAccent.copy(alpha = 0.20f)
                             } else {
-                                "Офлайн Markdown"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = palette.secondaryAccent,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                palette.primaryAccent.copy(alpha = 0.18f)
+                            }
+                        ) {
+                            Text(
+                                text = if (storyState.isCompleted) {
+                                    "Книга прочитана"
+                                } else {
+                                    val chNum = storyState.currentChapter?.chapterNumber ?: 1
+                                    "Глава $chNum из ${storyState.chapterCount}"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (storyState.isCompleted) palette.successAccent else palette.primaryAccent,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            )
+                        }
+                    }
+                }
+
+                if (!storyState.hasImportedBook) {
+                    Text(
+                        text = "Откройте вашу любимую книгу в формате Markdown для спокойного чтения между подходами.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = palette.textSecondary
+                    )
+                } else {
+                    Text(
+                        text = storyState.displayTitleRu,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = palette.textPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    val chapterSubtitle = storyState.currentChapter?.let { ch ->
+                        "${ch.actTitle} · ${ch.title}"
+                    } ?: ""
+                    if (chapterSubtitle.isNotBlank()) {
+                        Text(
+                            text = chapterSubtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = palette.textSecondary
                         )
                     }
                 }
 
-                Text(
-                    text = if (storyState.hasImportedBook) {
-                        storyState.displayTitleRu
-                    } else {
-                        "Книга ещё не импортирована"
-                    },
-                    style = MaterialTheme.typography.titleSmall,
-                    color = palette.textPrimary,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.testTag("home_story_book_title")
-                )
-
-                Text(
-                    text = if (storyState.hasImportedBook) {
-                        storyState.savedPositionSummaryRu
-                    } else {
-                        "Откройте локальный файл романа (.md / .markdown) для чтения в режимах «Книга» и «Пошаговый»."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = palette.textSecondary,
-                    modifier = Modifier.testTag("home_story_saved_position")
-                )
-
-                FilledTonalButton(
+                Button(
                     onClick = onOpenReader,
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = palette.surfaceVariant,
-                        contentColor = palette.primaryAccent
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = palette.secondaryAccent,
+                        contentColor = palette.onPrimaryAccent
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 48.dp)
+                        .heightIn(min = 50.dp)
                         .testTag("btn_open_reader")
                 ) {
+                    Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (!storyState.hasImportedBook) {
-                            "Добавить книгу"
-                        } else {
-                            "Продолжить"
+                        text = when {
+                            !storyState.hasImportedBook -> "Добавить книгу"
+                            storyState.isCompleted -> "Открыть книгу"
+                            else -> "Продолжить читать"
                         },
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
         }
 
-        // Простой недельный обзор на 7 дней (Update v1.1 п. 3)
+        // 3. Недельный обзор (7 последних дней)
         WeeklyOverviewCard(
-            weeklyOverview = weeklyOverview,
-            onSelectDate = onSelectWeeklyDate
+            overview = weeklyOverview,
+            onSelectDay = onSelectOverviewDay
         )
     }
 }
 
 /**
- * Простой недельный обзор на 7 дней (Update v1.1 п. 3):
- * - количество выполненных подходов за каждый из последних 7 дней;
- * - выделение сегодняшнего дня;
- * - короткая сводка при нажатии на день;
- * - строится строго по реальным сохранённым записям (`isDemo = false`);
- * - честное спокойное пустое состояние, если реальных записей ещё нет.
+ * Компактная полоса недельного обзора за 7 дней (Итерация v1.4 п. 4):
+ * - учитываются только реальные завершения (`isDemo = false`);
+ * - раздельно показывает плановые («По плану») и свободные («Мои интервалы») тренировки за выбранный день;
+ * - без круговых диаграмм, серий дней и без `0/0` или `0%`.
  */
 @Composable
 fun WeeklyOverviewCard(
-    weeklyOverview: WeeklyOverviewState,
-    onSelectDate: (String) -> Unit,
+    overview: WeeklyOverviewState,
+    onSelectDay: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalVelarisPalette.current
-    val selectedDay: WeeklyDaySummary? = weeklyOverview.selectedDaySummary
+    val selectedSummary: WeeklyDaySummary? = overview.days.firstOrNull {
+        it.localDate == overview.selectedDate
+    } ?: overview.days.lastOrNull()
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .testTag("weekly_overview_card"),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = palette.surface)
     ) {
         Column(
@@ -654,67 +577,87 @@ fun WeeklyOverviewCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Недельный обзор · 7 дней",
+                    text = "Недельный обзор (7 дней)",
                     style = MaterialTheme.typography.titleMedium,
                     color = palette.textPrimary,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.ExtraBold
                 )
-                Text(
-                    text = "За неделю: ${weeklyOverview.totalRealCompletionsInWeek}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = palette.secondaryAccent,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.testTag("weekly_total_real_count")
-                )
+                if (overview.hasAnyRealData) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = palette.primaryAccent.copy(alpha = 0.18f)
+                    ) {
+                        Text(
+                            text = "За 7 дней: ${overview.totalRealCompletionsInWeek}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = palette.primaryAccent,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
             }
 
-            if (!weeklyOverview.hasAnyRealData) {
+            if (!overview.hasAnyRealData) {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = palette.surfaceVariant,
+                    shape = RoundedCornerShape(14.dp),
+                    color = palette.surfaceElevated,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("weekly_empty_state")
+                        .testTag("weekly_overview_empty_state")
                 ) {
                     Text(
-                        text = "Реальных завершённых подходов пока нет. Демо-результаты учитываются отдельно и не попадают в недельную статистику.",
+                        text = "Здесь появится история ваших выполненных тренировок по дням недели. Тестовые запуски в статистику не включаются.",
                         style = MaterialTheme.typography.bodySmall,
                         color = palette.textSecondary,
-                        modifier = Modifier.padding(12.dp)
+                        modifier = Modifier.padding(14.dp)
                     )
                 }
             }
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("weekly_days_row"),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                weeklyOverview.days.forEach { day ->
-                    val isSelected = day.localDate == weeklyOverview.selectedDate
+                overview.days.forEach { day ->
+                    val isSelected = day.localDate == selectedSummary?.localDate
+                    val hasCompletions = day.completedCount > 0
+                    val cellBg = when {
+                        isSelected && hasCompletions -> palette.primaryAccent
+                        isSelected -> palette.selectedContainer
+                        hasCompletions -> palette.successAccent.copy(alpha = 0.24f)
+                        else -> palette.surfaceElevated
+                    }
                     val borderColor = when {
-                        isSelected -> palette.primaryAccent
-                        day.isToday -> palette.secondaryAccent.copy(alpha = 0.75f)
+                        isSelected -> palette.selectedBorder
+                        day.isToday -> palette.secondaryAccent
+                        hasCompletions -> palette.successAccent.copy(alpha = 0.65f)
                         else -> palette.outline.copy(alpha = 0.35f)
                     }
-                    val containerColor = when {
-                        day.completedCount > 0 -> palette.successAccent.copy(alpha = 0.16f)
-                        isSelected -> palette.surfaceVariant
-                        else -> palette.backgroundTop.copy(alpha = 0.55f)
+                    val contentColor = if (isSelected && hasCompletions) {
+                        palette.onPrimaryAccent
+                    } else {
+                        palette.textPrimary
                     }
 
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = 68.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(containerColor)
+                            .heightIn(min = 66.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(cellBg)
                             .border(
                                 width = if (isSelected || day.isToday) 1.5.dp else 1.dp,
                                 color = borderColor,
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(14.dp)
                             )
-                            .clickable { onSelectDate(day.localDate) }
-                            .padding(vertical = 8.dp, horizontal = 4.dp)
+                            .clickable { onSelectDay(day.localDate) }
+                            .padding(vertical = 8.dp, horizontal = 2.dp)
+                            .semantics {
+                                contentDescription = "${day.shortLabelRu} ${day.dayOfMonthLabel}: выполнено ${day.completedCount}"
+                            }
                             .testTag("weekly_day_${day.localDate}"),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.SpaceBetween
@@ -722,60 +665,82 @@ fun WeeklyOverviewCard(
                         Text(
                             text = day.shortLabelRu,
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (day.isToday) palette.primaryAccent else palette.textSecondary,
-                            fontWeight = if (day.isToday) FontWeight.Bold else FontWeight.Normal
+                            color = if (isSelected && hasCompletions) palette.onPrimaryAccent else palette.textSecondary,
+                            fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             text = day.dayOfMonthLabel,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = palette.textPrimary,
-                            fontWeight = FontWeight.Medium
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = contentColor,
+                            fontWeight = FontWeight.ExtraBold
                         )
-                        Text(
-                            text = "${day.completedCount}",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = if (day.completedCount > 0) palette.successAccent else palette.textSecondary,
-                            fontWeight = FontWeight.Bold
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    when {
+                                        isSelected && hasCompletions -> palette.onPrimaryAccent
+                                        hasCompletions -> palette.successAccent
+                                        day.isToday -> palette.secondaryAccent.copy(alpha = 0.7f)
+                                        else -> palette.outline.copy(alpha = 0.35f)
+                                    }
+                                )
                         )
                     }
                 }
             }
 
-            if (selectedDay != null) {
+            if (selectedSummary != null) {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = palette.surfaceVariant.copy(alpha = 0.75f),
+                    shape = RoundedCornerShape(14.dp),
+                    color = palette.surfaceElevated,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("weekly_selected_day_summary")
+                        .testTag("weekly_selected_day_details")
                 ) {
-                    val dayHeader = if (selectedDay.isToday) {
-                        "Сегодня (${selectedDay.localDate})"
-                    } else {
-                        "${selectedDay.shortLabelRu}, ${selectedDay.localDate}"
-                    }
-                    val details = if (selectedDay.completedCount == 0) {
-                        "Выполненных подходов: 0."
-                    } else {
-                        val breakdown = "По плану: ${selectedDay.plannedCompletedCount} · Свободные: ${selectedDay.freeCompletedCount}"
-                        val titles = if (selectedDay.completedTitlesRu.isNotEmpty()) {
-                            " (${selectedDay.completedTitlesRu.joinToString(", ")})"
-                        } else ""
-                        "$breakdown$titles"
-                    }
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = dayHeader,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = palette.textPrimary,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = details,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = palette.textSecondary
-                        )
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (selectedSummary.isToday) {
+                                    "Сегодня (${selectedSummary.shortLabelRu}, ${selectedSummary.dayOfMonthLabel})"
+                                } else {
+                                    "Дата: ${selectedSummary.localDate} (${selectedSummary.shortLabelRu})"
+                                },
+                                style = MaterialTheme.typography.labelLarge,
+                                color = palette.textPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = when {
+                                    selectedSummary.assignedCount == 0 &&
+                                        selectedSummary.completedCount == 0 &&
+                                        overview.hasAnyRealData -> "День отдыха"
+                                    selectedSummary.completedCount > 0 -> "Выполнено: ${selectedSummary.completedCount}"
+                                    else -> "Нет записей"
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (selectedSummary.completedCount > 0) palette.successAccent else palette.textSecondary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        if (selectedSummary.completedCount > 0) {
+                            Text(
+                                text = "По плану: ${selectedSummary.plannedCompletedCount} · Мои интервалы: ${selectedSummary.freeCompletedCount}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.secondaryAccent,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.testTag("weekly_selected_day_breakdown")
+                            )
+                        }
                     }
                 }
             }
@@ -784,119 +749,142 @@ fun WeeklyOverviewCard(
 }
 
 /**
- * Вкладки экрана «План» (Итерация v1.3).
- * Переключение между ежедневным расписанием («По плану») и пятью сохраняемыми шаблонами («Свободный режим»).
+ * Экран «Тренировки» (Итерация v1.4, раздел 5):
+ * - верхний переключатель «По плану» / «Мои интервалы»;
+ * - плавное переключение между режимами;
+ * - 5 редактируемых шаблонов с понятной проверкой полей, сохранением и защитой несохранённых правок.
  */
-enum class PlanScreenTab(val titleRu: String) {
-    SCHEDULED("По плану"),
-    FREE("Свободный режим")
-}
-
-/**
- * Экран 2: План дня и свободный интервальный режим (Update v1.1 п. 2, v1.3).
- * Показывает:
- * - вкладку «По плану»: группы «Утро / Обед / Вечер», карточки плана, спокойную отметку «Завершено»;
- * - вкладку «Свободный режим»: 5 редактируемых сохраняемых шаблонов без расписания;
- * - единую блокировку параллельного запуска при активной или приостановленной тренировке.
- */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun VelarisPlanScreen(
     snapshot: PhaseEngineSnapshot,
     settings: BenchSignalSettings,
     dailySlots: List<DailySlotWithCompletion>,
     freeTemplates: List<FreeIntervalTemplateEntity>,
-    isZeroSlotDemoMode: Boolean,
-    demoCompletionsCount: Int,
-    realCompletionsCount: Int,
-    databaseErrorMessage: String?,
-    onSelectDailySlot: (DailySlotWithCompletion) -> Unit,
-    onStartSelectedSlot: (DailySlotWithCompletion) -> Unit,
-    onStartFreeWorkout: (FreeIntervalTemplateEntity) -> Unit,
+    onStartSlot: (DailySlotWithCompletion) -> Unit,
+    onSelectSlot: (DailySlotWithCompletion) -> Unit,
+    onStartFreeTemplate: (FreeIntervalTemplateEntity) -> Unit,
     onSaveFreeTemplate: (FreeIntervalTemplateEntity) -> Unit,
-    onReturnToActiveWorkout: () -> Unit,
+    onReturnToWorkout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalVelarisPalette.current
-    val totalSlots = dailySlots.size
-    val completedSlots = dailySlots.count { it.isCompleted }
-    val isDemoMode = !settings.isRealProgramEnabled || isZeroSlotDemoMode
+    val animatorsEnabled = remember {
+        runCatching { ValueAnimator.areAnimatorsEnabled() }.getOrDefault(true)
+    }
+    var selectedTab by rememberSaveable { mutableStateOf("scheduled") }
+    var editingSlotIndex by rememberSaveable { mutableStateOf<Int?>(null) }
 
-    var selectedTab by remember { mutableStateOf(PlanScreenTab.SCHEDULED) }
-    var editingTemplate by remember { mutableStateOf<FreeIntervalTemplateEntity?>(null) }
+    val editingTemplate = remember(editingSlotIndex, freeTemplates) {
+        editingSlotIndex?.let { idx -> freeTemplates.firstOrNull { it.slotIndex == idx } }
+    }
 
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("plan_screen"),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        if (isDemoMode) {
-            DemoSafetyBanner()
-        }
-
-        if (snapshot.isActiveOrPaused) {
-            ActiveSessionReturnBanner(
-                snapshot = snapshot,
-                onReturnToWorkout = onReturnToActiveWorkout
-            )
-        }
-
-        // Переключатель «По плану / Свободный режим» (v1.3 п. 1)
-        Row(
+        // Верхний сегментированный переключатель «По плану / Мои интервалы»
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = palette.surface,
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(palette.surface)
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                .border(1.dp, palette.outline.copy(alpha = 0.45f), RoundedCornerShape(18.dp))
+                .testTag("plan_mode_switcher")
         ) {
-            PlanScreenTab.entries.forEach { tab ->
-                val isTabSelected = selectedTab == tab
-                Surface(
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val isScheduled = selectedTab == "scheduled"
+                Button(
+                    onClick = { selectedTab = "scheduled" },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isScheduled) palette.primaryAccent else palette.surfaceElevated,
+                        contentColor = if (isScheduled) palette.onPrimaryAccent else palette.textPrimary
+                    ),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable { selectedTab = tab }
-                        .testTag(if (tab == PlanScreenTab.SCHEDULED) "plan_tab_scheduled" else "plan_tab_free"),
-                    color = if (isTabSelected) palette.primaryAccent else Color.Transparent,
-                    shape = RoundedCornerShape(10.dp)
+                        .heightIn(min = 48.dp)
+                        .testTag("plan_tab_scheduled")
                 ) {
-                    Box(
-                        modifier = Modifier.padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = tab.titleRu,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = if (isTabSelected) palette.onPrimaryAccent else palette.textSecondary,
-                            fontWeight = if (isTabSelected) FontWeight.Bold else FontWeight.Medium
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.CalendarMonth,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "По плану",
+                        fontWeight = if (isScheduled) FontWeight.ExtraBold else FontWeight.Medium
+                    )
+                }
+
+                val isFree = selectedTab == "free"
+                Button(
+                    onClick = { selectedTab = "free" },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isFree) palette.primaryAccent else palette.surfaceElevated,
+                        contentColor = if (isFree) palette.onPrimaryAccent else palette.textPrimary
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
+                        .testTag("plan_tab_free")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Timer,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Мои интервалы",
+                        fontWeight = if (isFree) FontWeight.ExtraBold else FontWeight.Medium
+                    )
                 }
             }
         }
 
-        if (databaseErrorMessage != null) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = palette.errorAccent.copy(alpha = 0.16f),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = databaseErrorMessage,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = palette.errorAccent,
-                    modifier = Modifier.padding(10.dp)
-                )
-            }
-        }
+        Crossfade(
+            targetState = selectedTab,
+            animationSpec = tween(durationMillis = if (animatorsEnabled) 160 else 0),
+            label = "plan_mode_crossfade"
+        ) { mode ->
+            if (mode == "free") {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    if (editingTemplate != null) {
+                        FreeTemplateEditorCard(
+                            template = editingTemplate,
+                            onDismiss = { editingSlotIndex = null },
+                            onSave = { updated ->
+                                onSaveFreeTemplate(updated)
+                                editingSlotIndex = null
+                            }
+                        )
+                    }
 
-        when (selectedTab) {
-            PlanScreenTab.SCHEDULED -> {
+                    FreeIntervalTemplatesSection(
+                        templates = freeTemplates,
+                        isSessionLocked = snapshot.isActiveOrPaused,
+                        onStartTemplate = onStartFreeTemplate,
+                        onEditTemplate = { template -> editingSlotIndex = template.slotIndex }
+                    )
+                }
+            } else {
+                val totalSlots = dailySlots.size
+                val completedCount = dailySlots.count { it.isCompleted }
+
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("daily_plan_persistence_card"),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(22.dp),
                     colors = CardDefaults.cardColors(containerColor = palette.surface)
                 ) {
                     Column(
@@ -915,66 +903,56 @@ fun VelarisPlanScreen(
                                     text = "План на сегодня",
                                     style = MaterialTheme.typography.titleLarge,
                                     color = palette.textPrimary,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.ExtraBold
                                 )
-                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = if (isDemoMode) {
-                                        "Демонстрационный план · Запуск вручную без штрафов за пропуски"
+                                    text = if (settings.isRealProgramEnabled) {
+                                        "Расписание подходов по группам дня"
                                     } else {
-                                        "${settings.realProgramSource} · Запуск вручную в спокойном темпе"
+                                        "Ознакомительное расписание (демо-режим)"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = palette.textSecondary
                                 )
                             }
 
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = palette.surfaceVariant
-                            ) {
-                                val badgeText = if (totalSlots == 0) {
-                                    "Сегодня без тренировок"
-                                } else {
-                                    "Сегодня $completedSlots из $totalSlots"
+                            if (totalSlots > 0) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = palette.selectedContainer
+                                ) {
+                                    Text(
+                                        text = "Выполнено: $completedCount из $totalSlots",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = palette.primaryAccent,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
                                 }
-                                Text(
-                                    text = badgeText,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = if (completedSlots == totalSlots && totalSlots > 0) {
-                                        palette.successAccent
-                                    } else {
-                                        palette.primaryAccent
-                                    },
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier
-                                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                                        .testTag("daily_plan_progress_badge")
-                                )
                             }
                         }
 
                         if (totalSlots == 0) {
                             Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = palette.surfaceVariant,
+                                shape = RoundedCornerShape(16.dp),
+                                color = palette.surfaceElevated,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .testTag("zero_slots_rest_day_banner")
+                                    .testTag("zero_slots_calm_message")
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(16.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                                    modifier = Modifier.padding(18.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Text(
                                         text = "Сегодня без тренировок",
                                         style = MaterialTheme.typography.titleMedium,
-                                        color = palette.primaryAccent,
+                                        color = palette.secondaryAccent,
                                         fontWeight = FontWeight.Bold
                                     )
-                                    Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "В плане на сегодня назначено 0 подходов. Отдыхайте или откройте интерактивную историю.",
+                                        text = "По расписанию на сегодня подходы не назначены. Вы можете отдохнуть или перейти во вкладку «Мои интервалы».",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = palette.textSecondary,
                                         textAlign = TextAlign.Center
@@ -983,145 +961,115 @@ fun VelarisPlanScreen(
                             }
                         } else {
                             val grouped = dailySlots.groupBy { PlanGroup.fromCode(it.slot.groupCode) }
-                            PlanGroup.entries.forEach { group ->
-                                val groupSlots = grouped[group].orEmpty()
-                                if (groupSlots.isNotEmpty()) {
+                            PlanGroup.entries.sortedBy { it.order }.forEach { group ->
+                                val groupItems = grouped[group].orEmpty()
+                                if (groupItems.isNotEmpty()) {
                                     Text(
                                         text = group.titleRu,
-                                        style = MaterialTheme.typography.titleSmall,
+                                        style = MaterialTheme.typography.labelLarge,
                                         color = palette.secondaryAccent,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(top = 4.dp)
                                     )
 
-                                    groupSlots.forEach { item ->
-                                        val slot = item.slot
-                                        val isSelected = snapshot.protocol.id == slot.id
-                                        val isCompleted = item.isCompleted
-                                        val difficultyLabel = WorkoutDifficulty.fromCode(item.completion?.optionalDifficulty)?.labelRu
+                                    groupItems.forEach { item ->
+                                        val isSelected = snapshot.protocol.id == item.slot.id
+                                        val diffLabel = WorkoutDifficulty.fromCode(item.completion?.optionalDifficulty)?.labelRu
+                                        val cardContainer = when {
+                                            item.isCompleted -> palette.surfaceElevated
+                                            isSelected -> palette.selectedContainer
+                                            else -> palette.surfaceElevated.copy(alpha = 0.7f)
+                                        }
+                                        val borderColor = when {
+                                            item.isCompleted -> palette.successAccent.copy(alpha = 0.7f)
+                                            isSelected -> palette.selectedBorder
+                                            else -> palette.outline.copy(alpha = 0.4f)
+                                        }
 
-                                        Card(
+                                        Column(
                                             modifier = Modifier
                                                 .fillMaxWidth()
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(cardContainer)
                                                 .border(
-                                                    width = if (isSelected) 1.5.dp else 1.dp,
-                                                    color = when {
-                                                        isCompleted -> palette.successAccent.copy(alpha = 0.65f)
-                                                        isSelected -> palette.primaryAccent
-                                                        else -> palette.outline.copy(alpha = 0.4f)
-                                                    },
+                                                    width = if (isSelected || item.isCompleted) 1.5.dp else 1.dp,
+                                                    color = borderColor,
                                                     shape = RoundedCornerShape(16.dp)
                                                 )
                                                 .clickable(enabled = !snapshot.isActiveOrPaused) {
-                                                    onSelectDailySlot(item)
+                                                    onSelectSlot(item)
                                                 }
-                                                .testTag("daily_slot_${slot.sortOrder}"),
-                                            shape = RoundedCornerShape(16.dp),
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = if (isSelected) {
-                                                    palette.surfaceVariant
-                                                } else {
-                                                    palette.backgroundTop.copy(alpha = 0.65f)
-                                                }
-                                            )
+                                                .padding(14.dp)
+                                                .testTag("daily_slot_${item.slot.assignmentId}"),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            Column(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(14.dp),
-                                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
                                                 Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.weight(1f)
                                                 ) {
-                                                    Row(
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        RadioButton(
-                                                            selected = isSelected,
-                                                            onClick = {
-                                                                if (!snapshot.isActiveOrPaused) {
-                                                                    onSelectDailySlot(item)
-                                                                }
-                                                            },
-                                                            enabled = !snapshot.isActiveOrPaused,
-                                                            colors = RadioButtonDefaults.colors(
-                                                                selectedColor = palette.primaryAccent,
-                                                                unselectedColor = palette.textSecondary
-                                                            )
+                                                    Icon(
+                                                        imageVector = if (item.isCompleted) {
+                                                            Icons.Default.CheckCircle
+                                                        } else {
+                                                            Icons.Default.RadioButtonUnchecked
+                                                        },
+                                                        contentDescription = if (item.isCompleted) "Выполнено" else "Ожидает выполнения",
+                                                        tint = if (item.isCompleted) palette.successAccent else palette.textSecondary,
+                                                        modifier = Modifier.size(22.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                    Column {
+                                                        Text(
+                                                            text = item.slot.titleRu,
+                                                            style = MaterialTheme.typography.bodyLarge,
+                                                            color = palette.textPrimary,
+                                                            fontWeight = FontWeight.Bold
                                                         )
-                                                        Column {
-                                                            Text(
-                                                                text = slot.titleRu,
-                                                                style = MaterialTheme.typography.bodyLarge,
-                                                                color = palette.textPrimary,
-                                                                fontWeight = FontWeight.SemiBold
-                                                            )
-                                                            Text(
-                                                                text = "Сокращение ${slot.contractionMs / 1000} с · Расслабление ${slot.relaxationMs / 1000} с · Повторов: ${slot.repetitions}",
-                                                                style = MaterialTheme.typography.bodySmall,
-                                                                color = palette.textSecondary
-                                                            )
-                                                        }
-                                                    }
-
-                                                    if (isCompleted) {
-                                                        Surface(
-                                                            shape = RoundedCornerShape(10.dp),
-                                                            color = palette.successAccent.copy(alpha = 0.18f)
-                                                        ) {
-                                                            Row(
-                                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                                                verticalAlignment = Alignment.CenterVertically
-                                                            ) {
-                                                                Icon(
-                                                                    imageVector = Icons.Default.CheckCircle,
-                                                                    contentDescription = "Завершено",
-                                                                    tint = palette.successAccent,
-                                                                    modifier = Modifier.size(16.dp)
-                                                                )
-                                                                Spacer(modifier = Modifier.width(4.dp))
-                                                                Text(
-                                                                    text = if (difficultyLabel != null) {
-                                                                        "Завершено · $difficultyLabel"
-                                                                    } else {
-                                                                        "Завершено"
-                                                                    },
-                                                                    style = MaterialTheme.typography.labelMedium,
-                                                                    color = palette.successAccent,
-                                                                    fontWeight = FontWeight.Bold
-                                                                )
-                                                            }
-                                                        }
+                                                        Text(
+                                                            text = "Удержание ${item.slot.contractionMs / 1000} с · Отдых ${item.slot.relaxationMs / 1000} с · Циклов: ${item.slot.repetitions}" +
+                                                                (if (diffLabel != null) " · Оценка: $diffLabel" else ""),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = palette.textSecondary
+                                                        )
                                                     }
                                                 }
 
-                                                if (!isCompleted && !snapshot.isActiveOrPaused) {
-                                                    Button(
-                                                        onClick = { onStartSelectedSlot(item) },
-                                                        colors = ButtonDefaults.buttonColors(
-                                                            containerColor = palette.primaryAccent,
-                                                            contentColor = palette.onPrimaryAccent
-                                                        ),
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .heightIn(min = 48.dp)
-                                                            .testTag("btn_start_slot_${slot.sortOrder}")
+                                                if (item.isCompleted) {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        color = palette.successAccent.copy(alpha = 0.2f)
                                                     ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.PlayArrow,
-                                                            contentDescription = null,
-                                                            modifier = Modifier.size(18.dp)
-                                                        )
-                                                        Spacer(modifier = Modifier.width(6.dp))
                                                         Text(
-                                                            text = "Начать этот подход",
-                                                            fontWeight = FontWeight.SemiBold
+                                                            text = "Зачтено",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = palette.successAccent,
+                                                            fontWeight = FontWeight.Bold,
+                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                                         )
                                                     }
+                                                }
+                                            }
+
+                                            if (!item.isCompleted && !snapshot.isActiveOrPaused) {
+                                                Button(
+                                                    onClick = { onStartSlot(item) },
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        containerColor = palette.primaryAccent,
+                                                        contentColor = palette.onPrimaryAccent
+                                                    ),
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .heightIn(min = 48.dp)
+                                                        .testTag("btn_start_slot_${item.slot.assignmentId}")
+                                                ) {
+                                                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text("Начать подход", fontWeight = FontWeight.Bold)
                                                 }
                                             }
                                         }
@@ -1129,58 +1077,20 @@ fun VelarisPlanScreen(
                                 }
                             }
                         }
-
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = "Учтено в демо: $demoCompletionsCount",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = palette.textSecondary,
-                                modifier = Modifier.testTag("demo_completions_counter")
-                            )
-                            Text(
-                                text = "Учтено в реальной статистике: $realCompletionsCount",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = palette.textSecondary,
-                                modifier = Modifier.testTag("real_completions_counter")
-                            )
-                        }
                     }
                 }
             }
-            PlanScreenTab.FREE -> {
-                FreeIntervalTemplatesSection(
-                    templates = freeTemplates,
-                    isWorkoutActiveOrPaused = snapshot.isActiveOrPaused,
-                    onStartTemplate = onStartFreeWorkout,
-                    onEditTemplate = { editingTemplate = it }
-                )
-            }
         }
-    }
-
-    if (editingTemplate != null) {
-        FreeTemplateEditorDialog(
-            template = editingTemplate!!,
-            onDismiss = { editingTemplate = null },
-            onSave = { updated ->
-                onSaveFreeTemplate(updated)
-                editingTemplate = null
-            }
-        )
     }
 }
 
 /**
- * Секция пяти сохраняемых шаблонов свободного интервального режима (v1.3 п. 2, п. 3).
+ * Секция «Мои интервалы» с 5 сохраняемыми шаблонами (Итерация v1.3 / v1.4 п. 5).
  */
 @Composable
 fun FreeIntervalTemplatesSection(
     templates: List<FreeIntervalTemplateEntity>,
-    isWorkoutActiveOrPaused: Boolean,
+    isSessionLocked: Boolean,
     onStartTemplate: (FreeIntervalTemplateEntity) -> Unit,
     onEditTemplate: (FreeIntervalTemplateEntity) -> Unit,
     modifier: Modifier = Modifier
@@ -1191,173 +1101,161 @@ fun FreeIntervalTemplatesSection(
         modifier = modifier
             .fillMaxWidth()
             .testTag("free_interval_templates_section"),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = palette.surface)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "Свободный интервальный режим",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = palette.textPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-                // Обязательная подпись ТЗ v1.3: «Ваши интервалы. Приложение не оценивает подходящую нагрузку»
+            Text(
+                text = "Мои интервалы (5 шаблонов)",
+                style = MaterialTheme.typography.titleLarge,
+                color = palette.textPrimary,
+                fontWeight = FontWeight.ExtraBold
+            )
+
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = palette.surfaceElevated,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("free_intervals_disclaimer_caption")
+            ) {
                 Text(
                     text = "Ваши интервалы. Приложение не оценивает подходящую нагрузку",
                     style = MaterialTheme.typography.bodySmall,
                     color = palette.secondaryAccent,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.testTag("free_intervals_disclaimer_caption")
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "Пять сохраняемых шаблонов для повторных запусков без расписания. Длительность всегда рассчитывается только на полные циклы.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = palette.textSecondary
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(12.dp)
                 )
             }
 
-            if (isWorkoutActiveOrPaused) {
+            if (isSessionLocked) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = palette.warningAccent.copy(alpha = 0.16f),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = "В приложении уже активна или приостановлена тренировка. Завершите или остановите её перед запуском свободного режима.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = palette.warningAccent,
-                        modifier = Modifier.padding(12.dp)
-                    )
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = palette.warningAccent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Сейчас уже выполняется или стоит на паузе другая тренировка. Завершите её перед новым запуском.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = palette.warningAccent,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
 
-            templates.sortedBy { it.slotIndex }.forEach { template ->
+            templates.forEach { template ->
                 val calc = calculateFreeCycles(
-                    desiredDurationSec = template.targetDurationSec,
+                    targetMinutes = template.targetDurationMinutes,
+                    targetSeconds = template.targetDurationSeconds,
                     contractionSec = template.contractionSec,
                     relaxationSec = template.relaxationSec
                 )
 
-                Card(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(palette.surfaceElevated)
                         .border(
                             width = 1.dp,
-                            color = palette.outline.copy(alpha = 0.45f),
-                            shape = RoundedCornerShape(16.dp)
+                            color = if (calc.isValid) palette.outline.copy(alpha = 0.55f) else palette.errorAccent.copy(alpha = 0.7f),
+                            shape = RoundedCornerShape(18.dp)
                         )
+                        .padding(16.dp)
                         .testTag("free_template_card_${template.slotIndex}"),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = palette.backgroundTop.copy(alpha = 0.65f))
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = template.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = palette.textPrimary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "Сокращение: ${template.contractionSec} с · Отдых: ${template.relaxationSec} с",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = palette.textSecondary
-                                )
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = palette.surfaceVariant
-                            ) {
-                                Text(
-                                    text = "Шаблон #${template.slotIndex + 1}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = palette.primaryAccent,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-
-                        // Расчёт времени и циклов (v1.3 п. 3)
+                        Text(
+                            text = template.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = palette.textPrimary,
+                            fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier.weight(1f)
+                        )
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (calc.isValid) {
-                                palette.surfaceVariant.copy(alpha = 0.8f)
-                            } else {
-                                palette.errorAccent.copy(alpha = 0.15f)
-                            },
-                            modifier = Modifier.fillMaxWidth()
+                            shape = RoundedCornerShape(8.dp),
+                            color = palette.selectedContainer
                         ) {
                             Text(
-                                text = calc.summaryRu,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (calc.isValid) palette.textPrimary else palette.errorAccent,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                text = "Шаблон ${template.slotIndex + 1}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = palette.secondaryAccent,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }
+                    }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Text(
+                        text = "Удержание ${template.contractionSec} с · Отдых ${template.relaxationSec} с",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = palette.textPrimary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    Text(
+                        text = calc.summaryRu,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (calc.isValid) palette.secondaryAccent else palette.errorAccent,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.testTag("free_template_summary_${template.slotIndex}")
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = { onStartTemplate(template) },
+                            enabled = !isSessionLocked && calc.isValid && template.isValid,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = palette.primaryAccent,
+                                contentColor = palette.onPrimaryAccent,
+                                disabledContainerColor = palette.disabledContainer,
+                                disabledContentColor = palette.disabledContent
+                            ),
+                            modifier = Modifier
+                                .weight(1.3f)
+                                .heightIn(min = 48.dp)
+                                .testTag("btn_start_free_${template.slotIndex}")
                         ) {
-                            Button(
-                                onClick = { onStartTemplate(template) },
-                                enabled = !isWorkoutActiveOrPaused && calc.isValid,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = palette.primaryAccent,
-                                    contentColor = palette.onPrimaryAccent
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .heightIn(min = 48.dp)
-                                    .testTag("btn_start_free_${template.slotIndex}")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Начать", fontWeight = FontWeight.SemiBold)
-                            }
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Начать", fontWeight = FontWeight.Bold)
+                        }
 
-                            FilledTonalButton(
-                                onClick = { onEditTemplate(template) },
-                                colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = palette.surfaceVariant,
-                                    contentColor = palette.textPrimary
-                                ),
-                                modifier = Modifier
-                                    .heightIn(min = 48.dp)
-                                    .testTag("btn_edit_free_${template.slotIndex}")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Изменить", fontWeight = FontWeight.SemiBold)
-                            }
+                        OutlinedButton(
+                            onClick = { onEditTemplate(template) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
+                                .testTag("btn_edit_free_${template.slotIndex}")
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Изменить", color = palette.textPrimary, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -1367,188 +1265,307 @@ fun FreeIntervalTemplatesSection(
 }
 
 /**
- * Компактный диалог редактирования шаблона (v1.3 п. 2, п. 3).
- * Отдельный экран/диалог с явным сохранением, без одновременного показа 5 громоздких форм.
+ * Редактор шаблона «Мои интервалы» (Итерация v1.4 п. 5):
+ * - поля с явными единицами измерения и числовой клавиатурой;
+ * - мгновенная проверка ошибок рядом с полем (включая предел 300 циклов без молчаливого сброса);
+ * - защита от случайной потери несохранённых правок при нажатии «Отмена».
  */
 @Composable
-fun FreeTemplateEditorDialog(
+private fun FreeTemplateEditorCard(
     template: FreeIntervalTemplateEntity,
     onDismiss: () -> Unit,
     onSave: (FreeIntervalTemplateEntity) -> Unit
 ) {
     val palette = LocalVelarisPalette.current
 
-    var nameText by remember { mutableStateOf(template.name) }
-    var minutesText by remember { mutableStateOf(template.targetMinutes.toString()) }
-    var secondsText by remember { mutableStateOf(template.targetSeconds.toString()) }
-    var contractionText by remember { mutableStateOf(template.contractionSec.toString()) }
-    var relaxationText by remember { mutableStateOf(template.relaxationSec.toString()) }
+    var nameInput by rememberSaveable(template.slotIndex) { mutableStateOf(template.name) }
+    var minutesInput by rememberSaveable(template.slotIndex) { mutableStateOf(template.targetDurationMinutes.toString()) }
+    var secondsInput by rememberSaveable(template.slotIndex) { mutableStateOf(template.targetDurationSeconds.toString()) }
+    var contractionInput by rememberSaveable(template.slotIndex) { mutableStateOf(template.contractionSec.toString()) }
+    var relaxationInput by rememberSaveable(template.slotIndex) { mutableStateOf(template.relaxationSec.toString()) }
+    var showUnsavedConfirm by rememberSaveable(template.slotIndex) { mutableStateOf(false) }
 
-    val parsedMinutes = minutesText.toIntOrNull() ?: 0
-    val parsedSeconds = secondsText.toIntOrNull() ?: 0
-    val parsedDurationSec = (parsedMinutes * 60 + parsedSeconds).coerceAtLeast(0)
-    val parsedContractionSec = contractionText.toIntOrNull() ?: 0
-    val parsedRelaxationSec = relaxationText.toIntOrNull() ?: 0
+    val parsedMin = minutesInput.trim().toIntOrNull()
+    val parsedSec = secondsInput.trim().toIntOrNull()
+    val parsedCon = contractionInput.trim().toIntOrNull()
+    val parsedRel = relaxationInput.trim().toIntOrNull()
+
+    val nameError = if (nameInput.trim().isEmpty()) "Введите название шаблона" else null
+    val minutesError = when {
+        parsedMin == null -> "Укажите целое число минут (0–90)"
+        parsedMin !in 0..90 -> "Минуты должны быть от 0 до 90"
+        else -> null
+    }
+    val secondsError = when {
+        parsedSec == null -> "Укажите секунды (0–59)"
+        parsedSec !in 0..59 -> "Секунды должны быть от 0 до 59"
+        else -> null
+    }
+    val contractionError = when {
+        parsedCon == null -> "Укажите секунды удержания (1–120)"
+        parsedCon !in 1..120 -> "Удержание должно быть от 1 до 120 секунд"
+        else -> null
+    }
+    val relaxationError = when {
+        parsedRel == null -> "Укажите секунды отдыха (1–120)"
+        parsedRel !in 1..120 -> "Отдых должен быть от 1 до 120 секунд"
+        else -> null
+    }
 
     val calc = calculateFreeCycles(
-        desiredDurationSec = parsedDurationSec,
-        contractionSec = parsedContractionSec,
-        relaxationSec = parsedRelaxationSec
+        targetMinutes = parsedMin ?: -1,
+        targetSeconds = parsedSec ?: -1,
+        contractionSec = parsedCon ?: -1,
+        relaxationSec = parsedRel ?: -1
     )
 
-    // Технические пределы ТЗ v1.3:
-    // - интервалы 1..120 с
-    // - длительность до 90 мин (5400 с)
-    // - максимум 300 циклов
-    val isFormValid = nameText.isNotBlank() &&
-            parsedContractionSec in 1..120 &&
-            parsedRelaxationSec in 1..120 &&
-            parsedDurationSec in 1..5400 &&
-            calc.isValid &&
-            calc.completedCycles in 1..300
+    val fieldError = nameError ?: minutesError ?: secondsError ?: contractionError ?: relaxationError
+    val isFormValid = fieldError == null && calc.isValid
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        modifier = Modifier.testTag("free_template_editor_dialog"),
-        title = {
+    val hasUnsavedChanges = nameInput.trim() != template.name ||
+        minutesInput.trim() != template.targetDurationMinutes.toString() ||
+        secondsInput.trim() != template.targetDurationSeconds.toString() ||
+        contractionInput.trim() != template.contractionSec.toString() ||
+        relaxationInput.trim() != template.relaxationSec.toString()
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .imePadding()
+            .border(1.5.dp, palette.primaryAccent, RoundedCornerShape(22.dp))
+            .testTag("free_template_editor_dialog"),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = palette.surfaceElevated)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             Text(
-                text = "Настройка шаблона #${template.slotIndex + 1}",
-                style = MaterialTheme.typography.titleLarge,
+                text = "Настройка шаблона ${template.slotIndex + 1}",
+                style = MaterialTheme.typography.titleMedium,
                 color = palette.textPrimary,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.ExtraBold
             )
-        },
-        text = {
-            Column(
+
+            OutlinedTextField(
+                value = nameInput,
+                onValueChange = {
+                    nameInput = it
+                    showUnsavedConfirm = false
+                },
+                label = { Text("Название шаблона") },
+                isError = nameError != null,
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("edit_template_name_input")
+            )
+
+            Text(
+                text = "Желаемая продолжительность (до 90 минут):",
+                style = MaterialTheme.typography.labelLarge,
+                color = palette.textSecondary
+            )
+
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedTextField(
+                    value = minutesInput,
+                    onValueChange = {
+                        minutesInput = it.filter { ch -> ch.isDigit() }.take(3)
+                        showUnsavedConfirm = false
+                    },
+                    label = { Text("Минуты (0–90)") },
+                    isError = minutesError != null,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("edit_template_minutes_input")
+                )
+                OutlinedTextField(
+                    value = secondsInput,
+                    onValueChange = {
+                        secondsInput = it.filter { ch -> ch.isDigit() }.take(2)
+                        showUnsavedConfirm = false
+                    },
+                    label = { Text("Секунды (0–59)") },
+                    isError = secondsError != null,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("edit_template_seconds_input")
+                )
+            }
+
+            Text(
+                text = "Интервалы одного цикла (в секундах):",
+                style = MaterialTheme.typography.labelLarge,
+                color = palette.textSecondary
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedTextField(
+                    value = contractionInput,
+                    onValueChange = {
+                        contractionInput = it.filter { ch -> ch.isDigit() }.take(3)
+                        showUnsavedConfirm = false
+                    },
+                    label = { Text("Удержание (с)") },
+                    isError = contractionError != null,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("edit_template_contraction_input")
+                )
+                OutlinedTextField(
+                    value = relaxationInput,
+                    onValueChange = {
+                        relaxationInput = it.filter { ch -> ch.isDigit() }.take(3)
+                        showUnsavedConfirm = false
+                    },
+                    label = { Text("Отдых (с)") },
+                    isError = relaxationError != null,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("edit_template_relaxation_input")
+                )
+            }
+
+            // Понятный блок расчёта полных циклов или сообщения об ошибке
+            val displayMessage = fieldError ?: calc.summaryRu
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = if (isFormValid) {
+                    palette.primaryAccent.copy(alpha = 0.16f)
+                } else {
+                    palette.errorAccent.copy(alpha = 0.18f)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(if (isFormValid) "free_template_calc_preview" else "free_template_validation_error")
             ) {
                 Text(
-                    text = "Ваши интервалы. Приложение не оценивает подходящую нагрузку",
+                    text = displayMessage,
                     style = MaterialTheme.typography.bodySmall,
-                    color = palette.secondaryAccent,
-                    fontWeight = FontWeight.Medium
+                    color = if (isFormValid) palette.secondaryAccent else palette.errorAccent,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(12.dp)
                 )
+            }
 
-                OutlinedTextField(
-                    value = nameText,
-                    onValueChange = { nameText = it.take(40) },
-                    label = { Text("Название шаблона") },
-                    singleLine = true,
+            if (showUnsavedConfirm && hasUnsavedChanges) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = palette.warningAccent.copy(alpha = 0.18f),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("free_template_name_input")
-                )
-
-                Text(
-                    text = "Желаемая длительность (до 90 мин):",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = palette.textPrimary,
-                    fontWeight = FontWeight.SemiBold
-                )
+                        .testTag("unsaved_changes_confirm_bar")
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "В шаблоне есть несохранённые изменения. Закрыть без сохранения?",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = palette.warningAccent,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { showUnsavedConfirm = false },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 48.dp)
+                                    .testTag("btn_keep_editing_template")
+                            ) {
+                                Text("Продолжить", color = palette.textPrimary)
+                            }
+                            Button(
+                                onClick = onDismiss,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = palette.errorAccent,
+                                    contentColor = palette.onPrimaryAccent
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 48.dp)
+                                    .testTag("btn_discard_unsaved_template")
+                            ) {
+                                Text("Не сохранять", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    OutlinedTextField(
-                        value = minutesText,
-                        onValueChange = { minutesText = it.filter { ch -> ch.isDigit() }.take(2) },
-                        label = { Text("Минуты") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
+                    OutlinedButton(
+                        onClick = {
+                            if (hasUnsavedChanges) {
+                                showUnsavedConfirm = true
+                            } else {
+                                onDismiss()
+                            }
+                        },
                         modifier = Modifier
                             .weight(1f)
-                            .testTag("free_template_minutes_input")
-                    )
-                    OutlinedTextField(
-                        value = secondsText,
-                        onValueChange = { secondsText = it.filter { ch -> ch.isDigit() }.take(2) },
-                        label = { Text("Секунды") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("free_template_seconds_input")
-                    )
-                }
+                            .heightIn(min = 50.dp)
+                            .testTag("btn_cancel_free_template")
+                    ) {
+                        Text("Отмена", color = palette.textPrimary, fontWeight = FontWeight.SemiBold)
+                    }
 
-                Text(
-                    text = "Интервалы фаз (1..120 с):",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = palette.textPrimary,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = contractionText,
-                        onValueChange = { contractionText = it.filter { ch -> ch.isDigit() }.take(3) },
-                        label = { Text("Сокращение, с") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
+                    Button(
+                        onClick = {
+                            if (isFormValid && parsedMin != null && parsedSec != null && parsedCon != null && parsedRel != null) {
+                                onSave(
+                                    template.copy(
+                                        name = nameInput.trim(),
+                                        targetDurationMinutes = parsedMin,
+                                        targetDurationSeconds = parsedSec,
+                                        contractionSec = parsedCon,
+                                        relaxationSec = parsedRel,
+                                        isConfigured = true,
+                                        updatedAtEpochMs = System.currentTimeMillis()
+                                    )
+                                )
+                            }
+                        },
+                        enabled = isFormValid,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = palette.primaryAccent,
+                            contentColor = palette.onPrimaryAccent,
+                            disabledContainerColor = palette.disabledContainer,
+                            disabledContentColor = palette.disabledContent
+                        ),
                         modifier = Modifier
-                            .weight(1f)
-                            .testTag("free_template_hold_input")
-                    )
-                    OutlinedTextField(
-                        value = relaxationText,
-                        onValueChange = { relaxationText = it.filter { ch -> ch.isDigit() }.take(3) },
-                        label = { Text("Отдых, с") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("free_template_relax_input")
-                    )
+                            .weight(1.2f)
+                            .heightIn(min = 50.dp)
+                            .testTag("btn_save_free_template")
+                    ) {
+                        Text("Сохранить", fontWeight = FontWeight.Bold)
+                    }
                 }
-
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (isFormValid) palette.surfaceVariant else palette.errorAccent.copy(alpha = 0.15f),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = calc.summaryRu,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isFormValid) palette.textPrimary else palette.errorAccent,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(10.dp)
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val updated = template.copy(
-                        name = nameText.trim().ifEmpty { template.name },
-                        targetDurationMinutes = parsedMinutes,
-                        targetDurationSeconds = parsedSeconds,
-                        contractionSec = parsedContractionSec,
-                        relaxationSec = parsedRelaxationSec
-                    )
-                    onSave(updated)
-                },
-                enabled = isFormValid,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = palette.primaryAccent,
-                    contentColor = palette.onPrimaryAccent
-                ),
-                modifier = Modifier.testTag("free_template_save_button")
-            ) {
-                Text("Сохранить")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.testTag("free_template_cancel_button")
-            ) {
-                Text("Отмена", color = palette.textSecondary)
             }
         }
-    )
+    }
 }
-

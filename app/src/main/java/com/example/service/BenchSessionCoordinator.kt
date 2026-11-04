@@ -202,7 +202,7 @@ object BenchSessionCoordinator {
             refreshHardwareStatus()
             appendLog(
                 "INIT",
-                "Инициализировано приложение Velaris v0.5.0-v1.2 (versionCode 5): резервное копирование и атомарное восстановление"
+                "Инициализировано приложение Velaris v0.7.0-v1.4 (versionCode 7)"
             )
         }
     }
@@ -927,7 +927,7 @@ object BenchSessionCoordinator {
 
         val proto = DemoProtocolConfig(
             id = "free_slot_${template.slotIndex}",
-            titleRu = "Свободный · ${template.name}",
+            titleRu = "Мои интервалы · ${template.name}",
             contractionMs = template.contractionSec * 1000L,
             relaxationMs = template.relaxationSec * 1000L,
             repetitions = template.calculatedCycles,

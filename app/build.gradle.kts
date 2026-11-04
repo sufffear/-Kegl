@@ -16,8 +16,8 @@ android {
     applicationId = "com.velaris.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 6
-    versionName = "0.6.0-v1.3"
+    versionCode = 7
+    versionName = "0.7.0-v1.4"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -161,7 +161,7 @@ val exportDebugApk by tasks.registering(Copy::class) {
   dependsOn("assembleDebug", cleanOldReleaseApks)
   from(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk"))
   into(rootProject.layout.projectDirectory.dir("releases"))
-  rename { "velaris-v0.6.0-v1.3-debug.apk" }
+  rename { "velaris-v0.7.0-v1.4-debug.apk" }
 }
 
 
