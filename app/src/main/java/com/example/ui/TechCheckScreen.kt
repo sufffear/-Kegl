@@ -96,7 +96,6 @@ import java.util.Locale
 private val MAIN_NAV_DESTINATIONS = listOf(
     VelarisNavDestination.HOME,
     VelarisNavDestination.PLAN,
-    VelarisNavDestination.READER,
     VelarisNavDestination.SETTINGS
 )
 
