@@ -252,11 +252,16 @@ class BenchTimerService : Service() {
         return when (snapshot.status) {
             RunStatus.PREPARING -> {
                 val sec = ((snapshot.prepRemainingMs + 999L) / 1000L).coerceAtLeast(1L)
-                "Демо · Подготовка ($sec сек)"
+                val prefix = if (snapshot.isCustomProgram) "Программа" else "Тренировка"
+                "$prefix · Подготовка ($sec сек)"
             }
             RunStatus.RUNNING -> {
                 val sec = ((snapshot.phaseRemainingMs + 999L) / 1000L).coerceAtLeast(1L)
-                "Демо · Цикл ${snapshot.currentRepetition}/${snapshot.totalRepetitions} · Осталось $sec сек фазы"
+                if (snapshot.isCustomProgram && snapshot.currentBlockName.isNotBlank()) {
+                    "${snapshot.currentBlockName} · ${snapshot.currentPhase.labelRu} · $sec с"
+                } else {
+                    "Цикл ${snapshot.currentRepetition}/${snapshot.totalRepetitions} · ${snapshot.currentPhase.labelRu} · $sec с"
+                }
             }
             RunStatus.PAUSED,
             RunStatus.INTERRUPTED -> {

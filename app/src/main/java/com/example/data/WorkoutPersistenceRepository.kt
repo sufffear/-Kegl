@@ -1,5 +1,6 @@
 package com.example.data
 
+import com.example.domain.CustomWorkoutProgram
 import com.example.domain.DEFAULT_DEMO_PROTOCOLS
 import com.example.domain.DemoProtocolConfig
 import com.example.domain.PhaseEngineSnapshot
@@ -310,6 +311,27 @@ class WorkoutPersistenceRepository(
 
     suspend fun saveFreeTemplate(template: FreeIntervalTemplateEntity) {
         dao.upsertFreeTemplate(template.copy(updatedAtEpochMs = timeProvider.currentWallTimeMs()))
+    }
+
+    // --- Продвинутый конструктор тренировок (программы из 4 типов блоков) ---
+
+    suspend fun getAllCustomPrograms(): List<CustomWorkoutProgram> {
+        val entities = dao.getAllCustomPrograms()
+        if (entities.isEmpty()) {
+            val defaults = CustomProgramJsonParser.createDefaultPrograms()
+            dao.upsertCustomPrograms(defaults.mapIndexed { idx, prog -> CustomProgramJsonParser.toEntity(prog, idx) })
+            return defaults
+        }
+        return entities.map { CustomProgramJsonParser.toDomain(it) }
+    }
+
+    suspend fun saveCustomProgram(program: CustomWorkoutProgram, sortOrder: Int = 0) {
+        val updated = program.copy(updatedAtEpochMs = timeProvider.currentWallTimeMs())
+        dao.upsertCustomProgram(CustomProgramJsonParser.toEntity(updated, sortOrder))
+    }
+
+    suspend fun deleteCustomProgram(id: String) {
+        dao.deleteCustomProgram(id)
     }
 
     suspend fun saveRunCheckpoint(snapshot: PhaseEngineSnapshot) {

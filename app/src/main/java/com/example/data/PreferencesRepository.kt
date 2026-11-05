@@ -34,7 +34,8 @@ data class BenchSignalSettings(
     val readerFontSize: ReaderFontSize = ReaderFontSize.NORMAL,
     val readerLineSpacing: ReaderLineSpacing = ReaderLineSpacing.COMFORTABLE,
     val isRealProgramEnabled: Boolean = false,
-    val realProgramSource: String = DEFAULT_REAL_PROGRAM_SOURCE
+    val realProgramSource: String = DEFAULT_REAL_PROGRAM_SOURCE,
+    val duckOtherApps: Boolean = false
 ) {
     companion object {
         const val DEFAULT_REAL_PROGRAM_SOURCE = "Личный базовый протокол (Утро / Обед / Вечер)"
@@ -64,8 +65,13 @@ class PreferencesRepository(private val dataStore: DataStore<Preferences>) {
             readerLineSpacing = ReaderLineSpacing.fromId(prefs[KEY_READER_LINE_SPACING_ID]),
             isRealProgramEnabled = prefs[KEY_REAL_PROGRAM_ENABLED] ?: false,
             realProgramSource = prefs[KEY_REAL_PROGRAM_SOURCE]
-                ?: BenchSignalSettings.DEFAULT_REAL_PROGRAM_SOURCE
+                ?: BenchSignalSettings.DEFAULT_REAL_PROGRAM_SOURCE,
+            duckOtherApps = prefs[KEY_DUCK_OTHER_APPS] ?: false
         )
+    }
+
+    suspend fun setDuckOtherApps(enabled: Boolean) {
+        dataStore.edit { it[KEY_DUCK_OTHER_APPS] = enabled }
     }
 
     suspend fun setSoundEnabled(enabled: Boolean) {
@@ -131,6 +137,7 @@ class PreferencesRepository(private val dataStore: DataStore<Preferences>) {
             prefs[KEY_READER_LINE_SPACING_ID] = settings.readerLineSpacing.id
             prefs[KEY_REAL_PROGRAM_ENABLED] = settings.isRealProgramEnabled
             prefs[KEY_REAL_PROGRAM_SOURCE] = settings.realProgramSource
+            prefs[KEY_DUCK_OTHER_APPS] = settings.duckOtherApps
         }
     }
 
@@ -148,5 +155,6 @@ class PreferencesRepository(private val dataStore: DataStore<Preferences>) {
         private val KEY_READER_LINE_SPACING_ID = stringPreferencesKey("reader_line_spacing_id")
         private val KEY_REAL_PROGRAM_ENABLED = booleanPreferencesKey("real_program_enabled")
         private val KEY_REAL_PROGRAM_SOURCE = stringPreferencesKey("real_program_source")
+        private val KEY_DUCK_OTHER_APPS = booleanPreferencesKey("duck_other_apps")
     }
 }

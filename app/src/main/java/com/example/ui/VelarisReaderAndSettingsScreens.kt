@@ -1161,6 +1161,7 @@ fun VelarisSettingsScreen(
     onSoundEnabledChange: (Boolean) -> Unit,
     onVibrationEnabledChange: (Boolean) -> Unit,
     onMetronomeEnabledChange: (Boolean) -> Unit,
+    onDuckOtherAppsChange: (Boolean) -> Unit = {},
     onSignalVolumeChange: (Float) -> Unit,
     onMetronomeVolumeChange: (Float) -> Unit,
     onPlaySample: (SignalType) -> Unit,
@@ -1724,6 +1725,48 @@ fun VelarisSettingsScreen(
                             .fillMaxWidth()
                             .semantics { contentDescription = "Громкость метронома" }
                             .testTag("slider_metronome_volume")
+                    )
+                }
+
+                // Переключатель приглушения других приложений (YouTube / музыка)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(palette.surfaceElevated)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Приглушать другие приложения",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = palette.textPrimary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = if (settings.duckOtherApps) {
+                                "Включено: звук YouTube и музыки временно снижается на время сигнала (AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)"
+                            } else {
+                                "Выключено: звуки тренировки звучат поверх YouTube и музыки без пауз и приглушения"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = palette.textSecondary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Switch(
+                        checked = settings.duckOtherApps,
+                        onCheckedChange = onDuckOtherAppsChange,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = palette.primaryAccent,
+                            checkedTrackColor = palette.primaryAccent.copy(alpha = 0.5f),
+                            uncheckedThumbColor = palette.textSecondary,
+                            uncheckedTrackColor = palette.surfaceVariant
+                        ),
+                        modifier = Modifier.testTag("switch_duck_other_apps")
                     )
                 }
 

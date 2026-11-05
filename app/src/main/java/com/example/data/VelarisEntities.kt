@@ -5,6 +5,21 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
+ * Пользовательская программа продвинутого конструктора тренировок.
+ * Хранит блоки (4 типа) в виде JSON для надёжности, лёгкого копирования и атомарности.
+ */
+@Entity(tableName = "custom_programs")
+data class CustomProgramEntity(
+    @PrimaryKey val id: String,
+    val title: String,
+    val description: String = "",
+    val sortOrder: Int = 0,
+    val blocksJson: String = "[]",
+    val createdAtEpochMs: Long = 0L,
+    val updatedAtEpochMs: Long = 0L
+)
+
+/**
  * План тренировок (ТЗ п. 6, п. 9):
  * TrainingPlan(id, version, source, effectiveFrom, assignments).
  */

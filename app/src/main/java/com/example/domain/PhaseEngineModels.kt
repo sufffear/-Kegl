@@ -304,7 +304,11 @@ data class PhaseEngineSnapshot(
     val lastSchedulerDriftMs: Long = 0L,
     val maxSchedulerDriftMs: Long = 0L,
     val isDemo: Boolean = true,
-    val isFreeMode: Boolean = false
+    val isFreeMode: Boolean = false,
+    val isCustomProgram: Boolean = false,
+    val currentBlockName: String = "",
+    val currentBlockIndex: Int = 1,
+    val totalBlocks: Int = 1
 ) {
     val isActiveOrPaused: Boolean
         get() = status == RunStatus.PREPARING ||

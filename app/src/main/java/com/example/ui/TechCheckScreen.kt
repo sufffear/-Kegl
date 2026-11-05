@@ -93,12 +93,154 @@ import com.example.domain.WorkoutDifficulty
 import com.example.ui.theme.LocalVelarisPalette
 import java.util.Locale
 
-private val MAIN_NAV_DESTINATIONS = listOf(
-    VelarisNavDestination.HOME,
-    VelarisNavDestination.PLAN,
-    VelarisNavDestination.READER,
-    VelarisNavDestination.SETTINGS
-)
+private fun resolveRingColor(status: RunStatus, currentPhase: PhaseType, palette: com.example.ui.theme.VelarisPalette): Color = when (status) {
+    RunStatus.IDLE -> palette.outline
+    RunStatus.PREPARING -> palette.phasePrepAccent
+    RunStatus.RUNNING -> if (currentPhase == PhaseType.CONTRACTION) {
+        palette.phaseHoldAccent
+    } else {
+        palette.phaseRelaxAccent
+    }
+    RunStatus.PAUSED,
+    RunStatus.INTERRUPTED -> palette.phasePauseAccent
+    RunStatus.COMPLETED -> palette.successAccent
+    RunStatus.STOPPED -> palette.errorAccent
+}
+
+/**
+ * Изолированное кольцо таймера active workout.
+ * Обновление frameNowMs через withFrameMillis происходит только внутри этого компонента,
+ * предотвращая рекомпозицию верхнеуровневых экранов и карточек каждый кадр (60/120 FPS).
+ */
+@Composable
+fun ActiveWorkoutTimerRing(
+    snapshot: PhaseEngineSnapshot,
+    palette: com.example.ui.theme.VelarisPalette,
+    modifier: Modifier = Modifier
+) {
+    val animatorsEnabled = remember {
+        runCatching { ValueAnimator.areAnimatorsEnabled() }.getOrDefault(true) &&
+            !android.os.Build.FINGERPRINT.equals("robolectric", ignoreCase = true)
+    }
+
+    var frameNowMs by remember(snapshot.runId, snapshot.status, snapshot.snapshotElapsedRealtimeMs) {
+        mutableLongStateOf(snapshot.snapshotElapsedRealtimeMs)
+    }
+
+    LaunchedEffect(snapshot.isRunningOrPreparing, snapshot.snapshotElapsedRealtimeMs, animatorsEnabled) {
+        if (snapshot.isRunningOrPreparing && animatorsEnabled) {
+            val baseEngineMs = snapshot.snapshotElapsedRealtimeMs
+            val baseLocalMs = SystemClock.elapsedRealtime()
+            while (true) {
+                withFrameMillis {
+                    val elapsedSinceSnapshot = (SystemClock.elapsedRealtime() - baseLocalMs).coerceAtLeast(0L)
+                    frameNowMs = baseEngineMs + elapsedSinceSnapshot
+                }
+            }
+        } else {
+            frameNowMs = snapshot.snapshotElapsedRealtimeMs
+        }
+    }
+
+    val ringProgress = snapshot.computeVisualRingProgress(frameNowMs)
+    val displayWholeSeconds = snapshot.computeDisplayWholeSeconds(frameNowMs)
+    val ringColor = resolveRingColor(snapshot.status, snapshot.currentPhase, palette)
+
+    Box(
+        modifier = modifier
+            .size(268.dp)
+            .padding(6.dp)
+            .testTag("smooth_timer_ring"),
+        contentAlignment = Alignment.Center
+    ) {
+        val trackColor = palette.surfaceElevated
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val strokePx = 18.dp.toPx()
+            val diameter = size.minDimension - strokePx
+            val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
+            val arcSize = Size(diameter, diameter)
+
+            drawArc(
+                color = trackColor,
+                startAngle = 0f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(width = strokePx, cap = StrokeCap.Round)
+            )
+
+            drawArc(
+                color = ringColor,
+                startAngle = -90f,
+                sweepAngle = 360f * ringProgress.coerceIn(0f, 1f),
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(width = strokePx, cap = StrokeCap.Round)
+            )
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = String.format(Locale.US, "%d", displayWholeSeconds),
+                style = MaterialTheme.typography.displayLarge.merge(
+                    TextStyle(
+                        fontFamily = FontFamily.SansSerif,
+                        fontFeatureSettings = "tnum"
+                    )
+                ),
+                color = palette.textPrimary,
+                fontWeight = FontWeight.ExtraBold,
+                modifier = Modifier.testTag("timer_whole_seconds")
+            )
+            Text(
+                text = "секунд",
+                style = MaterialTheme.typography.labelMedium,
+                color = palette.textSecondary
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            if (snapshot.isCustomProgram && snapshot.currentBlockName.isNotBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = palette.primaryAccent.copy(alpha = 0.22f)
+                ) {
+                    Text(
+                        text = snapshot.currentBlockName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = palette.primaryAccent,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(modifier = Modifier.height(3.dp))
+            }
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = palette.surfaceElevated
+            ) {
+                Text(
+                    text = "Цикл ${snapshot.currentRepetition} из ${snapshot.totalRepetitions}",
+                    style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                    color = palette.secondaryAccent,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Осталось всего: ${formatDurationCompact(snapshot.remainingActiveMs)}",
+                style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                color = palette.textSecondary
+            )
+        }
+    }
+}
 
 /**
  * Корневой экран приложения Velaris (Итерация v1.4, версия 0.7.0-v1.4, versionCode 7).
@@ -124,6 +266,7 @@ fun TechCheckScreen(
     val isServiceForeground by viewModel.isServiceForeground.collectAsStateWithLifecycle()
     val dailySlots by viewModel.dailySlots.collectAsStateWithLifecycle()
     val freeTemplates by viewModel.freeTemplates.collectAsStateWithLifecycle()
+    val customPrograms by viewModel.customPrograms.collectAsStateWithLifecycle()
     val isZeroSlotDemoMode by viewModel.isZeroSlotDemoMode.collectAsStateWithLifecycle()
     val demoCompletionsCount by viewModel.demoCompletionsCount.collectAsStateWithLifecycle()
     val realCompletionsCount by viewModel.realCompletionsCount.collectAsStateWithLifecycle()
@@ -306,10 +449,16 @@ fun TechCheckScreen(
                                     settings = settings,
                                     dailySlots = dailySlots,
                                     freeTemplates = freeTemplates,
+                                    customPrograms = customPrograms,
                                     onStartSlot = { slot -> viewModel.startSlotAndOpenWorkout(slot) },
                                     onSelectSlot = { slot -> viewModel.selectDailySlot(slot) },
                                     onStartFreeTemplate = { template -> viewModel.startFreeWorkoutAndOpenWorkout(template) },
                                     onSaveFreeTemplate = { template -> viewModel.saveFreeTemplate(template) },
+                                    onStartCustomProgram = { prog -> viewModel.startCustomProgramAndOpenWorkout(prog) },
+                                    onSaveCustomProgram = { prog -> viewModel.saveCustomProgram(prog) },
+                                    onDeleteCustomProgram = { id -> viewModel.deleteCustomProgram(id) },
+                                    onDuplicateCustomProgram = { prog -> viewModel.duplicateCustomProgram(prog) },
+                                    onReorderCustomPrograms = { list -> viewModel.reorderCustomPrograms(list) },
                                     onReturnToWorkout = { viewModel.navigateTo(VelarisNavDestination.WORKOUT) }
                                 )
                             }
@@ -371,6 +520,7 @@ fun TechCheckScreen(
                                     onSoundEnabledChange = { viewModel.setSoundEnabled(it) },
                                     onVibrationEnabledChange = { viewModel.setVibrationEnabled(it) },
                                     onMetronomeEnabledChange = { viewModel.setMetronomeEnabled(it) },
+                                    onDuckOtherAppsChange = { viewModel.setDuckOtherApps(it) },
                                     onSignalVolumeChange = { viewModel.setSignalVolume(it) },
                                     onMetronomeVolumeChange = { viewModel.setMetronomeVolume(it) },
                                     onPlaySample = { viewModel.playSample(it) },
@@ -744,46 +894,7 @@ fun VelarisActiveWorkoutScreen(
     modifier: Modifier = Modifier
 ) {
     val palette = LocalVelarisPalette.current
-    val animatorsEnabled = remember {
-        runCatching { ValueAnimator.areAnimatorsEnabled() }.getOrDefault(true) &&
-            !android.os.Build.FINGERPRINT.equals("robolectric", ignoreCase = true)
-    }
-
-    var frameNowMs by remember(snapshot.runId, snapshot.status, snapshot.snapshotElapsedRealtimeMs) {
-        mutableLongStateOf(snapshot.snapshotElapsedRealtimeMs)
-    }
-
-    LaunchedEffect(snapshot.isRunningOrPreparing, snapshot.snapshotElapsedRealtimeMs, animatorsEnabled) {
-        if (snapshot.isRunningOrPreparing && animatorsEnabled) {
-            val baseEngineMs = snapshot.snapshotElapsedRealtimeMs
-            val baseLocalMs = SystemClock.elapsedRealtime()
-            while (true) {
-                withFrameMillis {
-                    val elapsedSinceSnapshot = (SystemClock.elapsedRealtime() - baseLocalMs).coerceAtLeast(0L)
-                    frameNowMs = baseEngineMs + elapsedSinceSnapshot
-                }
-            }
-        } else {
-            frameNowMs = snapshot.snapshotElapsedRealtimeMs
-        }
-    }
-
-    val ringProgress = snapshot.computeVisualRingProgress(frameNowMs)
-    val displayWholeSeconds = snapshot.computeDisplayWholeSeconds(frameNowMs)
-
-    val ringColor = when (snapshot.status) {
-        RunStatus.IDLE -> palette.outline
-        RunStatus.PREPARING -> palette.phasePrepAccent
-        RunStatus.RUNNING -> if (snapshot.currentPhase == PhaseType.CONTRACTION) {
-            palette.phaseHoldAccent
-        } else {
-            palette.phaseRelaxAccent
-        }
-        RunStatus.PAUSED,
-        RunStatus.INTERRUPTED -> palette.phasePauseAccent
-        RunStatus.COMPLETED -> palette.successAccent
-        RunStatus.STOPPED -> palette.errorAccent
-    }
+    val ringColor = resolveRingColor(snapshot.status, snapshot.currentPhase, palette)
 
     Column(
         modifier = modifier
@@ -862,84 +973,11 @@ fun VelarisActiveWorkoutScreen(
                     )
                 }
 
-                // Непрерывное кольцо неизменного размера 268.dp
-                Box(
-                    modifier = Modifier
-                        .size(268.dp)
-                        .padding(6.dp)
-                        .testTag("smooth_timer_ring"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val trackColor = palette.surfaceElevated
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val strokePx = 18.dp.toPx()
-                        val diameter = size.minDimension - strokePx
-                        val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
-                        val arcSize = Size(diameter, diameter)
-
-                        drawArc(
-                            color = trackColor,
-                            startAngle = 0f,
-                            sweepAngle = 360f,
-                            useCenter = false,
-                            topLeft = topLeft,
-                            size = arcSize,
-                            style = Stroke(width = strokePx, cap = StrokeCap.Round)
-                        )
-
-                        drawArc(
-                            color = ringColor,
-                            startAngle = -90f,
-                            sweepAngle = 360f * ringProgress.coerceIn(0f, 1f),
-                            useCenter = false,
-                            topLeft = topLeft,
-                            size = arcSize,
-                            style = Stroke(width = strokePx, cap = StrokeCap.Round)
-                        )
-                    }
-
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = String.format(Locale.US, "%d", displayWholeSeconds),
-                            style = MaterialTheme.typography.displayLarge.merge(
-                                TextStyle(
-                                    fontFamily = FontFamily.SansSerif,
-                                    fontFeatureSettings = "tnum"
-                                )
-                            ),
-                            color = palette.textPrimary,
-                            fontWeight = FontWeight.ExtraBold,
-                            modifier = Modifier.testTag("timer_whole_seconds")
-                        )
-                        Text(
-                            text = "секунд",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = palette.textSecondary
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = palette.surfaceElevated
-                        ) {
-                            Text(
-                                text = "Цикл ${snapshot.currentRepetition} из ${snapshot.totalRepetitions}",
-                                style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
-                                color = palette.secondaryAccent,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Осталось всего: ${formatDurationCompact(snapshot.remainingActiveMs)}",
-                            style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
-                            color = palette.textSecondary
-                        )
-                    }
-                }
+                // Непрерывное кольцо неизменного размера 268.dp (изолировано в ActiveWorkoutTimerRing)
+                ActiveWorkoutTimerRing(
+                    snapshot = snapshot,
+                    palette = palette
+                )
 
                 if (snapshot.interruptionReason != null) {
                     Surface(

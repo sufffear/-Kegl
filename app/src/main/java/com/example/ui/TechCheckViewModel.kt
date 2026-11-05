@@ -73,6 +73,7 @@ class TechCheckViewModel(
 
     val dailySlots: StateFlow<List<DailySlotWithCompletion>> = BenchSessionCoordinator.dailySlots
     val freeTemplates: StateFlow<List<com.example.data.FreeIntervalTemplateEntity>> = BenchSessionCoordinator.freeTemplates
+    val customPrograms: StateFlow<List<com.example.domain.CustomWorkoutProgram>> = BenchSessionCoordinator.customPrograms
     val isZeroSlotDemoMode: StateFlow<Boolean> = BenchSessionCoordinator.isZeroSlotDemoMode
     val demoCompletionsCount: StateFlow<Int> = BenchSessionCoordinator.demoCompletionsCount
     val realCompletionsCount: StateFlow<Int> = BenchSessionCoordinator.realCompletionsCount
@@ -119,6 +120,32 @@ class TechCheckViewModel(
 
     fun saveFreeTemplate(template: com.example.data.FreeIntervalTemplateEntity) {
         BenchSessionCoordinator.saveFreeTemplate(template)
+    }
+
+    // --- Продвинутый конструктор тренировок ---
+
+    fun startCustomProgramAndOpenWorkout(program: com.example.domain.CustomWorkoutProgram) {
+        val started = BenchSessionCoordinator.startCustomProgramSession(program)
+        if (started) {
+            _currentDestination.value = VelarisNavDestination.WORKOUT
+            BenchTimerService.sendCommand(appContext, BenchTimerService.ACTION_START_FREE)
+        }
+    }
+
+    fun saveCustomProgram(program: com.example.domain.CustomWorkoutProgram) {
+        BenchSessionCoordinator.saveCustomProgram(program)
+    }
+
+    fun deleteCustomProgram(id: String) {
+        BenchSessionCoordinator.deleteCustomProgram(id)
+    }
+
+    fun duplicateCustomProgram(program: com.example.domain.CustomWorkoutProgram) {
+        BenchSessionCoordinator.duplicateCustomProgram(program)
+    }
+
+    fun reorderCustomPrograms(reordered: List<com.example.domain.CustomWorkoutProgram>) {
+        BenchSessionCoordinator.reorderCustomPrograms(reordered)
     }
 
     fun setZeroSlotDemoMode(enabled: Boolean) {
@@ -269,6 +296,10 @@ class TechCheckViewModel(
 
     fun setMetronomeVolume(volume: Float) {
         BenchSessionCoordinator.updateSettings { it.copy(metronomeVolume = volume.coerceIn(0f, 1f)) }
+    }
+
+    fun setDuckOtherApps(enabled: Boolean) {
+        BenchSessionCoordinator.updateSettings { it.copy(duckOtherApps = enabled) }
     }
 
     fun setThemeId(themeId: VelarisThemeId) {

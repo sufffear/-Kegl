@@ -140,6 +140,26 @@ interface VelarisDao {
     @Query("DELETE FROM free_interval_templates")
     suspend fun deleteAllFreeTemplates()
 
+    // --- Продвинутый конструктор тренировок (составные программы из 4 типов блоков) ---
+
+    @Query("SELECT * FROM custom_programs ORDER BY sortOrder ASC, createdAtEpochMs ASC")
+    suspend fun getAllCustomPrograms(): List<CustomProgramEntity>
+
+    @Query("SELECT * FROM custom_programs WHERE id = :id LIMIT 1")
+    suspend fun getCustomProgramById(id: String): CustomProgramEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertCustomProgram(program: CustomProgramEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertCustomPrograms(programs: List<CustomProgramEntity>)
+
+    @Query("DELETE FROM custom_programs WHERE id = :id")
+    suspend fun deleteCustomProgram(id: String)
+
+    @Query("DELETE FROM custom_programs")
+    suspend fun deleteAllCustomPrograms()
+
     // --- Универсальный офлайн-читатель линейного романа из Markdown (Update v1.1 п. 5–7) ---
 
     @Query("SELECT * FROM imported_novels WHERE slotKey = :slotKey LIMIT 1")

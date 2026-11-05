@@ -31,6 +31,8 @@ class PhaseEngine(
     private var lastPrepSecondEmitted: Int = -1
     private var lastMetronomeSecondEmitted: Int = -1
     private var lastCheckpointActiveMs: Long = 0L
+    private var customExecutionSteps: List<ExpandedPhaseStep> = emptyList()
+    private var currentCustomStepIndex: Int = 0
     var isMetronomeEnabled: Boolean = true
 
     fun currentSnapshot(): PhaseEngineSnapshot = snapshot
@@ -113,6 +115,90 @@ class PhaseEngine(
         onLog(
             "STATE",
             "IDLE -> PREPARING (слот=$slotId, дата=$startDate, звук=${soundPackSnapshot.titleRu}, сигнал 1/3)"
+        )
+        onCheckpoint(snapshot, CheckpointTrigger.START)
+        emitSignal(SignalType.PREP_TICK)
+        return true
+    }
+
+    /**
+     * Запуск программы продвинутого конструктора тренировок (составные блоки).
+     */
+    fun startCustomProgram(
+        program: CustomWorkoutProgram,
+        runId: String = "prog_run_${clock.elapsedRealtimeMs()}",
+        startDate: String = "2026-11-03",
+        zoneId: String = "UTC",
+        soundPackSnapshot: SoundPack = SoundPack.SOFT,
+        metronomeStyleSnapshot: MetronomeTickStyle = MetronomeTickStyle.SOFT,
+        isDemo: Boolean = false
+    ): Boolean {
+        if (snapshot.isActiveOrPaused) {
+            onLog("GUARD", "Повторный старт заблокирован: активно состояние ${snapshot.status}")
+            return false
+        }
+        val steps = program.expandAllSteps()
+        if (steps.isEmpty()) {
+            onLog("GUARD", "Нельзя запустить пустую программу без блоков")
+            return false
+        }
+
+        customExecutionSteps = steps
+        currentCustomStepIndex = 0
+
+        val firstStep = steps[0]
+        val totalMs = program.totalDurationMs
+        val now = clock.elapsedRealtimeMs()
+        lastTickRealtimeMs = now
+        lastPrepSecondEmitted = 3
+        lastMetronomeSecondEmitted = -1
+        lastCheckpointActiveMs = 0L
+
+        // Синтезируем виртуальный протокол для совместимости с внешними слушателями
+        val proto = DemoProtocolConfig(
+            id = program.id,
+            titleRu = program.title,
+            contractionMs = firstStep.durationMs.coerceIn(1_000L, 120_000L),
+            relaxationMs = 5_000L,
+            repetitions = program.totalCycles.coerceIn(1, 300),
+            isLastInGroup = true,
+            group = PlanGroup.MORNING
+        )
+
+        snapshot = PhaseEngineSnapshot(
+            runId = runId,
+            slotId = "prog_${program.id}",
+            startDate = startDate,
+            zoneId = zoneId,
+            status = RunStatus.PREPARING,
+            protocol = proto,
+            soundPackSnapshot = soundPackSnapshot,
+            metronomeStyleSnapshot = metronomeStyleSnapshot,
+            currentRepetition = firstStep.cycleIndex,
+            totalRepetitions = firstStep.totalCyclesInBlock,
+            currentPhase = firstStep.phaseType,
+            phaseRemainingMs = firstStep.durationMs,
+            phaseDurationMs = firstStep.durationMs,
+            prepRemainingMs = preparationDurationMs,
+            confirmedActiveMs = 0L,
+            totalActiveDurationMs = totalMs,
+            remainingActiveMs = totalMs,
+            snapshotElapsedRealtimeMs = now,
+            isStopDialogVisible = false,
+            interruptionReason = null,
+            lastSchedulerDriftMs = 0L,
+            maxSchedulerDriftMs = 0L,
+            isDemo = isDemo,
+            isFreeMode = false,
+            isCustomProgram = true,
+            currentBlockName = firstStep.blockName,
+            currentBlockIndex = 1,
+            totalBlocks = program.blocks.size
+        )
+
+        onLog(
+            "STATE",
+            "Запуск конструктора: «${program.title}» (${program.blocks.size} блоков, ${steps.size} шагов, $totalMs мс)"
         )
         onCheckpoint(snapshot, CheckpointTrigger.START)
         emitSignal(SignalType.PREP_TICK)
@@ -304,7 +390,50 @@ class PhaseEngine(
             } else {
                 commandEmittedOnThisTick = true
                 phaseChangedOnThisTick = true
-                if (snapshot.currentPhase == PhaseType.CONTRACTION) {
+
+                if (customExecutionSteps.isNotEmpty()) {
+                    if (currentCustomStepIndex + 1 < customExecutionSteps.size) {
+                        currentCustomStepIndex++
+                        val nextStep = customExecutionSteps[currentCustomStepIndex]
+                        val sig = if (nextStep.phaseType == PhaseType.CONTRACTION) {
+                            SignalType.CONTRACTION
+                        } else {
+                            SignalType.RELAXATION
+                        }
+                        lastMetronomeSecondEmitted = ((nextStep.durationMs + 999L) / 1000L).toInt()
+                        snapshot = snapshot.copy(
+                            currentPhase = nextStep.phaseType,
+                            phaseRemainingMs = nextStep.durationMs,
+                            phaseDurationMs = nextStep.durationMs,
+                            currentRepetition = nextStep.cycleIndex,
+                            totalRepetitions = nextStep.totalCyclesInBlock,
+                            currentBlockName = nextStep.blockName,
+                            confirmedActiveMs = newConfirmedActive,
+                            remainingActiveMs = newRemainingActive,
+                            snapshotElapsedRealtimeMs = now
+                        )
+                        lastCheckpointActiveMs = newConfirmedActive
+                        onLog(
+                            "PHASE",
+                            "Конструктор: шаг ${currentCustomStepIndex + 1}/${customExecutionSteps.size} «${nextStep.blockName}» -> ${nextStep.phaseType.labelRu} (${nextStep.durationMs / 1000}с)"
+                        )
+                        onCheckpoint(snapshot, CheckpointTrigger.PHASE_CHANGE)
+                        emitSignal(sig)
+                    } else {
+                        snapshot = snapshot.copy(
+                            status = RunStatus.COMPLETED,
+                            phaseRemainingMs = 0L,
+                            confirmedActiveMs = snapshot.totalActiveDurationMs,
+                            remainingActiveMs = 0L,
+                            snapshotElapsedRealtimeMs = now,
+                            isStopDialogVisible = false
+                        )
+                        lastCheckpointActiveMs = snapshot.totalActiveDurationMs
+                        onLog("STATE", "Конструктор: программа успешно завершена (${snapshot.totalActiveDurationMs} мс)")
+                        onCheckpoint(snapshot, CheckpointTrigger.COMPLETE)
+                        emitSignal(SignalType.SET_COMPLETED)
+                    }
+                } else if (snapshot.currentPhase == PhaseType.CONTRACTION) {
                     val relaxDuration = snapshot.protocol.relaxationMs
                     lastMetronomeSecondEmitted = ((relaxDuration + 999L) / 1000L).toInt()
                     snapshot = snapshot.copy(
@@ -516,6 +645,8 @@ class PhaseEngine(
     }
 
     fun resetToIdle(): PhaseEngineSnapshot {
+        customExecutionSteps = emptyList()
+        currentCustomStepIndex = 0
         val now = clock.elapsedRealtimeMs()
         val protocol = snapshot.protocol
         snapshot = PhaseEngineSnapshot(

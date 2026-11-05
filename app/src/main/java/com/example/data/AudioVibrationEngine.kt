@@ -134,29 +134,59 @@ class AudioVibrationEngine(
 
     private val focusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
         when (focusChange) {
-            AudioManager.AUDIOFOCUS_LOSS,
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                hasAudioFocus = false
-                val codeName = when (focusChange) {
-                    AudioManager.AUDIOFOCUS_LOSS -> "AUDIOFOCUS_LOSS"
-                    AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> "AUDIOFOCUS_LOSS_TRANSIENT"
-                    else -> "AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK"
-                }
+                // Не прерываем тренировку: разрешено смешивание (ducking)
                 recordDiagnostic(
-                    eventType = "FOCUS_LOST",
-                    signalLabel = codeName,
+                    eventType = "FOCUS_DUCK",
+                    signalLabel = "CAN_DUCK",
                     packTitle = "-",
                     isSample = false,
                     effectiveVolume = 0f,
                     pcmRms = 0f,
-                    trackGain = 0f,
-                    outputRoute = "auto-pause"
+                    trackGain = 1.0f,
+                    outputRoute = "mixing-allowed"
                 )
-                onAudioFocusLost("Потеря аудиофокуса ($codeName: звонок или внешнее медиа)")
+                onLog("AUDIO_FOCUS", "Фокус: CAN_DUCK — фоновое медиа продолжается со смешиванием")
+            }
+            AudioManager.AUDIOFOCUS_LOSS,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                hasAudioFocus = false
+                val codeName = if (focusChange == AudioManager.AUDIOFOCUS_LOSS) "AUDIOFOCUS_LOSS" else "AUDIOFOCUS_LOSS_TRANSIENT"
+                val isCallActive = try {
+                    audioManager.mode == AudioManager.MODE_IN_CALL ||
+                        audioManager.mode == AudioManager.MODE_RINGTONE ||
+                        audioManager.mode == AudioManager.MODE_IN_COMMUNICATION
+                } catch (_: Exception) {
+                    false
+                }
+
+                if (isCallActive) {
+                    recordDiagnostic(
+                        eventType = "FOCUS_LOST",
+                        signalLabel = "$codeName (CALL)",
+                        packTitle = "-",
+                        isSample = false,
+                        effectiveVolume = 0f,
+                        pcmRms = 0f,
+                        trackGain = 0f,
+                        outputRoute = "auto-pause-call"
+                    )
+                    onAudioFocusLost("Входящий звонок или разговор ($codeName)")
+                } else {
+                    recordDiagnostic(
+                        eventType = "FOCUS_EXTERNAL",
+                        signalLabel = codeName,
+                        packTitle = "-",
+                        isSample = false,
+                        effectiveVolume = 0f,
+                        pcmRms = 0f,
+                        trackGain = 1.0f,
+                        outputRoute = "keep-running"
+                    )
+                    onLog("AUDIO_FOCUS", "Внешнее медиа активно ($codeName) — тренировка продолжается без принудительной паузы YouTube")
+                }
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
-                // По ТЗ п. 7: без автовозобновления после возврата аудиофокуса!
                 hasAudioFocus = true
                 recordDiagnostic(
                     eventType = "FOCUS_GAIN",
@@ -166,19 +196,37 @@ class AudioVibrationEngine(
                     effectiveVolume = 0f,
                     pcmRms = 0f,
                     trackGain = 1.0f,
-                    outputRoute = "manual-resume-only"
+                    outputRoute = "gain"
                 )
-                onLog("AUDIO_FOCUS", "Аудиофокус возвращён системой (AUDIOFOCUS_GAIN), автовозобновление отключено")
+                onLog("AUDIO_FOCUS", "Аудиофокус возвращён системе (AUDIOFOCUS_GAIN)")
             }
         }
     }
 
-    fun requestSessionAudioFocus(): Boolean {
+    fun requestSessionAudioFocus(duckOtherApps: Boolean = false): Boolean {
+        if (!duckOtherApps) {
+            // Режим одновременного воспроизведения со звуком других приложений:
+            // Не перехватываем монопольный аудиофокус, чтобы YouTube и плееры не ставились на паузу.
+            hasAudioFocus = false
+            recordDiagnostic(
+                eventType = "FOCUS_BYPASS",
+                signalLabel = "SIMULTANEOUS_MIXING",
+                packTitle = "USAGE_MEDIA",
+                isSample = false,
+                effectiveVolume = 1f,
+                pcmRms = 0f,
+                trackGain = 1.0f,
+                outputRoute = "STREAM_MUSIC"
+            )
+            onLog("AUDIO_FOCUS", "Одновременное воспроизведение со звуком YouTube (без перехвата аудиофокуса)")
+            return true
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val attrs = buildUnifiedAudioAttributes()
-            val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
                 .setAudioAttributes(attrs)
-                .setWillPauseWhenDucked(true)
+                .setWillPauseWhenDucked(false)
                 .setAcceptsDelayedFocusGain(false)
                 .setOnAudioFocusChangeListener(focusChangeListener)
                 .build()
@@ -190,13 +238,13 @@ class AudioVibrationEngine(
             val res = audioManager.requestAudioFocus(
                 focusChangeListener,
                 AudioManager.STREAM_MUSIC,
-                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
             )
             hasAudioFocus = (res == AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
         }
         recordDiagnostic(
             eventType = "FOCUS_REQ",
-            signalLabel = if (hasAudioFocus) "GRANTED" else "DENIED",
+            signalLabel = if (hasAudioFocus) "GRANTED (MAY_DUCK)" else "DENIED",
             packTitle = "USAGE_MEDIA",
             isSample = false,
             effectiveVolume = 1f,
@@ -207,7 +255,7 @@ class AudioVibrationEngine(
         onLog(
             "AUDIO_FOCUS",
             if (hasAudioFocus) {
-                "Аудиофокус получен (USAGE_MEDIA, AUDIOFOCUS_GAIN_TRANSIENT, willPauseWhenDucked=true)"
+                "Аудиофокус получен (USAGE_MEDIA, AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK, willPauseWhenDucked=false)"
             } else {
                 "Отказ в получении аудиофокуса (активен звонок или внешний монопольный поток)"
             }

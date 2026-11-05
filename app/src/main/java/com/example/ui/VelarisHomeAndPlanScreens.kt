@@ -760,10 +760,16 @@ fun VelarisPlanScreen(
     settings: BenchSignalSettings,
     dailySlots: List<DailySlotWithCompletion>,
     freeTemplates: List<FreeIntervalTemplateEntity>,
+    customPrograms: List<com.example.domain.CustomWorkoutProgram> = emptyList(),
     onStartSlot: (DailySlotWithCompletion) -> Unit,
     onSelectSlot: (DailySlotWithCompletion) -> Unit,
     onStartFreeTemplate: (FreeIntervalTemplateEntity) -> Unit,
     onSaveFreeTemplate: (FreeIntervalTemplateEntity) -> Unit,
+    onStartCustomProgram: (com.example.domain.CustomWorkoutProgram) -> Unit = {},
+    onSaveCustomProgram: (com.example.domain.CustomWorkoutProgram) -> Unit = {},
+    onDeleteCustomProgram: (String) -> Unit = {},
+    onDuplicateCustomProgram: (com.example.domain.CustomWorkoutProgram) -> Unit = {},
+    onReorderCustomPrograms: (List<com.example.domain.CustomWorkoutProgram>) -> Unit = {},
     onReturnToWorkout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -844,8 +850,33 @@ fun VelarisPlanScreen(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Мои интервалы",
+                        text = "Интервалы",
                         fontWeight = if (isFree) FontWeight.ExtraBold else FontWeight.Medium
+                    )
+                }
+
+                val isConstructor = selectedTab == "constructor"
+                Button(
+                    onClick = { selectedTab = "constructor" },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isConstructor) palette.primaryAccent else palette.surfaceElevated,
+                        contentColor = if (isConstructor) palette.onPrimaryAccent else palette.textPrimary
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .weight(1.1f)
+                        .heightIn(min = 48.dp)
+                        .testTag("plan_tab_constructor")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FitnessCenter,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Конструктор",
+                        fontWeight = if (isConstructor) FontWeight.ExtraBold else FontWeight.Medium
                     )
                 }
             }
@@ -856,7 +887,16 @@ fun VelarisPlanScreen(
             animationSpec = tween(durationMillis = if (animatorsEnabled) 160 else 0),
             label = "plan_mode_crossfade"
         ) { mode ->
-            if (mode == "free") {
+            if (mode == "constructor") {
+                WorkoutConstructorTabContent(
+                    programs = customPrograms,
+                    onStartProgram = onStartCustomProgram,
+                    onSaveProgram = onSaveCustomProgram,
+                    onDeleteProgram = onDeleteCustomProgram,
+                    onDuplicateProgram = onDuplicateCustomProgram,
+                    onReorderPrograms = onReorderCustomPrograms
+                )
+            } else if (mode == "free") {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     if (editingTemplate != null) {
                         FreeTemplateEditorCard(

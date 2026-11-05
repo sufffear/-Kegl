@@ -25,9 +25,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NovelBlockEntity::class,
         NovelReadingProgressEntity::class,
         ReadingProgressEntity::class,
-        FreeIntervalTemplateEntity::class
+        FreeIntervalTemplateEntity::class,
+        CustomProgramEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class VelarisDatabase : RoomDatabase() {
@@ -169,6 +170,25 @@ abstract class VelarisDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `custom_programs` (
+                        `id` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `sortOrder` INTEGER NOT NULL,
+                        `blocksJson` TEXT NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun getInstance(context: Context): VelarisDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -176,7 +196,7 @@ abstract class VelarisDatabase : RoomDatabase() {
                     VelarisDatabase::class.java,
                     "velaris_local.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { INSTANCE = it }
             }
