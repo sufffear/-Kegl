@@ -122,6 +122,9 @@ class AudioVibrationEngine(
     @Volatile
     private var hasAudioFocus: Boolean = false
 
+    @Volatile
+    private var isDucked: Boolean = false
+
     private val _audioDiagnostics = MutableStateFlow<List<AudioDiagnosticEntry>>(emptyList())
     val audioDiagnostics: StateFlow<List<AudioDiagnosticEntry>> = _audioDiagnostics.asStateFlow()
 
@@ -134,15 +137,23 @@ class AudioVibrationEngine(
 
     private val focusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
         when (focusChange) {
-            AudioManager.AUDIOFOCUS_LOSS,
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                isDucked = true
+                recordDiagnostic(
+                    eventType = "FOCUS_DUCKED",
+                    signalLabel = "AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK",
+                    packTitle = "-",
+                    isSample = false,
+                    effectiveVolume = 0.2f,
+                    pcmRms = 0f,
+                    trackGain = 0f,
+                    outputRoute = "auto-duck"
+                )
+            }
+            AudioManager.AUDIOFOCUS_LOSS,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
                 hasAudioFocus = false
-                val codeName = when (focusChange) {
-                    AudioManager.AUDIOFOCUS_LOSS -> "AUDIOFOCUS_LOSS"
-                    AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> "AUDIOFOCUS_LOSS_TRANSIENT"
-                    else -> "AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK"
-                }
+                val codeName = if (focusChange == AudioManager.AUDIOFOCUS_LOSS) "AUDIOFOCUS_LOSS" else "AUDIOFOCUS_LOSS_TRANSIENT"
                 recordDiagnostic(
                     eventType = "FOCUS_LOST",
                     signalLabel = codeName,
@@ -157,6 +168,7 @@ class AudioVibrationEngine(
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
                 // По ТЗ п. 7: без автовозобновления после возврата аудиофокуса!
+                isDucked = false
                 hasAudioFocus = true
                 recordDiagnostic(
                     eventType = "FOCUS_GAIN",
@@ -176,9 +188,9 @@ class AudioVibrationEngine(
     fun requestSessionAudioFocus(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val attrs = buildUnifiedAudioAttributes()
-            val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
                 .setAudioAttributes(attrs)
-                .setWillPauseWhenDucked(true)
+                .setWillPauseWhenDucked(false)
                 .setAcceptsDelayedFocusGain(false)
                 .setOnAudioFocusChangeListener(focusChangeListener)
                 .build()
@@ -190,7 +202,7 @@ class AudioVibrationEngine(
             val res = audioManager.requestAudioFocus(
                 focusChangeListener,
                 AudioManager.STREAM_MUSIC,
-                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
             )
             hasAudioFocus = (res == AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
         }
@@ -207,7 +219,7 @@ class AudioVibrationEngine(
         onLog(
             "AUDIO_FOCUS",
             if (hasAudioFocus) {
-                "Аудиофокус получен (USAGE_MEDIA, AUDIOFOCUS_GAIN_TRANSIENT, willPauseWhenDucked=true)"
+                "Аудиофокус получен (USAGE_MEDIA, AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK, willPauseWhenDucked=false)"
             } else {
                 "Отказ в получении аудиофокуса (активен звонок или внешний монопольный поток)"
             }
@@ -498,7 +510,8 @@ class AudioVibrationEngine(
                         .build()
 
                     // Явно фиксируем единичное усиление AudioTrack (1.0f); уровень громкости уже заложен в PCM
-                    audioTrack.setVolume(1.0f)
+                    val trackVolume = if (isDucked) 0.2f else 1.0f
+                    audioTrack.setVolume(trackVolume)
                     audioTrack.write(pcm, 0, pcm.size)
                     activeAudioTrack = audioTrack
                     activePlayingSignal = signal
