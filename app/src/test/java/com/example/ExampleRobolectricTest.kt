@@ -81,14 +81,14 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify v1_4 4-tab navigation, clean Home without versionCode clutter, and Diagnostics in Settings`() {
+    fun `verify v1_4 3-tab navigation, clean Home without versionCode clutter, and Diagnostics in Settings`() {
         composeTestRule.waitForIdle()
 
-        // 1. В нижней навигации ровно 4 основных раздела: Главная, Тренировки, Книга, Настройки
+        // 1. В нижней навигации ровно 3 основных раздела: Главная, Тренировки, Настройки
         composeTestRule.onNodeWithTag("nav_home").assertExists()
         composeTestRule.onNodeWithTag("nav_plan").assertExists()
-        composeTestRule.onNodeWithTag("nav_reader").assertExists()
         composeTestRule.onNodeWithTag("nav_settings").assertExists()
+        composeTestRule.onNodeWithTag("nav_reader").assertDoesNotExist()
         composeTestRule.onNodeWithTag("nav_workout").assertDoesNotExist()
 
         // На Главной нет технического номера сборки (versionCode), но есть компактный знак демо-режима и карточки
@@ -98,18 +98,18 @@ class ExampleRobolectricTest {
         composeTestRule.onNodeWithTag("home_story_card").assertExists()
         composeTestRule.onNodeWithTag("weekly_overview_card").assertExists()
 
-        // 2. Переход в Тренировки
-        composeTestRule.onNodeWithTag("nav_plan").performClick()
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("daily_plan_persistence_card").assertExists()
-
-        // 3. Переход в Книгу (спокойный экран чтения без горной шапки, кнопка «Добавить книгу»)
-        composeTestRule.onNodeWithTag("nav_reader").performClick()
+        // 2. Переход в Книгу с Главной карточки (спокойный экран чтения без горной шапки, кнопка «Добавить книгу»)
+        composeTestRule.onNodeWithTag("btn_open_reader").performScrollTo().performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("story_reader_screen").assertExists()
         composeTestRule.onNodeWithTag("reader_empty_import_card").assertExists()
         composeTestRule.onNodeWithTag("btn_open_book_from_file").assertExists()
         composeTestRule.onNodeWithText("Добавить книгу").assertExists()
+
+        // 3. Переход в Тренировки
+        composeTestRule.onNodeWithTag("nav_plan").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("daily_plan_persistence_card").assertExists()
 
         // 4. Переход в Настройки (5 тем, звук, чтение, данные, о приложении -> Диагностика)
         composeTestRule.onNodeWithTag("nav_settings").performClick()
@@ -1002,8 +1002,8 @@ class ExampleRobolectricTest {
         val initialRunId = com.example.service.BenchSessionCoordinator.engineSnapshot.value.runId
         assertNotNull(initialRunId)
 
-        // Переходим на экран Книги -> должна появиться компактная плашка текущей тренировки над нижней навигацией
-        composeTestRule.onNodeWithTag("nav_reader").performClick()
+        // Переходим на экран Настроек -> должна появиться компактная плашка текущей тренировки над нижней навигацией
+        composeTestRule.onNodeWithTag("nav_settings").performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("active_session_return_banner").assertExists()
         composeTestRule.onNodeWithTag("btn_return_to_workout").assertExists()
