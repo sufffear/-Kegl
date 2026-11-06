@@ -1222,7 +1222,7 @@ fun VelarisSettingsScreen(
                 Text("Резервная копия", fontWeight = FontWeight.Bold)
             },
             text = {
-                Text("Копия содержит историю занятий и текст вашей книги. Сохраните её в надёжном месте.")
+                Text("Копия содержит историю ваших занятий, шаблоны и настройки. Сохраните её в надёжном месте.")
             },
             confirmButton = {
                 Button(
@@ -1274,15 +1274,6 @@ fun VelarisSettingsScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = palette.primaryAccent,
                         fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = if (preview.hasBook && !preview.bookTitle.isNullOrBlank()) {
-                            "Книга: ${preview.bookTitle} (глав: ${preview.chapterCount})"
-                        } else {
-                            "Книга: отсутствует"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = palette.textPrimary
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Surface(
@@ -1468,7 +1459,7 @@ fun VelarisSettingsScreen(
             }
         }
 
-        // 2. Существующие параметры плана (демонстрационный режим явно обозначен)
+        // 2. Базовые параметры плана
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1482,33 +1473,15 @@ fun VelarisSettingsScreen(
                     .padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Параметры плана",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = palette.textPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = palette.warningAccent.copy(alpha = 0.18f)
-                    ) {
-                        Text(
-                            text = "Демонстрация",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = palette.warningAccent,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                }
+                Text(
+                    text = "Параметры плана",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = palette.textPrimary,
+                    fontWeight = FontWeight.Bold
+                )
 
                 Text(
-                    text = "Активен демонстрационный режим (не выполняйте физические упражнения по тестовым сигналам). Реальная программа нагрузки не назначается автоматически.",
+                    text = "Выберите базовый интервальный протокол для ежедневного расписания.",
                     style = MaterialTheme.typography.bodySmall,
                     color = palette.textSecondary
                 )
@@ -1807,89 +1780,7 @@ fun VelarisSettingsScreen(
             }
         }
 
-        // 4. Чтение
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("reader_settings_card"),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.surface)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(
-                    text = "Чтение",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = palette.textPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    ReaderMode.entries.forEach { mode ->
-                        val selected = settings.readerMode == mode
-                        OutlinedButton(
-                            onClick = { onReaderModeChange(mode) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 48.dp)
-                        ) {
-                            Text(
-                                text = mode.titleRu,
-                                color = if (selected) palette.primaryAccent else palette.textSecondary,
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                            )
-                        }
-                    }
-                }
-
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    ReaderFontSize.entries.forEach { sz ->
-                        val selected = settings.readerFontSize == sz
-                        FilledTonalButton(
-                            onClick = { onReaderFontSizeChange(sz) },
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = if (selected) palette.primaryAccent else palette.surfaceVariant,
-                                contentColor = if (selected) palette.onPrimaryAccent else palette.textPrimary
-                            ),
-                            modifier = Modifier.heightIn(min = 48.dp)
-                        ) {
-                            Text(sz.titleRu, style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                }
-
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    ReaderLineSpacing.entries.forEach { sp ->
-                        val selected = settings.readerLineSpacing == sp
-                        FilledTonalButton(
-                            onClick = { onReaderLineSpacingChange(sp) },
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = if (selected) palette.secondaryAccent else palette.surfaceVariant,
-                                contentColor = if (selected) palette.onPrimaryAccent else palette.textPrimary
-                            ),
-                            modifier = Modifier.heightIn(min = 48.dp)
-                        ) {
-                            Text(sp.titleRu, style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                }
-            }
-        }
-
-        // 5. Данные и резервное копирование (v1.2 п. 1–3)
+        // 4. Данные и резервное копирование
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2028,7 +1919,7 @@ fun VelarisSettingsScreen(
                 }
 
                 Text(
-                    text = "Резервная копия сохраняет реальные тренировки, настройки и точный текст вашей книги в локальный файл. Восстановление полностью заменяет текущие данные без слияния версий.",
+                    text = "Резервная копия сохраняет историю тренировок, шаблоны, авторские программы и настройки в локальный файл. Восстановление полностью заменяет текущие данные.",
                     style = MaterialTheme.typography.bodySmall,
                     color = palette.textSecondary
                 )
@@ -2067,77 +1958,10 @@ fun VelarisSettingsScreen(
                         Text("Восстановить", color = if (!snapshot.isActiveOrPaused) palette.textPrimary else palette.textSecondary)
                     }
                 }
-
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 4.dp),
-                    color = palette.outline.copy(alpha = 0.35f)
-                )
-
-                Text(
-                    text = "Книга",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = palette.textPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-
-                if (storyState.hasImportedBook) {
-                    Text(
-                        text = "Открыта книга: ${storyState.displayTitleRu}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = palette.textPrimary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Структура: актов — ${storyState.actCount}, глав — ${storyState.chapterCount}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = palette.textSecondary
-                    )
-                } else {
-                    Text(
-                        text = "Книга ещё не добавлена. Выберите текстовый файл книги (.md или .markdown) на телефоне.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = palette.textSecondary
-                    )
-                }
-
-                Button(
-                    onClick = { openDocumentLauncher.launch(MARKDOWN_DOCUMENT_MIME_TYPES) },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = palette.secondaryAccent,
-                        contentColor = palette.onPrimaryAccent
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
-                        .testTag("btn_settings_open_book_file")
-                ) {
-                    Icon(Icons.Default.FileOpen, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Добавить книгу", fontWeight = FontWeight.Bold)
-                }
-
-                if (storyState.hasImportedBook) {
-                    OutlinedButton(
-                        onClick = { showRemoveBookDialog = true },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp)
-                            .testTag("btn_settings_remove_book")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.DeleteOutline,
-                            contentDescription = null,
-                            tint = palette.errorAccent,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Удалить книгу", color = palette.errorAccent)
-                    }
-                }
             }
         }
 
-        // 6. О приложении и переход во вложенный экран «Настройки → О приложении → Диагностика»
+        // 5. О приложении и переход во вложенный экран «Настройки → О приложении → Диагностика»
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2158,7 +1982,7 @@ fun VelarisSettingsScreen(
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
-                    text = "Velaris — офлайн-приложение для интервальных тренировок по расписанию и своим шаблонам со спокойным чтением книг.",
+                    text = "Velaris — офлайн-приложение для интервальных тренировок по расписанию, свободным шаблонам и авторским программам.",
                     style = MaterialTheme.typography.bodySmall,
                     color = palette.textSecondary
                 )

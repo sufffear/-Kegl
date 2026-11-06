@@ -33,7 +33,7 @@ data class BenchSignalSettings(
     val readerMode: ReaderMode = ReaderMode.STEP_BY_STEP,
     val readerFontSize: ReaderFontSize = ReaderFontSize.NORMAL,
     val readerLineSpacing: ReaderLineSpacing = ReaderLineSpacing.COMFORTABLE,
-    val isRealProgramEnabled: Boolean = false,
+    val isRealProgramEnabled: Boolean = true,
     val realProgramSource: String = DEFAULT_REAL_PROGRAM_SOURCE,
     val duckOtherApps: Boolean = false
 ) {
@@ -44,7 +44,7 @@ data class BenchSignalSettings(
 
 /**
  * Хранилище пользовательских настроек звука, вибрации, звукового набора, тика метронома,
- * темы оформления, параметров читалки и режима программы в DataStore.
+ * темы оформления и режима программы в DataStore.
  */
 class PreferencesRepository(private val dataStore: DataStore<Preferences>) {
 
@@ -63,7 +63,7 @@ class PreferencesRepository(private val dataStore: DataStore<Preferences>) {
             readerMode = ReaderMode.fromId(prefs[KEY_READER_MODE_ID]),
             readerFontSize = ReaderFontSize.fromId(prefs[KEY_READER_FONT_SIZE_ID]),
             readerLineSpacing = ReaderLineSpacing.fromId(prefs[KEY_READER_LINE_SPACING_ID]),
-            isRealProgramEnabled = prefs[KEY_REAL_PROGRAM_ENABLED] ?: false,
+            isRealProgramEnabled = prefs[KEY_REAL_PROGRAM_ENABLED] ?: true,
             realProgramSource = prefs[KEY_REAL_PROGRAM_SOURCE]
                 ?: BenchSignalSettings.DEFAULT_REAL_PROGRAM_SOURCE,
             duckOtherApps = prefs[KEY_DUCK_OTHER_APPS] ?: false

@@ -91,25 +91,24 @@ class ExampleRobolectricTest {
         composeTestRule.onNodeWithTag("nav_reader").assertDoesNotExist()
         composeTestRule.onNodeWithTag("nav_workout").assertDoesNotExist()
 
-        // На Главной нет технического номера сборки (versionCode), но есть компактный знак демо-режима и карточки
-        composeTestRule.onNodeWithTag("demo_safety_banner").assertExists()
+        // На Главной нет технического номера сборки, демо-режима и книги; отображаются только Активная сессия и Недельный обзор
+        composeTestRule.onNodeWithTag("demo_safety_banner").assertDoesNotExist()
         composeTestRule.onNodeWithText("Версия: 0.7.0-v1.4 (versionCode 7)").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("home_story_card").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("btn_open_reader").assertDoesNotExist()
         composeTestRule.onNodeWithTag("home_workout_card").assertExists()
-        composeTestRule.onNodeWithTag("home_story_card").assertExists()
         composeTestRule.onNodeWithTag("weekly_overview_card").assertExists()
 
-        // 2. Переход в Книгу с Главной карточки (спокойный экран чтения без горной шапки, кнопка «Добавить книгу»)
-        composeTestRule.onNodeWithTag("btn_open_reader").performScrollTo().performClick()
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("story_reader_screen").assertExists()
-        composeTestRule.onNodeWithTag("reader_empty_import_card").assertExists()
-        composeTestRule.onNodeWithTag("btn_open_book_from_file").assertExists()
-        composeTestRule.onNodeWithText("Добавить книгу").assertExists()
-
-        // 3. Переход в Тренировки
+        // 2. Переход в Тренировку: проверяем 3 горизонтальные вкладки (Утро, Обед, Вечер) и 3 тренировки внутри Утра
         composeTestRule.onNodeWithTag("nav_plan").performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("daily_plan_persistence_card").assertExists()
+        composeTestRule.onNodeWithTag("plan_group_tab_MORNING").assertExists()
+        composeTestRule.onNodeWithTag("plan_group_tab_NOON").assertExists()
+        composeTestRule.onNodeWithTag("plan_group_tab_EVENING").assertExists()
+        composeTestRule.onNodeWithTag("daily_slot_real_v2_morning_fast").assertExists()
+        composeTestRule.onNodeWithTag("daily_slot_real_v2_morning_slow").assertExists()
+        composeTestRule.onNodeWithTag("daily_slot_real_v2_morning_endurance").assertExists()
 
         // 4. Переход в Настройки (5 тем, звук, чтение, данные, о приложении -> Диагностика)
         composeTestRule.onNodeWithTag("nav_settings").performClick()
@@ -937,7 +936,7 @@ class ExampleRobolectricTest {
         composeTestRule.waitForIdle()
 
         // Переключаемся на вкладку «Мои интервалы»
-        composeTestRule.onNodeWithTag("plan_tab_free").performClick()
+        composeTestRule.onNodeWithTag("plan_tab_free").performScrollTo().performClick()
         composeTestRule.waitForIdle()
 
         // Проверяем наличие секции шаблонов и обязательной подписи
@@ -989,7 +988,7 @@ class ExampleRobolectricTest {
         // Запускаем свободный подход из «Тренировки → Мои интервалы»
         composeTestRule.onNodeWithTag("nav_plan").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("plan_tab_free").performClick()
+        composeTestRule.onNodeWithTag("plan_tab_free").performScrollTo().performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("btn_start_free_0")
             .performScrollTo()
@@ -1022,5 +1021,48 @@ class ExampleRobolectricTest {
         // Останавливаем и сбрасываем тренировку, чтобы очистить состояние
         com.example.service.BenchSessionCoordinator.resetToIdle()
         composeTestRule.waitForIdle()
+    }
+
+    @Test
+    fun `real daily plan v2 seeds 3 workouts in Morning, Noon, and Evening with exact intervals`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = Room.inMemoryDatabaseBuilder(context, VelarisDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val clock = FakeControllableTimeProvider(localDate = "2026-11-05")
+            val repo = WorkoutPersistenceRepository(db.velarisDao(), clock)
+
+            val slots = repo.getOrCreateDailySlots(
+                localDate = "2026-11-05",
+                planId = WorkoutPersistenceRepository.REAL_PLAN_STANDARD_3,
+                isDemo = false
+            )
+            assertEquals(9, slots.size)
+
+            val morning = slots.filter { it.slot.groupCode == "MORNING" }
+            val noon = slots.filter { it.slot.groupCode == "NOON" }
+            val evening = slots.filter { it.slot.groupCode == "EVENING" }
+            assertEquals(3, morning.size)
+            assertEquals(3, noon.size)
+            assertEquals(3, evening.size)
+
+            // 1. Быстрая тренировка: 100 сжиманий, 1 с сжатие, 1 с отдых
+            assertEquals(1_000L, morning[0].slot.contractionMs)
+            assertEquals(1_000L, morning[0].slot.relaxationMs)
+            assertEquals(100, morning[0].slot.repetitions)
+
+            // 2. Медленная тренировка (Силовой контроль): 10 сжиманий, 10 с сжатие, 5 с отдых
+            assertEquals(10_000L, morning[1].slot.contractionMs)
+            assertEquals(5_000L, morning[1].slot.relaxationMs)
+            assertEquals(10, morning[1].slot.repetitions)
+
+            // 3. Очень медленные сжимания (Выносливость): 10 сжиманий, 25 с удержание, 10 с отдых
+            assertEquals(25_000L, morning[2].slot.contractionMs)
+            assertEquals(10_000L, morning[2].slot.relaxationMs)
+            assertEquals(10, morning[2].slot.repetitions)
+        } finally {
+            db.close()
+        }
     }
 }

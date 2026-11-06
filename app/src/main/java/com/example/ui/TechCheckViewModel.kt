@@ -40,7 +40,7 @@ enum class VelarisNavDestination(
     val titleRu: String
 ) {
     HOME("home", "Главная"),
-    PLAN("plan", "Тренировки"),
+    PLAN("plan", "Тренировка"),
     WORKOUT("workout", "Текущая тренировка"),
     READER("reader", "Книга"),
     SETTINGS("settings", "Настройки"),

@@ -453,7 +453,7 @@ data class BenchEventLogEntry(
 val DEFAULT_DEMO_PROTOCOLS = listOf(
     DemoProtocolConfig(
         id = "demo_slot_morning_fast",
-        titleRu = "Демо · Утро: Быстрые (3 повтора × 4 с / 4 с)",
+        titleRu = "Утро · Быстрые (3 повтора × 4 с / 4 с)",
         contractionMs = 4_000L,
         relaxationMs = 4_000L,
         repetitions = 3,
@@ -462,7 +462,7 @@ val DEFAULT_DEMO_PROTOCOLS = listOf(
     ),
     DemoProtocolConfig(
         id = "demo_slot_noon_slow",
-        titleRu = "Демо · Обед: Медленные (3 повтора × 5 с / 5 с)",
+        titleRu = "Обед · Медленные (3 повтора × 5 с / 5 с)",
         contractionMs = 5_000L,
         relaxationMs = 5_000L,
         repetitions = 3,
@@ -471,7 +471,7 @@ val DEFAULT_DEMO_PROTOCOLS = listOf(
     ),
     DemoProtocolConfig(
         id = "demo_slot_evening_hold",
-        titleRu = "Демо · Вечер: Удержание (2 повтора × 6 с / 6 с)",
+        titleRu = "Вечер · Удержание (2 повтора × 6 с / 6 с)",
         contractionMs = 6_000L,
         relaxationMs = 6_000L,
         repetitions = 2,

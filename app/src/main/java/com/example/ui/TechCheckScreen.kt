@@ -12,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -72,6 +73,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -92,6 +94,12 @@ import com.example.domain.RunStatus
 import com.example.domain.WorkoutDifficulty
 import com.example.ui.theme.LocalVelarisPalette
 import java.util.Locale
+
+private val MAIN_NAV_DESTINATIONS = listOf(
+    VelarisNavDestination.HOME,
+    VelarisNavDestination.PLAN,
+    VelarisNavDestination.SETTINGS
+)
 
 private fun resolveRingColor(status: RunStatus, currentPhase: PhaseType, palette: com.example.ui.theme.VelarisPalette): Color = when (status) {
     RunStatus.IDLE -> palette.outline
@@ -148,17 +156,19 @@ fun ActiveWorkoutTimerRing(
 
     Box(
         modifier = modifier
-            .size(268.dp)
+            .size(240.dp)
             .padding(6.dp)
             .testTag("smooth_timer_ring"),
         contentAlignment = Alignment.Center
     ) {
         val trackColor = palette.surfaceElevated
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val strokePx = 18.dp.toPx()
-            val diameter = size.minDimension - strokePx
+            val strokePx = 15.dp.toPx()
+            val glowStrokePx = 24.dp.toPx()
+            val diameter = size.minDimension - glowStrokePx
             val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
             val arcSize = Size(diameter, diameter)
+            val sweep = 360f * ringProgress.coerceIn(0f, 1f)
 
             drawArc(
                 color = trackColor,
@@ -170,10 +180,23 @@ fun ActiveWorkoutTimerRing(
                 style = Stroke(width = strokePx, cap = StrokeCap.Round)
             )
 
+            // Мягкое внешнее свечение активной дуги
+            if (sweep > 0.5f) {
+                drawArc(
+                    color = ringColor.copy(alpha = 0.18f),
+                    startAngle = -90f,
+                    sweepAngle = sweep,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = Stroke(width = glowStrokePx, cap = StrokeCap.Round)
+                )
+            }
+
             drawArc(
                 color = ringColor,
                 startAngle = -90f,
-                sweepAngle = 360f * ringProgress.coerceIn(0f, 1f),
+                sweepAngle = sweep,
                 useCenter = false,
                 topLeft = topLeft,
                 size = arcSize,
@@ -426,7 +449,8 @@ fun TechCheckScreen(
                         }
 
                         when (destination) {
-                            VelarisNavDestination.HOME -> {
+                            VelarisNavDestination.HOME,
+                            VelarisNavDestination.READER -> {
                                 VelarisHomeScreen(
                                     snapshot = snapshot,
                                     settings = settings,
@@ -438,7 +462,7 @@ fun TechCheckScreen(
                                     onStartNextSlot = { slot -> viewModel.startSlotAndOpenWorkout(slot) },
                                     onStartFreeTemplate = { template -> viewModel.startFreeWorkoutAndOpenWorkout(template) },
                                     onOpenPlan = { viewModel.navigateTo(VelarisNavDestination.PLAN) },
-                                    onOpenReader = { viewModel.navigateTo(VelarisNavDestination.READER) },
+                                    onOpenReader = { viewModel.navigateTo(VelarisNavDestination.HOME) },
                                     onSelectOverviewDay = { dateStr -> viewModel.selectWeeklyOverviewDate(dateStr) }
                                 )
                             }
@@ -476,32 +500,7 @@ fun TechCheckScreen(
                                     onReset = { viewModel.resetDemo() },
                                     onRateDifficulty = { diff -> viewModel.rateLastCompletedSlotDifficulty(diff) },
                                     onNavigateToPlan = { viewModel.navigateTo(VelarisNavDestination.PLAN) },
-                                    onNavigateToReader = { viewModel.navigateTo(VelarisNavDestination.READER) }
-                                )
-                            }
-
-                            VelarisNavDestination.READER -> {
-                                VelarisReaderScreen(
-                                    storyState = storyState,
-                                    settings = settings,
-                                    snapshot = snapshot,
-                                    onImportMarkdownUri = { uri -> viewModel.importMarkdownFromUri(uri) },
-                                    onUpdatePreviewHeadingLevels = { actLvl, chLvl ->
-                                        viewModel.updateImportPreviewHeadingLevels(actLvl, chLvl)
-                                    },
-                                    onConfirmPendingImport = { viewModel.confirmPendingMarkdownImport() },
-                                    onCancelPendingImport = { viewModel.cancelPendingMarkdownImport() },
-                                    onReaderModeChange = { viewModel.setReaderMode(it) },
-                                    onReaderFontSizeChange = { viewModel.setReaderFontSize(it) },
-                                    onReaderLineSpacingChange = { viewModel.setReaderLineSpacing(it) },
-                                    onNextStep = { viewModel.nextStoryStep() },
-                                    onPreviousStep = { viewModel.previousStoryStep() },
-                                    onNextChapter = { viewModel.nextStoryChapter() },
-                                    onPreviousChapter = { viewModel.previousStoryChapter() },
-                                    onSelectChapter = { viewModel.selectStoryChapter(it) },
-                                    onSaveBlockPosition = { viewModel.saveStoryBlockPosition(it) },
-                                    onRestartFromBeginning = { viewModel.restartStoryFromBeginning() },
-                                    onReturnToWorkout = { viewModel.navigateTo(VelarisNavDestination.WORKOUT) }
+                                    onNavigateToReader = { viewModel.navigateTo(VelarisNavDestination.HOME) }
                                 )
                             }
 
@@ -627,17 +626,17 @@ fun CompactActiveWorkoutBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .border(1.5.dp, phaseBadgeColor.copy(alpha = 0.7f), RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(14.dp))
+            .border(1.dp, phaseBadgeColor.copy(alpha = 0.65f), RoundedCornerShape(14.dp))
             .clickable { onReturnToWorkout() }
             .testTag("active_session_return_banner"),
         color = palette.surfaceElevated,
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(14.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -647,11 +646,11 @@ fun CompactActiveWorkoutBar(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(10.dp)
+                        .size(8.dp)
                         .clip(CircleShape)
                         .background(phaseBadgeColor)
                 )
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Column {
                     Text(
                         text = statusTitle,
@@ -662,7 +661,7 @@ fun CompactActiveWorkoutBar(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "Цикл ${snapshot.currentRepetition} из ${snapshot.totalRepetitions} · Осталось ${formatDurationCompact(snapshot.remainingActiveMs)}",
+                        text = "Цикл ${snapshot.currentRepetition}/${snapshot.totalRepetitions} · Осталось ${formatDurationCompact(snapshot.remainingActiveMs)}",
                         style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
                         color = palette.textSecondary,
                         maxLines = 1,
@@ -680,54 +679,59 @@ fun CompactActiveWorkoutBar(
                 if (snapshot.isRunningOrPreparing) {
                     FilledTonalButton(
                         onClick = onPauseWorkout,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = palette.surfaceVariant,
                             contentColor = palette.textPrimary
                         ),
                         modifier = Modifier
-                            .heightIn(min = 48.dp)
+                            .heightIn(min = 40.dp)
                             .testTag("btn_compact_pause")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Pause,
                             contentDescription = "Пауза",
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 } else {
                     FilledTonalButton(
                         onClick = onResumeWorkout,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = palette.surfaceVariant,
                             contentColor = palette.primaryAccent
                         ),
                         modifier = Modifier
-                            .heightIn(min = 48.dp)
+                            .heightIn(min = 40.dp)
                             .testTag("btn_compact_resume")
                     ) {
                         Icon(
                             imageVector = Icons.Default.PlayArrow,
                             contentDescription = "Продолжить",
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
 
                 Button(
                     onClick = onReturnToWorkout,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = palette.primaryAccent,
                         contentColor = palette.onPrimaryAccent
                     ),
                     modifier = Modifier
-                        .heightIn(min = 48.dp)
+                        .heightIn(min = 40.dp)
                         .testTag("btn_return_to_workout")
                 ) {
                     Text(
-                        text = "Вернуться к тренировке",
+                        text = "Открыть",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        maxLines = 1
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -736,8 +740,7 @@ fun CompactActiveWorkoutBar(
 }
 
 /**
- * Спокойная декоративная шапка в стиле горного пейзажа в сумерках (Итерация v1.4 п. 2, п. 8).
- * Статичный силуэт гор без параллакса и без технических сведений о сборке.
+ * Компактная воздушная шапка с мягким силуэтом гор (88.dp) без визуального перегруза.
  */
 @Composable
 fun VelarisMountainHeader(
@@ -748,7 +751,7 @@ fun VelarisMountainHeader(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(124.dp)
+            .height(72.dp)
             .background(
                 Brush.verticalGradient(
                     colors = listOf(palette.heroGradientStart, palette.heroGradientEnd)
@@ -764,11 +767,11 @@ fun VelarisMountainHeader(
             val h = size.height
 
             val farMountain = Path().apply {
-                moveTo(0f, h * 0.78f)
-                lineTo(w * 0.22f, h * 0.34f)
-                lineTo(w * 0.45f, h * 0.64f)
-                lineTo(w * 0.72f, h * 0.28f)
-                lineTo(w, h * 0.68f)
+                moveTo(0f, h * 0.80f)
+                lineTo(w * 0.22f, h * 0.40f)
+                lineTo(w * 0.45f, h * 0.66f)
+                lineTo(w * 0.72f, h * 0.34f)
+                lineTo(w, h * 0.70f)
                 lineTo(w, h)
                 lineTo(0f, h)
                 close()
@@ -776,12 +779,12 @@ fun VelarisMountainHeader(
             drawPath(farMountain, color = palette.mountainFar)
 
             val midMountain = Path().apply {
-                moveTo(0f, h * 0.85f)
-                lineTo(w * 0.15f, h * 0.56f)
-                lineTo(w * 0.38f, h * 0.76f)
-                lineTo(w * 0.61f, h * 0.44f)
-                lineTo(w * 0.86f, h * 0.72f)
-                lineTo(w, h * 0.54f)
+                moveTo(0f, h * 0.86f)
+                lineTo(w * 0.15f, h * 0.60f)
+                lineTo(w * 0.38f, h * 0.78f)
+                lineTo(w * 0.61f, h * 0.48f)
+                lineTo(w * 0.86f, h * 0.74f)
+                lineTo(w, h * 0.58f)
                 lineTo(w, h)
                 lineTo(0f, h)
                 close()
@@ -789,11 +792,11 @@ fun VelarisMountainHeader(
             drawPath(midMountain, color = palette.mountainMid)
 
             val nearMountain = Path().apply {
-                moveTo(0f, h * 0.90f)
-                lineTo(w * 0.28f, h * 0.66f)
-                lineTo(w * 0.53f, h * 0.84f)
-                lineTo(w * 0.80f, h * 0.62f)
-                lineTo(w, h * 0.82f)
+                moveTo(0f, h * 0.92f)
+                lineTo(w * 0.28f, h * 0.70f)
+                lineTo(w * 0.53f, h * 0.86f)
+                lineTo(w * 0.80f, h * 0.66f)
+                lineTo(w, h * 0.84f)
                 lineTo(w, h)
                 lineTo(0f, h)
                 close()
@@ -804,52 +807,26 @@ fun VelarisMountainHeader(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 18.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Velaris",
                     style = MaterialTheme.typography.headlineMedium,
                     color = palette.textPrimary,
-                    fontWeight = FontWeight.ExtraBold
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1
                 )
                 Text(
                     text = subtitleRu,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = palette.secondaryAccent,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-            }
-
-            if (isDemoActive) {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = palette.warningAccent.copy(alpha = 0.20f),
-                    modifier = Modifier
-                        .border(1.dp, palette.warningAccent.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
-                        .testTag("demo_safety_banner")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = palette.warningAccent,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Демо-режим",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = palette.warningAccent,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
             }
         }
     }
@@ -875,7 +852,7 @@ private fun DatabaseWarningBanner(message: String) {
 }
 
 /**
- * Отдельный экран активной тренировки с плавным кольцом и крупными секундами (Итерация v1.4 п. 6).
+ * Отдельный экран активной тренировки с плавным кольцом и крупными секундами.
  */
 @Composable
 fun VelarisActiveWorkoutScreen(
@@ -900,28 +877,29 @@ fun VelarisActiveWorkoutScreen(
         modifier = modifier
             .fillMaxWidth()
             .testTag("active_workout_screen"),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Компактный индикатор звука и предупреждение о беззвучном режиме
+        // Компактный индикатор звука без вылезания за правый край
         CompactAudioStatusRow(
             hardwareStatus = hardwareStatus,
             soundEnabled = soundEnabled
         )
 
-        // Основная карточка таймера (не скачет при смене цифр, фазы или заголовка)
+        // Основная карточка таймера
         Card(
             modifier = Modifier
                 .fillMaxWidth()
+                .border(1.dp, palette.outline.copy(alpha = 0.30f), RoundedCornerShape(24.dp))
                 .testTag("timer_state_card"),
-            shape = RoundedCornerShape(26.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = palette.surface)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
+                    .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -940,25 +918,32 @@ fun VelarisActiveWorkoutScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     OutlinedButton(
                         onClick = onNavigateToPlan,
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         modifier = Modifier
-                            .heightIn(min = 48.dp)
+                            .heightIn(min = 38.dp)
                             .testTag("btn_minimize_workout")
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "К списку тренировок",
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("К тренировкам", style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            text = "К тренировкам",
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            softWrap = false
+                        )
                     }
                 }
 
-                // Фиксированный по высоте блок заголовка фазы (не вызывает скачков вёрстки)
+                // Фиксированный по высоте блок заголовка фазы
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 52.dp),
+                        .heightIn(min = 42.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -973,7 +958,7 @@ fun VelarisActiveWorkoutScreen(
                     )
                 }
 
-                // Непрерывное кольцо неизменного размера 268.dp (изолировано в ActiveWorkoutTimerRing)
+                // Изолированное кольцо таймера со свечением
                 ActiveWorkoutTimerRing(
                     snapshot = snapshot,
                     palette = palette
@@ -997,7 +982,6 @@ fun VelarisActiveWorkoutScreen(
                     }
                 }
 
-                // Кнопки управления подходом (высота >= 56.dp для удобного нажатия)
                 WorkoutControlButtons(
                     status = snapshot.status,
                     onStart = onStart,
@@ -1009,7 +993,6 @@ fun VelarisActiveWorkoutScreen(
             }
         }
 
-        // Спокойный экран завершения подхода с понятным итогом и переходами «К тренировкам» и «Почитать»
         if (snapshot.status == RunStatus.COMPLETED) {
             WorkoutCompletionRewardCard(
                 snapshot = snapshot,
@@ -1034,7 +1017,7 @@ private fun CompactAudioStatusRow(
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Surface(
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(12.dp),
             color = palette.surfaceElevated,
             modifier = Modifier
                 .fillMaxWidth()
@@ -1043,11 +1026,14 @@ private fun CompactAudioStatusRow(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Icon(
                         imageVector = when {
                             !soundEnabled -> Icons.AutoMirrored.Filled.VolumeOff
@@ -1056,25 +1042,31 @@ private fun CompactAudioStatusRow(
                         },
                         contentDescription = null,
                         tint = palette.secondaryAccent,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = if (soundEnabled) {
-                            "Звук: ${hardwareStatus.outputRouteLabelRu}"
+                            hardwareStatus.outputRouteLabelRu
                         } else {
                             "Звук выключен (вибрация)"
                         },
                         style = MaterialTheme.typography.labelMedium,
                         color = palette.textPrimary,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Text(
                     text = hardwareStatus.ringerModeLabelRu,
                     style = MaterialTheme.typography.labelSmall,
-                    color = palette.textSecondary
+                    color = palette.textSecondary,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }
@@ -1190,45 +1182,24 @@ private fun WorkoutCompletionRewardCard(
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            Button(
+                onClick = onNavigateToPlan,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = palette.primaryAccent,
+                    contentColor = palette.onPrimaryAccent
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 50.dp)
+                    .testTag("btn_completion_to_plan")
             ) {
-                OutlinedButton(
-                    onClick = onNavigateToPlan,
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 50.dp)
-                        .testTag("btn_completion_to_plan")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CalendarMonth,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("К тренировкам", color = palette.textPrimary, fontWeight = FontWeight.SemiBold)
-                }
-
-                Button(
-                    onClick = onNavigateToReader,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = palette.secondaryAccent,
-                        contentColor = palette.onPrimaryAccent
-                    ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 50.dp)
-                        .testTag("btn_completion_to_reader")
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.MenuBook,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Почитать", fontWeight = FontWeight.Bold)
-                }
+                Icon(
+                    imageVector = Icons.Default.CalendarMonth,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("К тренировкам", fontWeight = FontWeight.Bold)
             }
         }
     }

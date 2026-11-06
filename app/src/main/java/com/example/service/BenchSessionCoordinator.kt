@@ -290,7 +290,7 @@ object BenchSessionCoordinator {
     }
 
     private fun isCurrentModeDemo(): Boolean {
-        return _isZeroSlotDemoMode.value || !_settings.value.isRealProgramEnabled
+        return _isZeroSlotDemoMode.value
     }
 
     private fun activeDateKey(): String {
@@ -299,10 +299,10 @@ object BenchSessionCoordinator {
     }
 
     private fun activePlanId(): String {
-        return when {
-            _isZeroSlotDemoMode.value -> WorkoutPersistenceRepository.DEMO_PLAN_ZERO_SLOTS
-            _settings.value.isRealProgramEnabled -> WorkoutPersistenceRepository.REAL_PLAN_STANDARD_3
-            else -> WorkoutPersistenceRepository.DEMO_PLAN_STANDARD_3
+        return if (_isZeroSlotDemoMode.value) {
+            WorkoutPersistenceRepository.DEMO_PLAN_ZERO_SLOTS
+        } else {
+            WorkoutPersistenceRepository.REAL_PLAN_STANDARD_3
         }
     }
 
@@ -859,18 +859,11 @@ object BenchSessionCoordinator {
         refreshHardwareStatus()
         val hw = _hardwareStatus.value
         if (_settings.value.soundEnabled && (!hw.isSilentOrVibrateRinger || hw.isHeadphonesConnected)) {
-            val focusGranted = audioVibrationEngine?.requestSessionAudioFocus(_settings.value.duckOtherApps) ?: true
-            if (!focusGranted) {
-                appendLog(
-                    "WARN",
-                    "Аудиофокус недоступен при старте (активен звонок или внешний поток). Старт со звуком отклонён."
-                )
-                return false
-            }
+            audioVibrationEngine?.requestSessionAudioFocus(_settings.value.duckOtherApps)
         }
 
         val slotIdToUse = matchingSlot?.slot?.id ?: phaseEngine.currentSnapshot().protocol.id
-        val isDemoSlot = matchingSlot?.slot?.isDemo ?: isCurrentModeDemo()
+        val isDemoSlot = matchingSlot?.slot?.isDemo ?: false
         val runId = "run_${UUID.randomUUID()}"
         val startDate = timeProvider.currentLocalDate()
         val zoneId = timeProvider.currentZoneId()
@@ -948,21 +941,14 @@ object BenchSessionCoordinator {
         refreshHardwareStatus()
         val hw = _hardwareStatus.value
         if (_settings.value.soundEnabled && (!hw.isSilentOrVibrateRinger || hw.isHeadphonesConnected)) {
-            val focusGranted = audioVibrationEngine?.requestSessionAudioFocus(_settings.value.duckOtherApps) ?: true
-            if (!focusGranted) {
-                appendLog(
-                    "WARN",
-                    "Аудиофокус недоступен при старте (активен звонок). Старт со звуком отклонён."
-                )
-                return false
-            }
+            audioVibrationEngine?.requestSessionAudioFocus(_settings.value.duckOtherApps)
         }
 
         val runId = "prog_run_${UUID.randomUUID()}"
         val startDate = timeProvider.currentLocalDate()
         val zoneId = timeProvider.currentZoneId()
         val currentSettings = _settings.value
-        val isDemoRun = !_settings.value.isRealProgramEnabled
+        val isDemoRun = false
         _lastCompletedSlotDifficulty.value = null
 
         val started = phaseEngine.startCustomProgram(
@@ -1013,14 +999,7 @@ object BenchSessionCoordinator {
         refreshHardwareStatus()
         val hw = _hardwareStatus.value
         if (_settings.value.soundEnabled && (!hw.isSilentOrVibrateRinger || hw.isHeadphonesConnected)) {
-            val focusGranted = audioVibrationEngine?.requestSessionAudioFocus(_settings.value.duckOtherApps) ?: true
-            if (!focusGranted) {
-                appendLog(
-                    "WARN",
-                    "Аудиофокус недоступен при старте (активен звонок или внешний поток). Старт со звуком отклонён."
-                )
-                return false
-            }
+            audioVibrationEngine?.requestSessionAudioFocus(_settings.value.duckOtherApps)
         }
 
         val proto = DemoProtocolConfig(
@@ -1038,7 +1017,7 @@ object BenchSessionCoordinator {
         val startDate = timeProvider.currentLocalDate()
         val zoneId = timeProvider.currentZoneId()
         val currentSettings = _settings.value
-        val isDemoRun = !_settings.value.isRealProgramEnabled
+        val isDemoRun = false
         _lastCompletedSlotDifficulty.value = null
 
         val started = phaseEngine.start(
@@ -1057,100 +1036,6 @@ object BenchSessionCoordinator {
             appendLog(
                 "FREE_START",
                 "Запущен свободный подход «${template.name}» (${proto.repetitions} циклов по ${template.contractionSec}с/${template.relaxationSec}с, факт=${template.actualDurationSec}с, demo=$isDemoRun)"
-            )
-        }
-        return started
-    }
-
-    // --- Продвинутый конструктор тренировок (управление и запуск) ---
-
-    fun saveCustomProgram(program: com.example.domain.CustomWorkoutProgram) {
-        val repo = persistenceRepository ?: return
-        coordinatorScope.launch {
-            repo.saveCustomProgram(program)
-            _customPrograms.value = repo.getAllCustomPrograms()
-            appendLog("PROGRAM", "Сохранена программа конструктора: «${program.title}» (${program.blocks.size} блоков)")
-        }
-    }
-
-    fun deleteCustomProgram(id: String) {
-        val repo = persistenceRepository ?: return
-        coordinatorScope.launch {
-            repo.deleteCustomProgram(id)
-            _customPrograms.value = repo.getAllCustomPrograms()
-            appendLog("PROGRAM", "Удалена программа конструктора (ID: $id)")
-        }
-    }
-
-    fun duplicateCustomProgram(program: com.example.domain.CustomWorkoutProgram) {
-        val copy = program.copy(
-            id = UUID.randomUUID().toString(),
-            title = "${program.title} (Копия)",
-            createdAtEpochMs = timeProvider.currentWallTimeMs(),
-            updatedAtEpochMs = timeProvider.currentWallTimeMs()
-        )
-        saveCustomProgram(copy)
-    }
-
-    fun reorderCustomPrograms(reordered: List<com.example.domain.CustomWorkoutProgram>) {
-        val repo = persistenceRepository ?: return
-        coordinatorScope.launch {
-            reordered.forEachIndexed { index, prog ->
-                repo.saveCustomProgram(prog, sortOrder = index)
-            }
-            _customPrograms.value = reordered
-            appendLog("PROGRAM", "Обновлён порядок программ конструктора")
-        }
-    }
-
-    @Synchronized
-    fun startCustomProgramSession(program: com.example.domain.CustomWorkoutProgram): Boolean {
-        if (phaseEngine.currentSnapshot().isActiveOrPaused) {
-            appendLog(
-                "GUARD",
-                "Нельзя запустить программу: уже активна другая попытка (${phaseEngine.currentSnapshot().status})"
-            )
-            return false
-        }
-        if (program.blocks.isEmpty()) {
-            appendLog("GUARD", "Нельзя запустить пустую программу: добавьте хотя бы один блок")
-            return false
-        }
-
-        refreshHardwareStatus()
-        val hw = _hardwareStatus.value
-        if (_settings.value.soundEnabled && (!hw.isSilentOrVibrateRinger || hw.isHeadphonesConnected)) {
-            val focusGranted = audioVibrationEngine?.requestSessionAudioFocus(_settings.value.duckOtherApps) ?: true
-            if (!focusGranted) {
-                appendLog(
-                    "WARN",
-                    "Аудиофокус недоступен при старте (активен звонок). Старт со звуком отклонён."
-                )
-                return false
-            }
-        }
-
-        val runId = "prog_run_${UUID.randomUUID()}"
-        val startDate = timeProvider.currentLocalDate()
-        val zoneId = timeProvider.currentZoneId()
-        val currentSettings = _settings.value
-        val isDemoRun = !_settings.value.isRealProgramEnabled
-        _lastCompletedSlotDifficulty.value = null
-
-        val started = phaseEngine.startCustomProgram(
-            program = program,
-            runId = runId,
-            startDate = startDate,
-            zoneId = zoneId,
-            soundPackSnapshot = currentSettings.soundPack,
-            metronomeStyleSnapshot = currentSettings.metronomeTickStyle,
-            isDemo = isDemoRun
-        )
-        _engineSnapshot.value = phaseEngine.currentSnapshot()
-        if (started) {
-            appendLog(
-                "PROGRAM_START",
-                "Запущена программа конструктора «${program.title}» (${program.blocks.size} блоков, ${program.formattedTotalDuration()})"
             )
         }
         return started
@@ -1184,14 +1069,7 @@ object BenchSessionCoordinator {
         refreshHardwareStatus()
         val hw = _hardwareStatus.value
         if (_settings.value.soundEnabled && (!hw.isSilentOrVibrateRinger || hw.isHeadphonesConnected)) {
-            val focusGranted = audioVibrationEngine?.requestSessionAudioFocus(_settings.value.duckOtherApps) ?: true
-            if (!focusGranted) {
-                appendLog(
-                    "WARN",
-                    "Не удалось возобновить со звуком: аудиофокус занят звонком или внешним приложением."
-                )
-                return false
-            }
+            audioVibrationEngine?.requestSessionAudioFocus(_settings.value.duckOtherApps)
         }
         val resumed = phaseEngine.resume()
         _engineSnapshot.value = phaseEngine.currentSnapshot()

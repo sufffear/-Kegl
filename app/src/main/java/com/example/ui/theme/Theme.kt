@@ -12,6 +12,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 
 val LocalVelarisPalette = staticCompositionLocalOf { DawnPalette }
 
@@ -110,7 +112,28 @@ fun VelarisTheme(
         )
     }
 
-    CompositionLocalProvider(LocalVelarisPalette provides palette) {
+    // Нормализуем плотность экрана (если системный Масштаб экрана Samsung сжал ширину < 412dp)
+    // и фиксируем аккуратный масштаб шрифта, чтобы интерфейс всегда оставался воздушным и компактным.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val currentDensity = LocalDensity.current
+    val balancedDensity = remember(currentDensity, context) {
+        val widthPx = context.resources.displayMetrics.widthPixels
+        val rawWidthDp = if (currentDensity.density > 0f) widthPx / currentDensity.density else 412f
+        val normalizedDensity = if (widthPx > 600 && rawWidthDp < 412f) {
+            widthPx / 412f
+        } else {
+            currentDensity.density
+        }
+        Density(
+            density = normalizedDensity,
+            fontScale = 0.92f
+        )
+    }
+
+    CompositionLocalProvider(
+        LocalVelarisPalette provides palette,
+        LocalDensity provides balancedDensity
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,

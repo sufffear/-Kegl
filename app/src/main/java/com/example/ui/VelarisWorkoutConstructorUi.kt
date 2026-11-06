@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -90,7 +91,7 @@ fun WorkoutConstructorTabContent(
         // Заголовок и кнопка создания
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -98,12 +99,16 @@ fun WorkoutConstructorTabContent(
                     text = "Конструктор программ",
                     style = MaterialTheme.typography.titleMedium,
                     color = palette.textPrimary,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "Составляйте тренировки из 4 типов блоков с расчётом времени",
+                    text = "4 типа блоков с точным хронометражем",
                     style = MaterialTheme.typography.bodySmall,
-                    color = palette.textSecondary
+                    color = palette.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Button(
@@ -128,14 +133,15 @@ fun WorkoutConstructorTabContent(
                     containerColor = palette.primaryAccent,
                     contentColor = palette.onPrimaryAccent
                 ),
-                shape = RoundedCornerShape(14.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
-                    .heightIn(min = 44.dp)
+                    .heightIn(min = 38.dp)
                     .testTag("btn_create_custom_program")
             ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Создать", fontWeight = FontWeight.Bold)
+                Text("Создать", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
 
@@ -258,7 +264,7 @@ fun WorkoutConstructorTabContent(
 }
 
 /**
- * Карточка программы в списке.
+ * Карточка программы в списке с визуальной шкалой ритма блоков.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -279,15 +285,15 @@ fun CustomProgramCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .border(1.dp, palette.outline.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+            .border(1.dp, palette.outline.copy(alpha = 0.4f), RoundedCornerShape(18.dp))
             .testTag("program_card_${program.id}"),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = palette.surface)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // Верхняя строка: заголовок и кнопки перемещения/дублирования/удаления
@@ -299,7 +305,7 @@ fun CustomProgramCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = program.title,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         color = palette.textPrimary,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -308,9 +314,9 @@ fun CustomProgramCard(
                     if (program.description.isNotBlank()) {
                         Text(
                             text = program.description,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.labelSmall,
                             color = palette.textSecondary,
-                            maxLines = 2,
+                            maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
@@ -318,36 +324,36 @@ fun CustomProgramCard(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (index > 0) {
-                        IconButton(onClick = onMoveUp, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.ArrowUpward, contentDescription = "Вверх", tint = palette.textSecondary, modifier = Modifier.size(18.dp))
+                        IconButton(onClick = onMoveUp, modifier = Modifier.size(30.dp)) {
+                            Icon(Icons.Default.ArrowUpward, contentDescription = "Вверх", tint = palette.textSecondary, modifier = Modifier.size(16.dp))
                         }
                     }
                     if (index < totalCount - 1) {
-                        IconButton(onClick = onMoveDown, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.ArrowDownward, contentDescription = "Вниз", tint = palette.textSecondary, modifier = Modifier.size(18.dp))
+                        IconButton(onClick = onMoveDown, modifier = Modifier.size(30.dp)) {
+                            Icon(Icons.Default.ArrowDownward, contentDescription = "Вниз", tint = palette.textSecondary, modifier = Modifier.size(16.dp))
                         }
                     }
-                    IconButton(onClick = onDuplicate, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Копировать", tint = palette.secondaryAccent, modifier = Modifier.size(18.dp))
+                    IconButton(onClick = onDuplicate, modifier = Modifier.size(30.dp)) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Копировать", tint = palette.secondaryAccent, modifier = Modifier.size(16.dp))
                     }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Delete, contentDescription = "Удалить", tint = palette.errorAccent, modifier = Modifier.size(18.dp))
+                    IconButton(onClick = onDelete, modifier = Modifier.size(30.dp)) {
+                        Icon(Icons.Default.Delete, contentDescription = "Удалить", tint = palette.errorAccent, modifier = Modifier.size(16.dp))
                     }
                 }
             }
 
             // Бейджи хронометража и блоков
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = palette.primaryAccent.copy(alpha = 0.18f)
+                    color = palette.primaryAccent.copy(alpha = 0.16f)
                 ) {
                     Text(
                         text = "⏱ ${program.formattedTotalDuration()}",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelSmall,
                         color = palette.primaryAccent,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -356,11 +362,11 @@ fun CustomProgramCard(
 
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = palette.secondaryAccent.copy(alpha = 0.18f)
+                    color = palette.secondaryAccent.copy(alpha = 0.16f)
                 ) {
                     Text(
                         text = "Блоков: ${program.blocks.size}",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelSmall,
                         color = palette.secondaryAccent,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -372,11 +378,41 @@ fun CustomProgramCard(
                     color = palette.surfaceElevated
                 ) {
                     Text(
-                        text = "Всего циклов: ${program.totalCycles}",
-                        style = MaterialTheme.typography.labelMedium,
+                        text = "Циклов: ${program.totalCycles}",
+                        style = MaterialTheme.typography.labelSmall,
                         color = palette.textSecondary,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
+                }
+            }
+
+            // Визуальная цветовая шкала ритма блоков (Timeline Rhythm Bar)
+            if (program.blocks.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(palette.surfaceElevated),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    program.blocks.forEach { block ->
+                        val weightVal = block.totalDurationSec.coerceAtLeast(5).toFloat()
+                        Box(
+                            modifier = Modifier
+                                .weight(weightVal)
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(
+                                    when (block.type) {
+                                        WorkoutBlockType.REGULAR -> palette.primaryAccent
+                                        WorkoutBlockType.SHORT_PULSE -> palette.secondaryAccent
+                                        WorkoutBlockType.LONG_HOLD -> palette.phaseHoldAccent
+                                        WorkoutBlockType.CUSTOM_SEQUENCE -> palette.successAccent
+                                    }
+                                )
+                        )
+                    }
                 }
             }
 
@@ -387,7 +423,7 @@ fun CustomProgramCard(
                     .clip(RoundedCornerShape(12.dp))
                     .background(palette.surfaceElevated)
                     .padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 program.blocks.forEachIndexed { bIdx, block ->
                     Row(
@@ -398,7 +434,7 @@ fun CustomProgramCard(
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                             Box(
                                 modifier = Modifier
-                                    .size(8.dp)
+                                    .size(7.dp)
                                     .clip(CircleShape)
                                     .background(
                                         when (block.type) {
@@ -409,10 +445,10 @@ fun CustomProgramCard(
                                         }
                                     )
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "${bIdx + 1}. ${block.name}",
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.labelMedium,
                                 color = palette.textPrimary,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
@@ -420,42 +456,49 @@ fun CustomProgramCard(
                             )
                         }
 
+                        Spacer(modifier = Modifier.width(6.dp))
+
                         Text(
                             text = when (block.type) {
                                 WorkoutBlockType.REGULAR,
                                 WorkoutBlockType.SHORT_PULSE,
-                                WorkoutBlockType.LONG_HOLD -> "${block.contractionSec}с/${block.relaxationSec}с × ${block.repetitions} повт."
+                                WorkoutBlockType.LONG_HOLD -> "${block.contractionSec}с/${block.relaxationSec}с × ${block.repetitions}"
 
-                                WorkoutBlockType.CUSTOM_SEQUENCE -> "${block.customSteps.size} шагов × ${block.sequenceCycles} цикла"
+                                WorkoutBlockType.CUSTOM_SEQUENCE -> "${block.customSteps.size} шаг. × ${block.sequenceCycles}"
                             },
                             style = MaterialTheme.typography.labelSmall,
-                            color = palette.textSecondary
+                            color = palette.textSecondary,
+                            maxLines = 1
                         )
                     }
                 }
             }
 
-            // Нижние кнопки действий: Предпросмотр, Изменить, Запуск
+            // Нижние кнопки действий: Обзор, Изменить, Начать
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedButton(
                     onClick = onPreview,
-                    modifier = Modifier.weight(1f).heightIn(min = 44.dp)
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(11.dp),
+                    modifier = Modifier.weight(0.95f).heightIn(min = 40.dp)
                 ) {
-                    Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Обзор", style = MaterialTheme.typography.labelMedium)
+                    Text("Обзор", style = MaterialTheme.typography.labelMedium, maxLines = 1)
                 }
 
                 OutlinedButton(
                     onClick = onEdit,
-                    modifier = Modifier.weight(1f).heightIn(min = 44.dp)
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(11.dp),
+                    modifier = Modifier.weight(1.05f).heightIn(min = 40.dp)
                 ) {
-                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Изменить", style = MaterialTheme.typography.labelMedium)
+                    Text("Изменить", style = MaterialTheme.typography.labelMedium, maxLines = 1)
                 }
 
                 Button(
@@ -464,11 +507,13 @@ fun CustomProgramCard(
                         containerColor = palette.primaryAccent,
                         contentColor = palette.onPrimaryAccent
                     ),
-                    modifier = Modifier.weight(1.3f).heightIn(min = 44.dp).testTag("btn_start_program_${program.id}")
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(11.dp),
+                    modifier = Modifier.weight(1.15f).heightIn(min = 40.dp).testTag("btn_start_program_${program.id}")
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Начать", fontWeight = FontWeight.Bold)
+                    Text("Начать", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
             }
         }

@@ -90,55 +90,68 @@ class WorkoutPersistenceRepository(
         }
 
         val existingRealPlan = dao.getTrainingPlanById(REAL_PLAN_STANDARD_3)
-        if (existingRealPlan == null) {
+        if (existingRealPlan == null || existingRealPlan.version < REAL_PLAN_CURRENT_VERSION) {
             dao.upsertTrainingPlan(
                 TrainingPlanEntity(
                     id = REAL_PLAN_STANDARD_3,
-                    version = 1,
-                    titleRu = "Базовый план: 3 подхода (Утро / Обед / Вечер)",
+                    version = REAL_PLAN_CURRENT_VERSION,
+                    titleRu = "Ежедневный план: Утро, Обед и Вечер (по 3 тренировки)",
                     source = BenchSignalSettings.DEFAULT_REAL_PROGRAM_SOURCE,
                     effectiveFromDate = "2026-01-01",
                     isDemo = false
                 )
             )
-            val realAssignments = listOf(
-                PlanAssignmentEntity(
-                    id = "real_morning_endurance",
-                    planId = REAL_PLAN_STANDARD_3,
-                    planVersion = 1,
-                    groupCode = PlanGroup.MORNING.code,
-                    sortOrder = 1,
-                    titleRu = "Утро · Плавная выдержка (5с / 5с × 6)",
-                    contractionMs = 5_000L,
-                    relaxationMs = 5_000L,
-                    repetitions = 6,
-                    isDemo = false
-                ),
-                PlanAssignmentEntity(
-                    id = "real_noon_rhythm",
-                    planId = REAL_PLAN_STANDARD_3,
-                    planVersion = 1,
-                    groupCode = PlanGroup.NOON.code,
-                    sortOrder = 2,
-                    titleRu = "Обед · Короткий ритм (3с / 3с × 8)",
-                    contractionMs = 3_000L,
-                    relaxationMs = 3_000L,
-                    repetitions = 8,
-                    isDemo = false
-                ),
-                PlanAssignmentEntity(
-                    id = "real_evening_calm",
-                    planId = REAL_PLAN_STANDARD_3,
-                    planVersion = 1,
-                    groupCode = PlanGroup.EVENING.code,
-                    sortOrder = 3,
-                    titleRu = "Вечер · Спокойное завершение (4с / 6с × 6)",
-                    contractionMs = 4_000L,
-                    relaxationMs = 6_000L,
-                    repetitions = 6,
-                    isDemo = false
+            val groups = listOf(PlanGroup.MORNING, PlanGroup.NOON, PlanGroup.EVENING)
+            val realAssignments = mutableListOf<PlanAssignmentEntity>()
+            var orderCounter = 1
+            for (group in groups) {
+                val gKey = group.code.lowercase()
+                // 1. Быстрая тренировка: 100 сжиманий (1 с сжатие / 1 с отдых)
+                realAssignments.add(
+                    PlanAssignmentEntity(
+                        id = "real_v2_${gKey}_fast",
+                        planId = REAL_PLAN_STANDARD_3,
+                        planVersion = REAL_PLAN_CURRENT_VERSION,
+                        groupCode = group.code,
+                        sortOrder = orderCounter++,
+                        titleRu = "Быстрая тренировка",
+                        contractionMs = 1_000L,
+                        relaxationMs = 1_000L,
+                        repetitions = 100,
+                        isDemo = false
+                    )
                 )
-            )
+                // 2. Медленная тренировка (Силовой контроль): 10 сжиманий (10 с сжатие / 5 с отдых)
+                realAssignments.add(
+                    PlanAssignmentEntity(
+                        id = "real_v2_${gKey}_slow",
+                        planId = REAL_PLAN_STANDARD_3,
+                        planVersion = REAL_PLAN_CURRENT_VERSION,
+                        groupCode = group.code,
+                        sortOrder = orderCounter++,
+                        titleRu = "Силовой контроль",
+                        contractionMs = 10_000L,
+                        relaxationMs = 5_000L,
+                        repetitions = 10,
+                        isDemo = false
+                    )
+                )
+                // 3. Очень медленные сжимания (Выносливость): 10 сжиманий (25 с удержание / 10 с отдых)
+                realAssignments.add(
+                    PlanAssignmentEntity(
+                        id = "real_v2_${gKey}_endurance",
+                        planId = REAL_PLAN_STANDARD_3,
+                        planVersion = REAL_PLAN_CURRENT_VERSION,
+                        groupCode = group.code,
+                        sortOrder = orderCounter++,
+                        titleRu = "Выносливость",
+                        contractionMs = 25_000L,
+                        relaxationMs = 10_000L,
+                        repetitions = 10,
+                        isDemo = false
+                    )
+                )
+            }
             dao.upsertPlanAssignments(realAssignments)
         }
     }
@@ -154,16 +167,22 @@ class WorkoutPersistenceRepository(
     ): List<DailySlotWithCompletion> {
         ensureBuiltinPlansSeeded()
 
+        val plan = dao.getTrainingPlanById(planId) ?: TrainingPlanEntity(
+            id = planId,
+            version = if (planId == REAL_PLAN_STANDARD_3) REAL_PLAN_CURRENT_VERSION else 1,
+            titleRu = if (isDemo) "Демо-план" else "Ежедневный план",
+            source = if (isDemo) "DEMO_BUILTIN" else BenchSignalSettings.DEFAULT_REAL_PROGRAM_SOURCE,
+            effectiveFromDate = localDate,
+            isDemo = isDemo
+        )
+        val assignments = dao.getAssignmentsForPlan(plan.id, plan.version)
+
         var dailyPlan = dao.getDailyPlan(localDate = localDate, isDemo = isDemo)
+        val needsSlotSync = dailyPlan == null ||
+            dailyPlan.planId != plan.id ||
+            dailyPlan.planVersion != plan.version
+
         if (dailyPlan == null) {
-            val plan = dao.getTrainingPlanById(planId) ?: TrainingPlanEntity(
-                id = planId,
-                version = 1,
-                titleRu = if (isDemo) "Демо-план" else "Базовый план",
-                source = if (isDemo) "DEMO_BUILTIN" else BenchSignalSettings.DEFAULT_REAL_PROGRAM_SOURCE,
-                effectiveFromDate = localDate,
-                isDemo = isDemo
-            )
             val dailyPlanId = "${if (isDemo) "demo" else "real"}_${localDate}"
             val newDailyPlan = DailyPlanEntity(
                 id = dailyPlanId,
@@ -174,33 +193,48 @@ class WorkoutPersistenceRepository(
             )
             dao.insertDailyPlanIgnore(newDailyPlan)
             dailyPlan = dao.getDailyPlan(localDate = localDate, isDemo = isDemo) ?: newDailyPlan
-
-            val assignments = dao.getAssignmentsForPlan(plan.id, plan.version)
-            if (assignments.isNotEmpty()) {
-                val maxOrderByGroup = assignments.groupBy { it.groupCode }
-                    .mapValues { (_, list) -> list.maxOf { it.sortOrder } }
-
-                val slots = assignments.map { a ->
-                    DailySlotEntity(
-                        id = "${dailyPlan.id}_${a.id}",
-                        dailyPlanId = dailyPlan.id,
-                        localDate = localDate,
-                        assignmentId = a.id,
-                        groupCode = a.groupCode,
-                        sortOrder = a.sortOrder,
-                        titleRu = a.titleRu,
-                        contractionMs = a.contractionMs,
-                        relaxationMs = a.relaxationMs,
-                        repetitions = a.repetitions,
-                        isLastInGroup = (maxOrderByGroup[a.groupCode] == a.sortOrder),
-                        isDemo = isDemo
-                    )
-                }
-                dao.insertDailySlotsIgnore(slots)
-            }
+        } else if (needsSlotSync) {
+            val updatedDailyPlan = dailyPlan.copy(
+                planId = plan.id,
+                planVersion = plan.version
+            )
+            dao.insertDailyPlans(listOf(updatedDailyPlan))
+            dailyPlan = updatedDailyPlan
         }
 
-        val slots = dao.getSlotsForDailyPlan(dailyPlan.id)
+        if (needsSlotSync && assignments.isNotEmpty()) {
+            val maxOrderByGroup = assignments.groupBy { it.groupCode }
+                .mapValues { (_, list) -> list.maxOf { it.sortOrder } }
+
+            val slotsToInsert = assignments.map { a ->
+                DailySlotEntity(
+                    id = "${dailyPlan.id}_${a.id}",
+                    dailyPlanId = dailyPlan.id,
+                    localDate = localDate,
+                    assignmentId = a.id,
+                    groupCode = a.groupCode,
+                    sortOrder = a.sortOrder,
+                    titleRu = a.titleRu,
+                    contractionMs = a.contractionMs,
+                    relaxationMs = a.relaxationMs,
+                    repetitions = a.repetitions,
+                    isLastInGroup = (maxOrderByGroup[a.groupCode] == a.sortOrder),
+                    isDemo = isDemo
+                )
+            }
+            dao.insertDailySlotsIgnore(slotsToInsert)
+        }
+
+        val rawSlots = dao.getSlotsForDailyPlan(dailyPlan.id)
+        val validAssignmentIds = assignments.map { it.id }.toSet()
+        val slots = if (plan.id == DEMO_PLAN_ZERO_SLOTS) {
+            emptyList()
+        } else if (validAssignmentIds.isNotEmpty()) {
+            rawSlots.filter { it.assignmentId in validAssignmentIds }
+        } else {
+            rawSlots
+        }
+
         val completionsBySlot = dao.getCompletionsForDate(localDate = localDate, isDemo = isDemo)
             .associateBy { it.slotId }
 
@@ -240,7 +274,17 @@ class WorkoutPersistenceRepository(
                 if (comp.isFreeMode) {
                     "Свободный подход"
                 } else {
-                    allSlotsMap[comp.slotId]?.titleRu ?: "Подход выполнен"
+                    val slotEntity = allSlotsMap[comp.slotId]
+                    if (slotEntity != null) {
+                        val groupTitle = PlanGroup.fromCode(slotEntity.groupCode).titleRu
+                        if (slotEntity.titleRu.startsWith(groupTitle)) {
+                            slotEntity.titleRu
+                        } else {
+                            "$groupTitle · ${slotEntity.titleRu}"
+                        }
+                    } else {
+                        "Подход выполнен"
+                    }
                 }
             }
             WeeklyDaySummary(
@@ -429,14 +473,20 @@ class WorkoutPersistenceRepository(
     suspend fun countDemoCompletions(): Int = dao.countCompletionsByDemoFlag(isDemo = true)
 
     fun slotToProtocolConfig(slot: DailySlotEntity): DemoProtocolConfig {
+        val group = PlanGroup.fromCode(slot.groupCode)
+        val displayTitle = if (slot.titleRu.startsWith(group.titleRu)) {
+            slot.titleRu
+        } else {
+            "${group.titleRu} · ${slot.titleRu}"
+        }
         return DemoProtocolConfig(
             id = slot.id,
-            titleRu = slot.titleRu,
+            titleRu = displayTitle,
             contractionMs = slot.contractionMs,
             relaxationMs = slot.relaxationMs,
             repetitions = slot.repetitions,
             isLastInGroup = slot.isLastInGroup,
-            group = PlanGroup.fromCode(slot.groupCode)
+            group = group
         )
     }
 
@@ -444,5 +494,6 @@ class WorkoutPersistenceRepository(
         const val DEMO_PLAN_STANDARD_3 = "demo_plan_standard_3"
         const val DEMO_PLAN_ZERO_SLOTS = "demo_plan_zero_slots"
         const val REAL_PLAN_STANDARD_3 = "real_plan_standard_3"
+        const val REAL_PLAN_CURRENT_VERSION = 2
     }
 }
