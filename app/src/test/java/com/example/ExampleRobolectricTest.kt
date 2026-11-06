@@ -110,20 +110,42 @@ class ExampleRobolectricTest {
         composeTestRule.onNodeWithTag("daily_slot_real_v2_morning_slow").assertExists()
         composeTestRule.onNodeWithTag("daily_slot_real_v2_morning_endurance").assertExists()
 
-        // 4. Переход в Настройки (5 тем, звук, чтение, данные, о приложении -> Диагностика)
+        // 4. Переход в Настройки (вкладки категорий + спойлеры: Оформление, Звук, Образцы, Данные, Диагностика)
         composeTestRule.onNodeWithTag("nav_settings").performClick()
         composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("settings_category_tabs_row").assertExists()
         composeTestRule.onNodeWithTag("theme_selector_card").assertExists()
+
+        // Раскрываем спойлер «Оформление» и проверяем все 5 тем
+        composeTestRule.onNodeWithTag("theme_selector_header").performClick()
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("theme_option_theme_dawn").assertExists()
         composeTestRule.onNodeWithTag("theme_option_theme_sky").assertExists()
         composeTestRule.onNodeWithTag("theme_option_theme_aurora").assertExists()
         composeTestRule.onNodeWithTag("theme_option_theme_sunset").assertExists()
         composeTestRule.onNodeWithTag("theme_option_theme_sakura").assertExists()
-        composeTestRule.onNodeWithTag("sound_pack_soft").assertExists()
-        composeTestRule.onNodeWithTag("sound_pack_chimes").assertExists()
-        composeTestRule.onNodeWithTag("sound_pack_crisp").assertExists()
 
-        // Кнопки резервного копирования и восстановления в «Настройки → Данные»
+        // Раскрываем спойлер «Звук, профили и вибрация» и проверяем 3 звонких профиля
+        composeTestRule.onNodeWithTag("sound_settings_header")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("sound_pack_crisp").assertExists()
+        composeTestRule.onNodeWithTag("sound_pack_chimes").assertExists()
+        composeTestRule.onNodeWithTag("sound_pack_soft").assertExists()
+
+        // Раскрываем спойлер «Прослушать образцы команд»
+        composeTestRule.onNodeWithTag("sound_samples_header")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("btn_sample_contraction").assertExists()
+
+        // Раскрываем спойлер «Резервные копии и данные»
+        composeTestRule.onNodeWithTag("data_settings_header")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("btn_create_backup")
             .performScrollTo()
             .assertExists()

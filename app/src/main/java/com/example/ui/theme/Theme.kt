@@ -1,19 +1,23 @@
 package com.example.ui.theme
 
 import android.animation.ValueAnimator
+import android.app.Activity
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.SnapSpec
 import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Density
+import androidx.core.view.WindowCompat
 
 val LocalVelarisPalette = staticCompositionLocalOf { DawnPalette }
 
@@ -91,7 +95,7 @@ fun VelarisTheme(
     }
 
     val colorScheme = remember(palette) {
-        darkColorScheme(
+        lightColorScheme(
             primary = palette.primaryAccent,
             onPrimary = palette.onPrimaryAccent,
             primaryContainer = palette.selectedContainer,
@@ -110,6 +114,20 @@ fun VelarisTheme(
             outline = palette.outline,
             error = palette.errorAccent
         )
+    }
+
+    // Принудительно включаем тёмные иконки/текст в системном верхнем статус-баре (время, заряд, уведомления)
+    // и в нижней системной панели навигации во всех 5 воздушных светлых темах, независимо от системной темы телефона.
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val activity = view.context as? Activity ?: return@SideEffect
+            val window = activity.window ?: return@SideEffect
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = true
+                isAppearanceLightNavigationBars = true
+            }
+        }
     }
 
     // Нормализуем плотность экрана (если системный Масштаб экрана Samsung сжал ширину < 412dp)

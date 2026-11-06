@@ -459,28 +459,28 @@ class AudioVibrationEngine(
 
         val timingsAndAmplitudes: Pair<LongArray, IntArray> = when (signal) {
             SignalType.PREP_TICK -> Pair(
-                longArrayOf(0L, 60L),
-                intArrayOf(0, 140)
+                longArrayOf(0L, 65L),
+                intArrayOf(0, 185)
             )
             SignalType.CONTRACTION -> Pair(
-                longArrayOf(0L, 120L, 70L, 180L),
-                intArrayOf(0, 220, 0, 255)
+                longArrayOf(0L, 120L, 65L, 190L),
+                intArrayOf(0, 235, 0, 255)
             )
             SignalType.RELAXATION -> Pair(
-                longArrayOf(0L, 280L),
-                intArrayOf(0, 150)
+                longArrayOf(0L, 260L),
+                intArrayOf(0, 200)
             )
             SignalType.PAUSED -> Pair(
-                longArrayOf(0L, 90L, 80L, 90L),
-                intArrayOf(0, 180, 0, 150)
+                longArrayOf(0L, 95L, 75L, 95L),
+                intArrayOf(0, 200, 0, 175)
             )
             SignalType.SET_COMPLETED -> Pair(
-                longArrayOf(0L, 100L, 60L, 100L, 60L, 220L),
-                intArrayOf(0, 180, 0, 200, 0, 255)
+                longArrayOf(0L, 100L, 55L, 100L, 55L, 230L),
+                intArrayOf(0, 200, 0, 225, 0, 255)
             )
             SignalType.GROUP_COMPLETED -> Pair(
-                longArrayOf(0L, 110L, 50L, 110L, 50L, 110L, 70L, 300L),
-                intArrayOf(0, 180, 0, 200, 0, 220, 0, 255)
+                longArrayOf(0L, 110L, 50L, 110L, 50L, 110L, 65L, 300L),
+                intArrayOf(0, 200, 0, 220, 0, 240, 0, 255)
             )
             SignalType.METRONOME_TICK -> return
         }

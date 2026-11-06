@@ -3,9 +3,9 @@ package com.example.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * 5 тем оформления приложения Velaris (Итерация v1.4, раздел 2).
- * Каждая тема объединяет глубокие тёмные поверхности, насыщенные выразительные акценты,
- * согласованные градиенты карточек/кнопок и спокойную однотонную поверхность чтения.
+ * 5 воздушных светлых тем оформления Velaris в эстетике Apple iOS / Samsung One UI Light.
+ * Полностью исключены тёмные тона: белоснежные карточки, мягкие пастельные фоны,
+ * выразительные чистые акценты и высокий контраст тёмного текста и системного статус-бара.
  */
 enum class VelarisThemeId(
     val id: String,
@@ -14,28 +14,28 @@ enum class VelarisThemeId(
 ) {
     DAWN(
         id = "theme_dawn",
-        titleRu = "Рассвет",
-        subtitleRu = "Глубокий фиолетовый, насыщенный розовый и тёплый персик"
+        titleRu = "Apple Чистый Белый",
+        subtitleRu = "Белоснежные карточки, воздушный жемчужный фон и свежий изумруд"
     ),
     SKY(
         id = "theme_sky",
-        titleRu = "Небо",
-        subtitleRu = "Глубокий тёмно-синий, электрический голубой и чистая лазурь"
+        titleRu = "Samsung Небесный",
+        subtitleRu = "Светлый облачно-голубой стиль One UI, чистый белый и небесная лазурь"
     ),
     AURORA(
         id = "theme_aurora",
-        titleRu = "Северное сияние",
-        subtitleRu = "Глубокий изумрудный, бирюзовый и яркая мята"
+        titleRu = "Свежая Мята",
+        subtitleRu = "Воздушный мятно-шалфейный оттенок, белые поверхности и живая зелень"
     ),
     SUNSET(
         id = "theme_sunset",
-        titleRu = "Закат",
-        subtitleRu = "Глубокий сливовый, яркий коралл и насыщенный оранжевый"
+        titleRu = "Утренний Персик",
+        subtitleRu = "Тёплый кремово-жемчужный фон, чистый белый и мягкий солнечный коралл"
     ),
     SAKURA(
         id = "theme_sakura",
-        titleRu = "Сакура",
-        subtitleRu = "Глубокий пурпур, сочный розовый и сиреневый"
+        titleRu = "Воздушная Лаванда",
+        subtitleRu = "Нежная утренняя сирень, белоснежные карточки и чистый ирисовый акцент"
     );
 
     companion object {
@@ -45,8 +45,8 @@ enum class VelarisThemeId(
 }
 
 /**
- * Семантические цветовые токены палитры Velaris (Итерация v1.4, раздел 2).
- * Контраст основного текста >= 4.5:1, крупного текста и элементов управления >= 3:1.
+ * Семантические цветовые токены светлой воздушной палитры Velaris.
+ * Контраст основного текста >= 12:1, вторичного текста >= 5.5:1.
  */
 data class VelarisPalette(
     val themeId: VelarisThemeId,
@@ -83,179 +83,194 @@ data class VelarisPalette(
     val outline: Color
 )
 
+/**
+ * 1. Apple Чистый Белый — снежно-белые карточки, светлый серебристо-жемчужный фон и изумрудный акцент.
+ */
 val DawnPalette = VelarisPalette(
     themeId = VelarisThemeId.DAWN,
-    backgroundTop = Color(0xFF0D071A),
-    backgroundMid = Color(0xFF1A0F30),
-    backgroundBottom = Color(0xFF281542),
-    surface = Color(0xFF18102B),
-    surfaceElevated = Color(0xFF23173D),
-    surfaceVariant = Color(0xFF2E1F4F),
-    readerSurface = Color(0xFF100A1D),
-    primaryAccent = Color(0xFFFF4D94),
-    secondaryAccent = Color(0xFFFF8E6E),
-    onPrimaryAccent = Color(0xFF160410),
-    heroGradientStart = Color(0xFF2E164D),
-    heroGradientEnd = Color(0xFF1B0E30),
-    buttonGradientStart = Color(0xFFFF4D94),
-    buttonGradientEnd = Color(0xFFFF8066),
-    selectedContainer = Color(0xFF391C54),
-    selectedBorder = Color(0xFFFF4D94),
-    disabledContainer = Color(0xFF241B35),
-    disabledContent = Color(0xFF83749E),
-    textPrimary = Color(0xFFF8F4FF),
-    textSecondary = Color(0xFFD8CBEB),
-    mountainFar = Color(0xFF3D225E),
-    mountainMid = Color(0xFF291544),
-    mountainNear = Color(0xFF180C29),
-    warningAccent = Color(0xFFFFB74D),
-    successAccent = Color(0xFF3CE6A5),
-    errorAccent = Color(0xFFFF6B81),
-    phaseHoldAccent = Color(0xFFFF4D94),
-    phaseRelaxAccent = Color(0xFF3CE6A5),
-    phasePrepAccent = Color(0xFFFF9E6D),
-    phasePauseAccent = Color(0xFFFFB74D),
-    outline = Color(0xFF563E7A)
+    backgroundTop = Color(0xFFF5F8F7),
+    backgroundMid = Color(0xFFEEF4F2),
+    backgroundBottom = Color(0xFFE6EFEA),
+    surface = Color(0xFFFFFFFF),
+    surfaceElevated = Color(0xFFF2F7F5),
+    surfaceVariant = Color(0xFFE3EEE9),
+    readerSurface = Color(0xFFFAFDFB),
+    primaryAccent = Color(0xFF10B981),
+    secondaryAccent = Color(0xFF059669),
+    onPrimaryAccent = Color(0xFFFFFFFF),
+    heroGradientStart = Color(0xFFFFFFFF),
+    heroGradientEnd = Color(0xFFECFDF5),
+    buttonGradientStart = Color(0xFF10B981),
+    buttonGradientEnd = Color(0xFF059669),
+    selectedContainer = Color(0xFFD1FAE5),
+    selectedBorder = Color(0xFF10B981),
+    disabledContainer = Color(0xFFE2E8F0),
+    disabledContent = Color(0xFF94A3B8),
+    textPrimary = Color(0xFF111827),
+    textSecondary = Color(0xFF4B5563),
+    mountainFar = Color(0xFFD1FAE5),
+    mountainMid = Color(0xFFA7F3D0),
+    mountainNear = Color(0xFF6EE7B7),
+    warningAccent = Color(0xFFD97706),
+    successAccent = Color(0xFF059669),
+    errorAccent = Color(0xFFDC2626),
+    phaseHoldAccent = Color(0xFF10B981),
+    phaseRelaxAccent = Color(0xFF0284C7),
+    phasePrepAccent = Color(0xFFD97706),
+    phasePauseAccent = Color(0xFFD97706),
+    outline = Color(0xFFCBD5E1)
 )
 
+/**
+ * 2. Samsung Небесный — воздушный голубой фон One UI, белоснежные карточки и чистая лазурь.
+ */
 val SkyPalette = VelarisPalette(
     themeId = VelarisThemeId.SKY,
-    backgroundTop = Color(0xFF060D1F),
-    backgroundMid = Color(0xFF0D1B38),
-    backgroundBottom = Color(0xFF142952),
-    surface = Color(0xFF0E1A33),
-    surfaceElevated = Color(0xFF152647),
-    surfaceVariant = Color(0xFF1E345E),
-    readerSurface = Color(0xFF091122),
-    primaryAccent = Color(0xFF24B0FF),
-    secondaryAccent = Color(0xFF5CE6FF),
-    onPrimaryAccent = Color(0xFF031322),
-    heroGradientStart = Color(0xFF16325C),
-    heroGradientEnd = Color(0xFF0D1D38),
-    buttonGradientStart = Color(0xFF1DA4FF),
-    buttonGradientEnd = Color(0xFF4DE1FF),
-    selectedContainer = Color(0xFF183661),
-    selectedBorder = Color(0xFF24B0FF),
-    disabledContainer = Color(0xFF15223B),
-    disabledContent = Color(0xFF6E85A8),
-    textPrimary = Color(0xFFF2F8FF),
-    textSecondary = Color(0xFFC4D8F2),
-    mountainFar = Color(0xFF1E3E6E),
-    mountainMid = Color(0xFF152C52),
-    mountainNear = Color(0xFF0B1830),
-    warningAccent = Color(0xFFFFC04D),
-    successAccent = Color(0xFF3CE6B0),
-    errorAccent = Color(0xFFFF6E7A),
-    phaseHoldAccent = Color(0xFF24B0FF),
-    phaseRelaxAccent = Color(0xFF3CE6B0),
-    phasePrepAccent = Color(0xFF5CE6FF),
-    phasePauseAccent = Color(0xFFFFC04D),
-    outline = Color(0xFF345687)
+    backgroundTop = Color(0xFFF2F7FF),
+    backgroundMid = Color(0xFFEAF2FE),
+    backgroundBottom = Color(0xFFE0ECFC),
+    surface = Color(0xFFFFFFFF),
+    surfaceElevated = Color(0xFFEEF5FD),
+    surfaceVariant = Color(0xFFDCEAFB),
+    readerSurface = Color(0xFFF9FBFF),
+    primaryAccent = Color(0xFF007AFF),
+    secondaryAccent = Color(0xFF0284C7),
+    onPrimaryAccent = Color(0xFFFFFFFF),
+    heroGradientStart = Color(0xFFFFFFFF),
+    heroGradientEnd = Color(0xFFEFF6FF),
+    buttonGradientStart = Color(0xFF007AFF),
+    buttonGradientEnd = Color(0xFF0284C7),
+    selectedContainer = Color(0xFFDBEAFE),
+    selectedBorder = Color(0xFF007AFF),
+    disabledContainer = Color(0xFFE2E8F0),
+    disabledContent = Color(0xFF94A3B8),
+    textPrimary = Color(0xFF0F172A),
+    textSecondary = Color(0xFF475569),
+    mountainFar = Color(0xFFDBEAFE),
+    mountainMid = Color(0xFFBFDBFE),
+    mountainNear = Color(0xFF93C5FD),
+    warningAccent = Color(0xFFD97706),
+    successAccent = Color(0xFF059669),
+    errorAccent = Color(0xFFDC2626),
+    phaseHoldAccent = Color(0xFF007AFF),
+    phaseRelaxAccent = Color(0xFF10B981),
+    phasePrepAccent = Color(0xFF0284C7),
+    phasePauseAccent = Color(0xFFD97706),
+    outline = Color(0xFFCBD5E1)
 )
 
+/**
+ * 3. Свежая Мята — мягкий мятно-шалфейный светлый фон, белые карточки и сочный зелёный акцент.
+ */
 val AuroraPalette = VelarisPalette(
     themeId = VelarisThemeId.AURORA,
-    backgroundTop = Color(0xFF051614),
-    backgroundMid = Color(0xFF0B2825),
-    backgroundBottom = Color(0xFF113B36),
-    surface = Color(0xFF0B2220),
-    surfaceElevated = Color(0xFF123330),
-    surfaceVariant = Color(0xFF194540),
-    readerSurface = Color(0xFF071615),
-    primaryAccent = Color(0xFF00E5B8),
-    secondaryAccent = Color(0xFF64FFDA),
-    onPrimaryAccent = Color(0xFF021A15),
-    heroGradientStart = Color(0xFF13423C),
-    heroGradientEnd = Color(0xFF0B2421),
-    buttonGradientStart = Color(0xFF00DCA8),
-    buttonGradientEnd = Color(0xFF5CFFD6),
-    selectedContainer = Color(0xFF154741),
-    selectedBorder = Color(0xFF00E5B8),
-    disabledContainer = Color(0xFF122B28),
-    disabledContent = Color(0xFF68948D),
-    textPrimary = Color(0xFFF2FFFB),
-    textSecondary = Color(0xFFBCE6DD),
-    mountainFar = Color(0xFF1B544B),
-    mountainMid = Color(0xFF123B35),
-    mountainNear = Color(0xFF09211E),
-    warningAccent = Color(0xFFFFC457),
-    successAccent = Color(0xFF47F09E),
-    errorAccent = Color(0xFFFF6E7E),
-    phaseHoldAccent = Color(0xFF00E5B8),
-    phaseRelaxAccent = Color(0xFF64FFDA),
-    phasePrepAccent = Color(0xFF5CE1FF),
-    phasePauseAccent = Color(0xFFFFC457),
-    outline = Color(0xFF2D6B62)
+    backgroundTop = Color(0xFFF0FDF4),
+    backgroundMid = Color(0xFFE6FAEE),
+    backgroundBottom = Color(0xFFDCFCE7),
+    surface = Color(0xFFFFFFFF),
+    surfaceElevated = Color(0xFFECFDF3),
+    surfaceVariant = Color(0xFFD8F8E5),
+    readerSurface = Color(0xFFF8FEFA),
+    primaryAccent = Color(0xFF16A34A),
+    secondaryAccent = Color(0xFF0D9488),
+    onPrimaryAccent = Color(0xFFFFFFFF),
+    heroGradientStart = Color(0xFFFFFFFF),
+    heroGradientEnd = Color(0xFFDCFCE7),
+    buttonGradientStart = Color(0xFF16A34A),
+    buttonGradientEnd = Color(0xFF0D9488),
+    selectedContainer = Color(0xFFDCFCE7),
+    selectedBorder = Color(0xFF16A34A),
+    disabledContainer = Color(0xFFE2E8F0),
+    disabledContent = Color(0xFF94A3B8),
+    textPrimary = Color(0xFF0F291E),
+    textSecondary = Color(0xFF3F6252),
+    mountainFar = Color(0xFFDCFCE7),
+    mountainMid = Color(0xFFBBF7D0),
+    mountainNear = Color(0xFF86EFAC),
+    warningAccent = Color(0xFFD97706),
+    successAccent = Color(0xFF15803D),
+    errorAccent = Color(0xFFDC2626),
+    phaseHoldAccent = Color(0xFF16A34A),
+    phaseRelaxAccent = Color(0xFF0D9488),
+    phasePrepAccent = Color(0xFF0284C7),
+    phasePauseAccent = Color(0xFFD97706),
+    outline = Color(0xFFBBF7D0)
 )
 
+/**
+ * 4. Утренний Персик — тёплый жемчужно-кремовый светлый фон, белые карточки и мягкий коралл.
+ */
 val SunsetPalette = VelarisPalette(
     themeId = VelarisThemeId.SUNSET,
-    backgroundTop = Color(0xFF180813),
-    backgroundMid = Color(0xFF2B1022),
-    backgroundBottom = Color(0xFF3E172E),
-    surface = Color(0xFF240E1D),
-    surfaceElevated = Color(0xFF331529),
-    surfaceVariant = Color(0xFF421C35),
-    readerSurface = Color(0xFF140811),
-    primaryAccent = Color(0xFFFF5E62),
-    secondaryAccent = Color(0xFFFF9933),
-    onPrimaryAccent = Color(0xFF1A0507),
-    heroGradientStart = Color(0xFF471932),
-    heroGradientEnd = Color(0xFF260E1E),
-    buttonGradientStart = Color(0xFFFF5E62),
-    buttonGradientEnd = Color(0xFFFF9933),
-    selectedContainer = Color(0xFF4D1E36),
-    selectedBorder = Color(0xFFFF5E62),
-    disabledContainer = Color(0xFF2E1826),
-    disabledContent = Color(0xFF947085),
-    textPrimary = Color(0xFFFFF4F6),
-    textSecondary = Color(0xFFEBC5D1),
-    mountainFar = Color(0xFF59233D),
-    mountainMid = Color(0xFF3D162B),
-    mountainNear = Color(0xFF220B18),
-    warningAccent = Color(0xFFFFB74D),
-    successAccent = Color(0xFF42E6A4),
-    errorAccent = Color(0xFFFF5268),
-    phaseHoldAccent = Color(0xFFFF5E62),
-    phaseRelaxAccent = Color(0xFF42E6A4),
-    phasePrepAccent = Color(0xFFFF9933),
-    phasePauseAccent = Color(0xFFFFB74D),
-    outline = Color(0xFF703754)
+    backgroundTop = Color(0xFFFFFAF5),
+    backgroundMid = Color(0xFFFEF4EA),
+    backgroundBottom = Color(0xFFFCECE0),
+    surface = Color(0xFFFFFFFF),
+    surfaceElevated = Color(0xFFFFF5EB),
+    surfaceVariant = Color(0xFFFDEBD9),
+    readerSurface = Color(0xFFFFFDF9),
+    primaryAccent = Color(0xFFEA580C),
+    secondaryAccent = Color(0xFFD97706),
+    onPrimaryAccent = Color(0xFFFFFFFF),
+    heroGradientStart = Color(0xFFFFFFFF),
+    heroGradientEnd = Color(0xFFFFF1E6),
+    buttonGradientStart = Color(0xFFF97316),
+    buttonGradientEnd = Color(0xFFEA580C),
+    selectedContainer = Color(0xFFFFEDD5),
+    selectedBorder = Color(0xFFF97316),
+    disabledContainer = Color(0xFFE7E5E4),
+    disabledContent = Color(0xFFA8A29E),
+    textPrimary = Color(0xFF1C1917),
+    textSecondary = Color(0xFF57534E),
+    mountainFar = Color(0xFFFFEDD5),
+    mountainMid = Color(0xFFFED7AA),
+    mountainNear = Color(0xFFFDBA74),
+    warningAccent = Color(0xFFD97706),
+    successAccent = Color(0xFF059669),
+    errorAccent = Color(0xFFDC2626),
+    phaseHoldAccent = Color(0xFFEA580C),
+    phaseRelaxAccent = Color(0xFF059669),
+    phasePrepAccent = Color(0xFFD97706),
+    phasePauseAccent = Color(0xFFD97706),
+    outline = Color(0xFFE7D5C5)
 )
 
+/**
+ * 5. Воздушная Лаванда — светлая сиреневая дымка, белоснежные карточки и чистый ирисовый акцент.
+ */
 val SakuraPalette = VelarisPalette(
     themeId = VelarisThemeId.SAKURA,
-    backgroundTop = Color(0xFF15081C),
-    backgroundMid = Color(0xFF261032),
-    backgroundBottom = Color(0xFF361747),
-    surface = Color(0xFF200E2B),
-    surfaceElevated = Color(0xFF2E153D),
-    surfaceVariant = Color(0xFF3C1D50),
-    readerSurface = Color(0xFF120818),
-    primaryAccent = Color(0xFFFF52A8),
-    secondaryAccent = Color(0xFFD47AFF),
-    onPrimaryAccent = Color(0xFF1A0412),
-    heroGradientStart = Color(0xFF421957),
-    heroGradientEnd = Color(0xFF230E30),
-    buttonGradientStart = Color(0xFFFF52A8),
-    buttonGradientEnd = Color(0xFFD47AFF),
-    selectedContainer = Color(0xFF461D5C),
-    selectedBorder = Color(0xFFFF52A8),
-    disabledContainer = Color(0xFF2B1936),
-    disabledContent = Color(0xFF8E729E),
-    textPrimary = Color(0xFFFCF4FF),
-    textSecondary = Color(0xFFE2C7F0),
-    mountainFar = Color(0xFF52236B),
-    mountainMid = Color(0xFF38164A),
-    mountainNear = Color(0xFF1F0B2B),
-    warningAccent = Color(0xFFFFBE55),
-    successAccent = Color(0xFF42E6AD),
-    errorAccent = Color(0xFFFF6680),
-    phaseHoldAccent = Color(0xFFFF52A8),
-    phaseRelaxAccent = Color(0xFF42E6AD),
-    phasePrepAccent = Color(0xFFD47AFF),
-    phasePauseAccent = Color(0xFFFFBE55),
-    outline = Color(0xFF663A82)
+    backgroundTop = Color(0xFFFAF7FF),
+    backgroundMid = Color(0xFFF4EEFF),
+    backgroundBottom = Color(0xFFEDE4FF),
+    surface = Color(0xFFFFFFFF),
+    surfaceElevated = Color(0xFFF6F1FF),
+    surfaceVariant = Color(0xFFECE3FF),
+    readerSurface = Color(0xFFFCFAFF),
+    primaryAccent = Color(0xFF7C3AED),
+    secondaryAccent = Color(0xFF9333EA),
+    onPrimaryAccent = Color(0xFFFFFFFF),
+    heroGradientStart = Color(0xFFFFFFFF),
+    heroGradientEnd = Color(0xFFF3E8FF),
+    buttonGradientStart = Color(0xFF8B5CF6),
+    buttonGradientEnd = Color(0xFF7C3AED),
+    selectedContainer = Color(0xFFEDE9FE),
+    selectedBorder = Color(0xFF7C3AED),
+    disabledContainer = Color(0xFFE2E8F0),
+    disabledContent = Color(0xFF94A3B8),
+    textPrimary = Color(0xFF1E1B4B),
+    textSecondary = Color(0xFF4C4975),
+    mountainFar = Color(0xFFEDE9FE),
+    mountainMid = Color(0xFFDDD6FE),
+    mountainNear = Color(0xFFC4B5FD),
+    warningAccent = Color(0xFFD97706),
+    successAccent = Color(0xFF059669),
+    errorAccent = Color(0xFFDC2626),
+    phaseHoldAccent = Color(0xFF7C3AED),
+    phaseRelaxAccent = Color(0xFF059669),
+    phasePrepAccent = Color(0xFF9333EA),
+    phasePauseAccent = Color(0xFFD97706),
+    outline = Color(0xFFD8CFF0)
 )
 
 fun paletteForTheme(themeId: VelarisThemeId): VelarisPalette = when (themeId) {
@@ -265,3 +280,4 @@ fun paletteForTheme(themeId: VelarisThemeId): VelarisPalette = when (themeId) {
     VelarisThemeId.SUNSET -> SunsetPalette
     VelarisThemeId.SAKURA -> SakuraPalette
 }
+

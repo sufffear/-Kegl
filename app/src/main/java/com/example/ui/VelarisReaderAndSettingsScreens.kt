@@ -6,6 +6,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,7 +34,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.FileOpen
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SettingsBackupRestore
@@ -66,10 +72,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -81,6 +90,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.AudioDiagnosticEntry
@@ -1355,54 +1365,72 @@ fun VelarisSettingsScreen(
             .testTag("settings_screen"),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // 1. Оформление (5 палитр с мгновенным сохранением и наглядным превью)
-        Card(
+        // 0. Верхние горизонтальные вкладки-фильтры настроек (Все | Вид и звук | Данные)
+        var selectedSettingsTab by rememberSaveable { mutableStateOf("all") }
+        var isThemeExpanded by rememberSaveable { mutableStateOf(false) }
+        var isSoundExpanded by rememberSaveable { mutableStateOf(false) }
+        var isSamplesExpanded by rememberSaveable { mutableStateOf(false) }
+        var isDataExpanded by rememberSaveable { mutableStateOf(false) }
+
+        val showAppearanceAndSound = selectedSettingsTab == "all" || selectedSettingsTab == "style_sound"
+        val showDataAndSystem = selectedSettingsTab == "all" || selectedSettingsTab == "data_system"
+        val effectiveDataExpanded = isDataExpanded || backupOperationBanner != null || backupErrorMessage != null
+
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = palette.surface,
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("theme_selector_card"),
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.surface)
+                .border(1.dp, palette.outline.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
+                .testTag("settings_category_tabs_row")
         ) {
-            Column(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Palette,
-                        contentDescription = null,
-                        tint = palette.primaryAccent,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Оформление",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = palette.textPrimary,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
+                SettingsCategoryTabChip(
+                    title = "Все",
+                    selected = selectedSettingsTab == "all",
+                    onClick = { selectedSettingsTab = "all" },
+                    testTag = "settings_tab_all",
+                    modifier = Modifier.weight(1f)
+                )
+                SettingsCategoryTabChip(
+                    title = "Вид и звук",
+                    selected = selectedSettingsTab == "style_sound",
+                    onClick = { selectedSettingsTab = "style_sound" },
+                    testTag = "settings_tab_style_sound",
+                    modifier = Modifier.weight(1f)
+                )
+                SettingsCategoryTabChip(
+                    title = "Данные и инфо",
+                    selected = selectedSettingsTab == "data_system",
+                    onClick = { selectedSettingsTab = "data_system" },
+                    testTag = "settings_tab_data_system",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
 
-                VelarisThemeId.entries.forEach { themeOption ->
-                    val isSelected = settings.themeId == themeOption
-                    val previewPalette = paletteForTheme(themeOption)
+        if (showAppearanceAndSound) {
+            // 1. Спойлер «Оформление» (по нажатию раскрывается список из 5 светлых тем)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, palette.outline.copy(alpha = 0.32f), RoundedCornerShape(18.dp))
+                    .testTag("theme_selector_card"),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = palette.surface)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(
-                                if (isSelected) palette.selectedContainer else palette.surfaceElevated
-                            )
-                            .border(
-                                width = if (isSelected) 2.dp else 1.dp,
-                                color = if (isSelected) palette.selectedBorder else palette.outline.copy(alpha = 0.35f),
-                                shape = RoundedCornerShape(16.dp)
-                            )
-                            .clickable { onThemeChange(themeOption) }
-                            .padding(horizontal = 12.dp, vertical = 12.dp)
-                            .testTag("theme_option_${themeOption.id}"),
+                            .clickable { isThemeExpanded = !isThemeExpanded }
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                            .testTag("theme_selector_header"),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -1410,604 +1438,885 @@ fun VelarisSettingsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f)
                         ) {
-                            RadioButton(
-                                selected = isSelected,
-                                onClick = { onThemeChange(themeOption) },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = palette.primaryAccent,
-                                    unselectedColor = palette.textSecondary
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(palette.primaryAccent.copy(alpha = 0.14f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Palette,
+                                    contentDescription = null,
+                                    tint = palette.primaryAccent,
+                                    modifier = Modifier.size(18.dp)
                                 )
-                            )
-                            Column {
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = themeOption.titleRu,
-                                    style = MaterialTheme.typography.bodyLarge,
+                                    text = "Оформление",
+                                    style = MaterialTheme.typography.titleMedium,
                                     color = palette.textPrimary,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = themeOption.subtitleRu,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = palette.textSecondary
+                                    text = "${settings.themeId.titleRu} · Нажмите для выбора",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = palette.textSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            val currentPreview = paletteForTheme(settings.themeId)
                             Box(
                                 modifier = Modifier
-                                    .size(20.dp)
+                                    .size(14.dp)
                                     .clip(CircleShape)
-                                    .background(previewPalette.backgroundMid)
-                                    .border(1.dp, previewPalette.outline, CircleShape)
+                                    .background(currentPreview.backgroundMid)
+                                    .border(1.dp, currentPreview.outline, CircleShape)
                             )
                             Box(
                                 modifier = Modifier
-                                    .size(20.dp)
+                                    .size(14.dp)
                                     .clip(CircleShape)
-                                    .background(previewPalette.primaryAccent)
+                                    .background(currentPreview.primaryAccent)
                             )
-                            Box(
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .clip(CircleShape)
-                                    .background(previewPalette.secondaryAccent)
+                            Icon(
+                                imageVector = if (isThemeExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (isThemeExpanded) "Свернуть оформление" else "Раскрыть оформление",
+                                tint = palette.textSecondary,
+                                modifier = Modifier.size(20.dp)
                             )
+                        }
+                    }
+
+                    AnimatedVisibility(visible = isThemeExpanded) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            HorizontalDivider(color = palette.outline.copy(alpha = 0.25f))
+                            VelarisThemeId.entries.forEach { themeOption ->
+                                val isSelected = settings.themeId == themeOption
+                                val previewPalette = paletteForTheme(themeOption)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(
+                                            if (isSelected) palette.selectedContainer else palette.surfaceElevated
+                                        )
+                                        .border(
+                                            width = if (isSelected) 1.5.dp else 1.dp,
+                                            color = if (isSelected) palette.selectedBorder else palette.outline.copy(alpha = 0.30f),
+                                            shape = RoundedCornerShape(14.dp)
+                                        )
+                                        .clickable { onThemeChange(themeOption) }
+                                        .padding(horizontal = 10.dp, vertical = 9.dp)
+                                        .testTag("theme_option_${themeOption.id}"),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        RadioButton(
+                                            selected = isSelected,
+                                            onClick = { onThemeChange(themeOption) },
+                                            colors = RadioButtonDefaults.colors(
+                                                selectedColor = palette.primaryAccent,
+                                                unselectedColor = palette.textSecondary
+                                            ),
+                                            modifier = Modifier.size(34.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = themeOption.titleRu,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = palette.textPrimary,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = themeOption.subtitleRu,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = palette.textSecondary,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(16.dp)
+                                                .clip(CircleShape)
+                                                .background(previewPalette.backgroundMid)
+                                                .border(1.dp, previewPalette.outline, CircleShape)
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .size(16.dp)
+                                                .clip(CircleShape)
+                                                .background(previewPalette.primaryAccent)
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .size(16.dp)
+                                                .clip(CircleShape)
+                                                .background(previewPalette.secondaryAccent)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
-        }
 
-        // 2. Базовые параметры плана
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("program_mode_card"),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.surface)
-        ) {
-            Column(
+            // 2. Спойлер «Параметры звука, профили и вибрация»
+            val soundSummaryRu = buildString {
+                append(if (settings.soundEnabled) settings.soundPack.titleRu else "Без звука")
+                append(" · ${(settings.signalVolume * 100).toInt()}%")
+                append(if (settings.vibrationEnabled) " · Вибрация ВКЛ" else " · Вибрация ВЫКЛ")
+            }
+
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .border(1.dp, palette.outline.copy(alpha = 0.32f), RoundedCornerShape(18.dp))
+                    .testTag("sound_settings_card"),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = palette.surface)
             ) {
-                Text(
-                    text = "Параметры плана",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = palette.textPrimary,
-                    fontWeight = FontWeight.Bold
-                )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    SettingsSpoilerHeader(
+                        icon = Icons.Default.VolumeUp,
+                        title = "Звук, профили и вибрация",
+                        subtitle = soundSummaryRu,
+                        expanded = isSoundExpanded,
+                        onToggle = { isSoundExpanded = !isSoundExpanded },
+                        testTag = "sound_settings_header"
+                    )
 
-                Text(
-                    text = "Выберите базовый интервальный протокол для ежедневного расписания.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = palette.textSecondary
-                )
+                    AnimatedVisibility(visible = isSoundExpanded) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            HorizontalDivider(color = palette.outline.copy(alpha = 0.25f))
 
-                availableProtocols.forEach { proto ->
-                    val isSelected = snapshot.protocol.id == proto.id
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isSelected) palette.surfaceVariant else palette.backgroundTop.copy(alpha = 0.45f))
-                            .clickable(enabled = !snapshot.isActiveOrPaused) {
-                                onSelectProtocol(proto)
-                            }
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = isSelected,
-                            onClick = { onSelectProtocol(proto) },
-                            enabled = !snapshot.isActiveOrPaused
-                        )
-                        Column {
-                            Text(
-                                text = proto.titleRu,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = palette.textPrimary,
-                                fontWeight = FontWeight.Medium
+                            // Базовые переключатели
+                            SettingsSwitchRow(
+                                title = "Звуковые сигналы фаз",
+                                checked = settings.soundEnabled,
+                                onCheckedChange = onSoundEnabledChange,
+                                testTag = "switch_sound_enabled"
                             )
+                            SettingsSwitchRow(
+                                title = "Вибрация при смене фаз",
+                                checked = settings.vibrationEnabled,
+                                onCheckedChange = onVibrationEnabledChange,
+                                testTag = "switch_vibration_enabled"
+                            )
+                            SettingsSwitchRow(
+                                title = "Секундный метроном внутри фазы",
+                                checked = settings.metronomeEnabled,
+                                onCheckedChange = onMetronomeEnabledChange,
+                                testTag = "switch_metronome_enabled"
+                            )
+
+                            // Громкость команд с кнопкой мгновенной проверки
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(palette.surfaceElevated)
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Громкость команд: ${(settings.signalVolume * 100).toInt()}%",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = palette.textPrimary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    FilledTonalButton(
+                                        onClick = { onPlaySample(SignalType.CONTRACTION) },
+                                        enabled = !snapshot.isRunningOrPreparing,
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = palette.selectedContainer,
+                                            contentColor = palette.primaryAccent
+                                        ),
+                                        modifier = Modifier.heightIn(min = 32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "Тест",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                                Slider(
+                                    value = settings.signalVolume,
+                                    onValueChange = onSignalVolumeChange,
+                                    valueRange = 0f..1f,
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = palette.primaryAccent,
+                                        activeTrackColor = palette.primaryAccent
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .semantics { contentDescription = "Громкость команд фаз" }
+                                        .testTag("slider_signal_volume")
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Громкость метронома",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = palette.textSecondary
+                                    )
+                                    Text(
+                                        text = "${(settings.metronomeVolume * 100).toInt()}%",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = palette.secondaryAccent,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Slider(
+                                    value = settings.metronomeVolume,
+                                    onValueChange = onMetronomeVolumeChange,
+                                    valueRange = 0f..1f,
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = palette.secondaryAccent,
+                                        activeTrackColor = palette.secondaryAccent
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .semantics { contentDescription = "Громкость метронома" }
+                                        .testTag("slider_metronome_volume")
+                                )
+                            }
+
+                            // Выбор звонкого звукового профиля
                             Text(
-                                text = "Сокращение ${proto.contractionMs / 1000}с · Расслабление ${proto.relaxationMs / 1000}с · Повторов: ${proto.repetitions}",
+                                text = "Звуковой профиль (при нажатии звучит предпросмотр):",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = palette.textSecondary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+
+                            SoundPack.entries.forEach { pack ->
+                                val isSelected = settings.soundPack == pack
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(
+                                            if (isSelected) palette.selectedContainer else palette.surfaceElevated
+                                        )
+                                        .border(
+                                            width = if (isSelected) 1.5.dp else 1.dp,
+                                            color = if (isSelected) palette.selectedBorder else palette.outline.copy(alpha = 0.28f),
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .clickable {
+                                            onSoundPackChange(pack)
+                                            if (!snapshot.isRunningOrPreparing) {
+                                                onPlaySample(SignalType.CONTRACTION)
+                                            }
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                                        .testTag("sound_pack_${pack.id}"),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = isSelected,
+                                        onClick = {
+                                            onSoundPackChange(pack)
+                                            if (!snapshot.isRunningOrPreparing) {
+                                                onPlaySample(SignalType.CONTRACTION)
+                                            }
+                                        },
+                                        colors = RadioButtonDefaults.colors(selectedColor = palette.primaryAccent),
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = pack.titleRu,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = palette.textPrimary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = pack.descriptionRu,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = palette.textSecondary
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Вариант тика метронома
+                            Text(
+                                text = "Звук тика метронома:",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = palette.textSecondary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                MetronomeTickStyle.entries.forEach { style ->
+                                    val isSelected = settings.metronomeTickStyle == style
+                                    FilledTonalButton(
+                                        onClick = {
+                                            onMetronomeTickStyleChange(style)
+                                            if (!snapshot.isRunningOrPreparing) {
+                                                onPlaySample(SignalType.METRONOME_TICK)
+                                            }
+                                        },
+                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = if (isSelected) palette.primaryAccent else palette.surfaceElevated,
+                                            contentColor = if (isSelected) palette.onPrimaryAccent else palette.textPrimary
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .heightIn(min = 42.dp)
+                                            .testTag("metronome_style_${style.id}")
+                                    ) {
+                                        Text(
+                                            text = style.titleRu,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Переключатель приглушения других приложений (YouTube / музыка)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(palette.surfaceElevated)
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Приглушать YouTube / музыку",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = palette.textPrimary,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = if (settings.duckOtherApps) {
+                                            "Фоновое медиа кратковременно приглушается во время сигнала"
+                                        } else {
+                                            "Звуки звучат поверх YouTube без пауз и приглушения"
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = palette.textSecondary
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Switch(
+                                    checked = settings.duckOtherApps,
+                                    onCheckedChange = onDuckOtherAppsChange,
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = palette.onPrimaryAccent,
+                                        checkedTrackColor = palette.primaryAccent,
+                                        uncheckedThumbColor = palette.textSecondary,
+                                        uncheckedTrackColor = palette.surfaceVariant
+                                    ),
+                                    modifier = Modifier.testTag("switch_duck_other_apps")
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Спойлер «Прослушать образцы команд»
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, palette.outline.copy(alpha = 0.32f), RoundedCornerShape(18.dp))
+                    .testTag("sound_samples_card"),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = palette.surface)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    SettingsSpoilerHeader(
+                        icon = Icons.Default.MusicNote,
+                        title = "Прослушать образцы команд",
+                        subtitle = "Тест сигналов удержания, отдыха, метронома и финала",
+                        expanded = isSamplesExpanded,
+                        onToggle = { isSamplesExpanded = !isSamplesExpanded },
+                        testTag = "sound_samples_header"
+                    )
+
+                    AnimatedVisibility(visible = isSamplesExpanded) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            HorizontalDivider(color = palette.outline.copy(alpha = 0.25f))
+                            Text(
+                                text = "Нажмите на любую команду, чтобы проверить звонкость текущего профиля (${settings.soundPack.titleRu}):",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = palette.textSecondary
                             )
+
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                listOf(
+                                    SignalType.CONTRACTION,
+                                    SignalType.RELAXATION,
+                                    SignalType.METRONOME_TICK,
+                                    SignalType.SET_COMPLETED,
+                                    SignalType.GROUP_COMPLETED
+                                ).forEach { signal ->
+                                    FilledTonalButton(
+                                        onClick = { onPlaySample(signal) },
+                                        enabled = !snapshot.isRunningOrPreparing,
+                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = palette.surfaceElevated,
+                                            contentColor = palette.textPrimary
+                                        ),
+                                        modifier = Modifier
+                                            .heightIn(min = 42.dp)
+                                            .testTag("btn_sample_${signal.name.lowercase(Locale.ROOT)}")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = null,
+                                            tint = palette.primaryAccent,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = signal.labelRu,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
         }
 
-        // 3. Звук и вибрация
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("sound_settings_card"),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.surface)
-        ) {
-            Column(
+        if (showDataAndSystem) {
+            // 4. Спойлер «Резервные копии и данные»
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .border(1.dp, palette.outline.copy(alpha = 0.32f), RoundedCornerShape(18.dp))
+                    .testTag("data_settings_card"),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = palette.surface)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.VolumeUp,
-                        contentDescription = null,
-                        tint = palette.primaryAccent,
-                        modifier = Modifier.size(20.dp)
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    SettingsSpoilerHeader(
+                        icon = Icons.Default.SettingsBackupRestore,
+                        title = "Резервные копии и данные",
+                        subtitle = "Экспорт истории, шаблонов и восстановление из ZIP",
+                        expanded = effectiveDataExpanded,
+                        onToggle = { isDataExpanded = !effectiveDataExpanded },
+                        testTag = "data_settings_header"
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Звук и вибрация",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = palette.textPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
 
-                Text(
-                    text = "Три офлайн-набора («Мягкий», «Колокольчики», «Чёткий»). Изменение набора применяется со следующего подхода.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = palette.textSecondary
-                )
+                    AnimatedVisibility(visible = effectiveDataExpanded) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            HorizontalDivider(color = palette.outline.copy(alpha = 0.25f))
 
-                SoundPack.entries.forEach { pack ->
-                    val isSelected = settings.soundPack == pack
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isSelected) palette.surfaceVariant else palette.backgroundTop.copy(alpha = 0.5f))
-                            .clickable { onSoundPackChange(pack) }
-                            .padding(horizontal = 10.dp, vertical = 8.dp)
-                            .testTag("sound_pack_${pack.id}"),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = isSelected,
-                            onClick = { onSoundPackChange(pack) },
-                            colors = RadioButtonDefaults.colors(selectedColor = palette.primaryAccent)
-                        )
-                        Column {
+                            if (backupOperationBanner != null) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = palette.successAccent.copy(alpha = 0.14f),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("backup_success_banner")
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = null,
+                                            tint = palette.successAccent,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = backupOperationBanner,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = palette.successAccent,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        IconButton(
+                                            onClick = onDismissBackupBanners,
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Закрыть",
+                                                tint = palette.textSecondary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (backupErrorMessage != null) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = palette.errorAccent.copy(alpha = 0.14f),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("backup_error_banner")
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = palette.errorAccent,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = backupErrorMessage,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = palette.errorAccent,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        IconButton(
+                                            onClick = onDismissBackupBanners,
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Закрыть",
+                                                tint = palette.textSecondary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (snapshot.isActiveOrPaused) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = palette.warningAccent.copy(alpha = 0.14f),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("backup_active_workout_warning")
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = palette.warningAccent,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Завершите или остановите текущую тренировку перед резервным копированием или восстановлением.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = palette.warningAccent,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                            }
+
                             Text(
-                                text = pack.titleRu,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = palette.textPrimary,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = pack.descriptionRu,
+                                text = "Копия сохраняет историю занятий, шаблоны, авторские программы и настройки в один ZIP-файл.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = palette.textSecondary
                             )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = { showBackupNoticeDialog = true },
+                                    enabled = !snapshot.isActiveOrPaused,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = palette.primaryAccent,
+                                        contentColor = palette.onPrimaryAccent
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 44.dp)
+                                        .testTag("btn_create_backup")
+                                ) {
+                                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Сохранить копию",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+
+                                OutlinedButton(
+                                    onClick = { restoreBackupLauncher.launch(BACKUP_DOCUMENT_MIME_TYPES) },
+                                    enabled = !snapshot.isActiveOrPaused,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 44.dp)
+                                        .testTag("btn_restore_backup")
+                                ) {
+                                    Icon(Icons.Default.SettingsBackupRestore, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Восстановить",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = if (!snapshot.isActiveOrPaused) palette.textPrimary else palette.textSecondary,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                            }
                         }
                     }
                 }
+            }
 
-                Text(
-                    text = "Вариант тика метронома:",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = palette.textSecondary
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    MetronomeTickStyle.entries.forEach { style ->
-                        val isSelected = settings.metronomeTickStyle == style
-                        OutlinedButton(
-                            onClick = { onMetronomeTickStyleChange(style) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 48.dp)
-                                .testTag("metronome_style_${style.id}")
-                        ) {
-                            Text(
-                                text = style.titleRu,
-                                color = if (isSelected) palette.primaryAccent else palette.textSecondary,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
-                        }
-                    }
-                }
-
-                SettingsSwitchRow(
-                    title = "Звуковые сигналы фаз",
-                    checked = settings.soundEnabled,
-                    onCheckedChange = onSoundEnabledChange,
-                    testTag = "switch_sound_enabled"
-                )
-                SettingsSwitchRow(
-                    title = "Вибрация при смене фаз",
-                    checked = settings.vibrationEnabled,
-                    onCheckedChange = onVibrationEnabledChange,
-                    testTag = "switch_vibration_enabled"
-                )
-                SettingsSwitchRow(
-                    title = "Секундный метроном внутри фазы",
-                    checked = settings.metronomeEnabled,
-                    onCheckedChange = onMetronomeEnabledChange,
-                    testTag = "switch_metronome_enabled"
-                )
-
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Громкость команд фаз",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = palette.textPrimary
-                        )
-                        Text(
-                            text = "${(settings.signalVolume * 100).toInt()}%",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = palette.primaryAccent,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Slider(
-                        value = settings.signalVolume,
-                        onValueChange = onSignalVolumeChange,
-                        valueRange = 0f..1f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = palette.primaryAccent,
-                            activeTrackColor = palette.primaryAccent
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .semantics { contentDescription = "Громкость команд фаз" }
-                            .testTag("slider_signal_volume")
-                    )
-                }
-
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Громкость метронома (всегда тише команд)",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = palette.textPrimary
-                        )
-                        Text(
-                            text = "${(settings.metronomeVolume * 100).toInt()}%",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = palette.secondaryAccent,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Slider(
-                        value = settings.metronomeVolume,
-                        onValueChange = onMetronomeVolumeChange,
-                        valueRange = 0f..1f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = palette.secondaryAccent,
-                            activeTrackColor = palette.secondaryAccent
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .semantics { contentDescription = "Громкость метронома" }
-                            .testTag("slider_metronome_volume")
-                    )
-                }
-
-                // Переключатель приглушения других приложений (YouTube / музыка)
+            // 5. Карточка «О приложении и Диагностика»
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, palette.outline.copy(alpha = 0.32f), RoundedCornerShape(18.dp))
+                    .testTag("about_app_card"),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = palette.surface)
+            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(palette.surfaceElevated)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Приглушать другие приложения",
-                            style = MaterialTheme.typography.bodyMedium,
+                            text = "О приложении и система",
+                            style = MaterialTheme.typography.titleMedium,
                             color = palette.textPrimary,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.Bold
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = if (settings.duckOtherApps) {
-                                "Включено: звук YouTube и музыки временно снижается на время сигнала (AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)"
-                            } else {
-                                "Выключено: звуки тренировки звучат поверх YouTube и музыки без пауз и приглушения"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
+                            text = "Инженерный стенд, журнал сигналов и проверка службы",
+                            style = MaterialTheme.typography.labelSmall,
                             color = palette.textSecondary
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Switch(
-                        checked = settings.duckOtherApps,
-                        onCheckedChange = onDuckOtherAppsChange,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = palette.primaryAccent,
-                            checkedTrackColor = palette.primaryAccent.copy(alpha = 0.5f),
-                            uncheckedThumbColor = palette.textSecondary,
-                            uncheckedTrackColor = palette.surfaceVariant
-                        ),
-                        modifier = Modifier.testTag("switch_duck_other_apps")
-                    )
-                }
-
-                Text(
-                    text = "Прослушать образцы (единый звуковой механизм с сессией):",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = palette.textSecondary
-                )
-
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    listOf(
-                        SignalType.CONTRACTION,
-                        SignalType.RELAXATION,
-                        SignalType.METRONOME_TICK,
-                        SignalType.SET_COMPLETED,
-                        SignalType.GROUP_COMPLETED
-                    ).forEach { signal ->
-                        FilledTonalButton(
-                            onClick = { onPlaySample(signal) },
-                            enabled = !snapshot.isRunningOrPreparing,
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = palette.surfaceVariant,
-                                contentColor = palette.textPrimary
-                            ),
-                            modifier = Modifier
-                                .heightIn(min = 48.dp)
-                                .testTag("btn_sample_${signal.name.lowercase(Locale.ROOT)}")
-                        ) {
-                            Text(signal.labelRu, style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                }
-            }
-        }
-
-        // 4. Данные и резервное копирование
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("data_settings_card"),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.surface)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Резервная копия и данные",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = palette.textPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-
-                // Статусные баннеры операций с резервной копией
-                if (backupOperationBanner != null) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = palette.successAccent.copy(alpha = 0.18f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("backup_success_banner")
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = palette.successAccent,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = backupOperationBanner,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = palette.successAccent,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(
-                                onClick = onDismissBackupBanners,
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Закрыть",
-                                    tint = palette.textSecondary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                if (backupErrorMessage != null) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = palette.errorAccent.copy(alpha = 0.18f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("backup_error_banner")
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = palette.errorAccent,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = backupErrorMessage,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = palette.errorAccent,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(
-                                onClick = onDismissBackupBanners,
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Закрыть",
-                                    tint = palette.textSecondary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Предупреждение о блокировке во время активной тренировки (v1.2 п. 3)
-                if (snapshot.isActiveOrPaused) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = palette.warningAccent.copy(alpha = 0.16f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("backup_active_workout_warning")
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = palette.warningAccent,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Завершите или остановите текущую тренировку перед резервным копированием или восстановлением.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = palette.warningAccent,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                }
-
-                Text(
-                    text = "Резервная копия сохраняет историю тренировок, шаблоны, авторские программы и настройки в локальный файл. Восстановление полностью заменяет текущие данные.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = palette.textSecondary
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Button(
-                        onClick = { showBackupNoticeDialog = true },
-                        enabled = !snapshot.isActiveOrPaused,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = palette.primaryAccent,
-                            contentColor = palette.onPrimaryAccent
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 48.dp)
-                            .testTag("btn_create_backup")
-                    ) {
-                        Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Сохранить копию", fontWeight = FontWeight.SemiBold)
-                    }
-
+                    Spacer(modifier = Modifier.width(10.dp))
                     OutlinedButton(
-                        onClick = { restoreBackupLauncher.launch(BACKUP_DOCUMENT_MIME_TYPES) },
-                        enabled = !snapshot.isActiveOrPaused,
+                        onClick = onOpenDiagnostics,
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                         modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 48.dp)
-                            .testTag("btn_restore_backup")
+                            .heightIn(min = 40.dp)
+                            .testTag("btn_open_diagnostics")
                     ) {
-                        Icon(Icons.Default.SettingsBackupRestore, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(
+                            imageVector = Icons.Default.Build,
+                            contentDescription = null,
+                            tint = palette.secondaryAccent,
+                            modifier = Modifier.size(16.dp)
+                        )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Восстановить", color = if (!snapshot.isActiveOrPaused) palette.textPrimary else palette.textSecondary)
+                        Text(
+                            text = "Диагностика",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = palette.textPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
                     }
                 }
             }
         }
+    }
+}
 
-        // 5. О приложении и переход во вложенный экран «Настройки → О приложении → Диагностика»
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("about_app_card"),
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.surface)
+@Composable
+private fun SettingsCategoryTabChip(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    testTag: String,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalVelarisPalette.current
+    val bgColor = if (selected) palette.primaryAccent else Color.Transparent
+    val contentColor = if (selected) palette.onPrimaryAccent else palette.textSecondary
+
+    Box(
+        modifier = modifier
+            .heightIn(min = 38.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(bgColor)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .testTag(testTag),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelMedium,
+            color = contentColor,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun SettingsSpoilerHeader(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    testTag: String
+) {
+    val palette = LocalVelarisPalette.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .testTag(testTag),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
         ) {
-            Column(
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(palette.primaryAccent.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
             ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = palette.primaryAccent,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "О приложении",
+                    text = title,
                     style = MaterialTheme.typography.titleMedium,
                     color = palette.textPrimary,
-                    fontWeight = FontWeight.ExtraBold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "Velaris — офлайн-приложение для интервальных тренировок по расписанию, свободным шаблонам и авторским программам.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = palette.textSecondary
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = palette.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                OutlinedButton(
-                    onClick = onOpenDiagnostics,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 50.dp)
-                        .testTag("btn_open_diagnostics")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Build,
-                        contentDescription = null,
-                        tint = palette.secondaryAccent,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Диагностика",
-                        color = palette.textPrimary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
             }
         }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Icon(
+            imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+            contentDescription = if (expanded) "Свернуть" else "Развернуть",
+            tint = palette.textSecondary,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 
@@ -2022,7 +2331,7 @@ private fun SettingsSwitchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp),
+            .heightIn(min = 42.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -2030,11 +2339,18 @@ private fun SettingsSwitchRow(
             text = title,
             style = MaterialTheme.typography.bodyMedium,
             color = palette.textPrimary,
+            fontWeight = FontWeight.Medium,
             modifier = Modifier.weight(1f)
         )
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = palette.onPrimaryAccent,
+                checkedTrackColor = palette.primaryAccent,
+                uncheckedThumbColor = palette.textSecondary,
+                uncheckedTrackColor = palette.surfaceVariant
+            ),
             modifier = Modifier.testTag(testTag)
         )
     }

@@ -8,26 +8,30 @@ import kotlin.math.sqrt
 
 /**
  * Параметры отдельной ноты/импульса в локальном синтезаторе сигналов.
+ * Поддерживает 2-ю и 3-ю гармоники в зоне максимальной чувствительности слуха (1–3.5 кГц),
+ * чтобы сигнал был звонким, резким и отчётливо слышимым на динамике смартфона и поверх YouTube/музыки.
  */
 data class ToneNoteSpec(
     val frequencyHz: Double,
-    val overtoneRatio: Double = 0.0,
-    val overtoneAmplitude: Double = 0.0,
+    val overtoneRatio: Double = 2.0,
+    val overtoneAmplitude: Double = 0.45,
+    val thirdHarmonicRatio: Double = 3.0,
+    val thirdHarmonicAmplitude: Double = 0.25,
     val durationMs: Int,
-    val exponentialDecayRate: Double = 0.0,
+    val exponentialDecayRate: Double = 0.8,
     val noteGain: Double = 1.0
 )
 
 /**
  * Спецификация звукового паттерна сигнала.
  * `relativeLoudnessScale` задаёт целевую относительную громкость сигнала внутри набора:
- * - Основные команды (`CONTRACTION`, `RELAXATION`, `SET_COMPLETED`, `GROUP_COMPLETED`) выровнены по RMS (`1.0`).
- * - Сигнал подготовки (`PREP_TICK`) чуть спокойнее (`0.82`), чтобы старт сессии никогда не звучал резче рабочих команд.
- * - Метроном (`METRONOME_TICK`) всегда заметно тише рабочих команд (`0.42`).
+ * - Основные команды (`CONTRACTION`, `RELAXATION`, `SET_COMPLETED`, `GROUP_COMPLETED`) выровнены по высокому RMS (`1.0`).
+ * - Сигнал подготовки (`PREP_TICK`) чуть сдержаннее (`0.86`), чтобы отсчёт перед стартом был звонким, но не громче рабочей фазы.
+ * - Метроном (`METRONOME_TICK`) отчётливый, но всегда тише рабочих команд (`0.48`).
  */
 data class SignalPatternSpec(
     val notes: List<ToneNoteSpec>,
-    val interNoteGapMs: Int = 14,
+    val interNoteGapMs: Int = 12,
     val relativeLoudnessScale: Double = 1.0
 ) {
     val totalDurationMs: Int
@@ -39,90 +43,136 @@ data class SignalPatternSpec(
 }
 
 /**
- * Чистый Kotlin-генератор локальных звуковых наборов («Мягкий», «Колокольчики», «Чёткий»)
- * и двух вариантов тика метронома («Мягкий», «Чёткий»).
- *
- * Гарантирует:
- * - различимость команд «Сокращение», «Расслабление», «Подход завершён», «Группа завершена» внутри каждого набора;
- * - выровненную воспринимаемую громкость (RMS) всех основных команд внутри каждого набора и на динамике телефона
- *   (частоты от 392 Гц с поддержкой 2-й гармоники на нижних нотах, чтобы микродинамик не «проваливал» команду «Расслабление» после старта);
- * - отсутствие щелчков на начале/конце за счёт сглаженного косинусного окна (raised-cosine attack/release) и старта/финиша в нуле;
- * - короткую длительность (<= 360 мс, для команд фаз <= 220 мс) без длинного хвоста, пригодную для самой короткой фазы (1000 мс);
- * - гарантированно более тихий метроном по сравнению с командами фаз.
+ * Генератор трёх звонких, резких и высокоэффективных звуковых профилей:
+ * - «Импульс Pro» (`CRISP`) — яркий спортивный таймер (1046–1568 Гц + гармоники до 3.5 кГц);
+ * - «Кристалл» (`CHIMES`) — звонкий хрустальный перелив с чёткой атакой (1175–1760 Гц);
+ * - «Радар» (`SOFT`) — плотный тактический бип-сигнал (880–1318 Гц) без глухих низких частот.
  */
 object SoundSynthesisSpec {
 
     const val SAMPLE_RATE_HZ = 24_000
     const val MIN_SUPPORTED_PHASE_MS = 1_000
 
-    private const val TARGET_COMMAND_RMS = 0.34
+    // Повышенный целевой RMS (0.56 вместо прежних 0.34) обеспечивает высокую громкость и пробивную читаемость
+    private const val TARGET_COMMAND_RMS = 0.56
 
     fun resolveSignalPattern(
         pack: SoundPack,
         signal: SignalType,
-        metronomeStyle: MetronomeTickStyle = MetronomeTickStyle.SOFT
+        metronomeStyle: MetronomeTickStyle = MetronomeTickStyle.CRISP
     ): SignalPatternSpec {
         if (signal == SignalType.METRONOME_TICK) {
             return resolveMetronomePattern(metronomeStyle)
         }
 
         return when (pack) {
-            SoundPack.SOFT -> when (signal) {
+            SoundPack.CRISP -> when (signal) {
                 SignalType.PREP_TICK -> SignalPatternSpec(
                     notes = listOf(
                         ToneNoteSpec(
-                            frequencyHz = 440.0,
+                            frequencyHz = 1046.50, // C6
                             overtoneRatio = 2.0,
-                            overtoneAmplitude = 0.20,
-                            durationMs = 60
+                            overtoneAmplitude = 0.50,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.30,
+                            durationMs = 55,
+                            exponentialDecayRate = 0.6
                         )
                     ),
                     interNoteGapMs = 0,
-                    relativeLoudnessScale = 0.82
+                    relativeLoudnessScale = 0.86
                 )
                 SignalType.CONTRACTION -> SignalPatternSpec(
-                    // Спокойный тёплый подъём (Соль4 392 Гц -> Си4 493.88 Гц) с богатой 2-й гармоникой
+                    // Резкий спортивный двойной импульс вверх (C6 1046.5 Гц -> G6 1568 Гц)
                     notes = listOf(
-                        ToneNoteSpec(frequencyHz = 392.00, overtoneRatio = 2.0, overtoneAmplitude = 0.32, durationMs = 80),
-                        ToneNoteSpec(frequencyHz = 493.88, overtoneRatio = 2.0, overtoneAmplitude = 0.28, durationMs = 100)
-                    ),
-                    interNoteGapMs = 14,
-                    relativeLoudnessScale = 1.0
-                )
-                SignalType.RELAXATION -> SignalPatternSpec(
-                    // Спокойный тёплый спад (Ля4 440 Гц -> Фа#4 369.99 Гц с усиленной 2-й гармоникой для динамика)
-                    notes = listOf(
-                        ToneNoteSpec(frequencyHz = 440.00, overtoneRatio = 2.0, overtoneAmplitude = 0.30, durationMs = 80),
-                        ToneNoteSpec(frequencyHz = 369.99, overtoneRatio = 2.0, overtoneAmplitude = 0.42, durationMs = 105)
-                    ),
-                    interNoteGapMs = 14,
-                    relativeLoudnessScale = 1.0
-                )
-                SignalType.PAUSED -> SignalPatternSpec(
-                    notes = listOf(
-                        ToneNoteSpec(frequencyHz = 440.00, overtoneRatio = 2.0, overtoneAmplitude = 0.25, durationMs = 65),
-                        ToneNoteSpec(frequencyHz = 349.23, overtoneRatio = 2.0, overtoneAmplitude = 0.38, durationMs = 85)
-                    ),
-                    interNoteGapMs = 14,
-                    relativeLoudnessScale = 0.92
-                )
-                SignalType.SET_COMPLETED -> SignalPatternSpec(
-                    // Тёплое трезвучие завершения подхода (392 -> 493.88 -> 587.33 Гц)
-                    notes = listOf(
-                        ToneNoteSpec(frequencyHz = 392.00, overtoneRatio = 2.0, overtoneAmplitude = 0.30, durationMs = 70),
-                        ToneNoteSpec(frequencyHz = 493.88, overtoneRatio = 2.0, overtoneAmplitude = 0.26, durationMs = 70),
-                        ToneNoteSpec(frequencyHz = 587.33, overtoneRatio = 2.0, overtoneAmplitude = 0.24, durationMs = 110)
+                        ToneNoteSpec(
+                            frequencyHz = 1046.50,
+                            overtoneRatio = 2.0,
+                            overtoneAmplitude = 0.52,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.32,
+                            durationMs = 70,
+                            exponentialDecayRate = 0.5
+                        ),
+                        ToneNoteSpec(
+                            frequencyHz = 1567.98,
+                            overtoneRatio = 2.0,
+                            overtoneAmplitude = 0.48,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.28,
+                            durationMs = 95,
+                            exponentialDecayRate = 0.5
+                        )
                     ),
                     interNoteGapMs = 12,
                     relativeLoudnessScale = 1.0
                 )
-                SignalType.GROUP_COMPLETED -> SignalPatternSpec(
-                    // Четырёхнотный мягкий финал группы
+                SignalType.RELAXATION -> SignalPatternSpec(
+                    // Отчётливый звонкий переход на отдых (E6 1318.5 Гц -> A5 880 Гц)
                     notes = listOf(
-                        ToneNoteSpec(frequencyHz = 392.00, overtoneRatio = 2.0, overtoneAmplitude = 0.30, durationMs = 65),
-                        ToneNoteSpec(frequencyHz = 493.88, overtoneRatio = 2.0, overtoneAmplitude = 0.26, durationMs = 65),
-                        ToneNoteSpec(frequencyHz = 587.33, overtoneRatio = 2.0, overtoneAmplitude = 0.24, durationMs = 70),
-                        ToneNoteSpec(frequencyHz = 783.99, overtoneRatio = 2.0, overtoneAmplitude = 0.20, durationMs = 120)
+                        ToneNoteSpec(
+                            frequencyHz = 1318.51,
+                            overtoneRatio = 2.0,
+                            overtoneAmplitude = 0.50,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.30,
+                            durationMs = 70,
+                            exponentialDecayRate = 0.5
+                        ),
+                        ToneNoteSpec(
+                            frequencyHz = 880.00,
+                            overtoneRatio = 2.0,
+                            overtoneAmplitude = 0.55,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.34,
+                            durationMs = 95,
+                            exponentialDecayRate = 0.5
+                        )
+                    ),
+                    interNoteGapMs = 12,
+                    relativeLoudnessScale = 1.0
+                )
+                SignalType.PAUSED -> SignalPatternSpec(
+                    notes = listOf(
+                        ToneNoteSpec(
+                            frequencyHz = 987.77,
+                            overtoneRatio = 2.0,
+                            overtoneAmplitude = 0.45,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.25,
+                            durationMs = 65,
+                            exponentialDecayRate = 0.6
+                        ),
+                        ToneNoteSpec(
+                            frequencyHz = 783.99,
+                            overtoneRatio = 2.0,
+                            overtoneAmplitude = 0.48,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.28,
+                            durationMs = 85,
+                            exponentialDecayRate = 0.6
+                        )
+                    ),
+                    interNoteGapMs = 12,
+                    relativeLoudnessScale = 0.94
+                )
+                SignalType.SET_COMPLETED -> SignalPatternSpec(
+                    // Яркое спортивное трезвучие финала (C6 -> E6 -> G6)
+                    notes = listOf(
+                        ToneNoteSpec(frequencyHz = 1046.50, overtoneRatio = 2.0, overtoneAmplitude = 0.48, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.28, durationMs = 60, exponentialDecayRate = 0.5),
+                        ToneNoteSpec(frequencyHz = 1318.51, overtoneRatio = 2.0, overtoneAmplitude = 0.48, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.28, durationMs = 60, exponentialDecayRate = 0.5),
+                        ToneNoteSpec(frequencyHz = 1567.98, overtoneRatio = 2.0, overtoneAmplitude = 0.48, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.28, durationMs = 105, exponentialDecayRate = 0.5)
+                    ),
+                    interNoteGapMs = 10,
+                    relativeLoudnessScale = 1.0
+                )
+                SignalType.GROUP_COMPLETED -> SignalPatternSpec(
+                    // Победная фанфара закрытия этапа (C6 -> E6 -> G6 -> C7)
+                    notes = listOf(
+                        ToneNoteSpec(frequencyHz = 1046.50, overtoneRatio = 2.0, overtoneAmplitude = 0.48, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.26, durationMs = 55, exponentialDecayRate = 0.5),
+                        ToneNoteSpec(frequencyHz = 1318.51, overtoneRatio = 2.0, overtoneAmplitude = 0.48, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.26, durationMs = 55, exponentialDecayRate = 0.5),
+                        ToneNoteSpec(frequencyHz = 1567.98, overtoneRatio = 2.0, overtoneAmplitude = 0.48, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.26, durationMs = 60, exponentialDecayRate = 0.5),
+                        ToneNoteSpec(frequencyHz = 2093.00, overtoneRatio = 2.0, overtoneAmplitude = 0.42, thirdHarmonicRatio = 2.5, thirdHarmonicAmplitude = 0.20, durationMs = 110, exponentialDecayRate = 0.5)
                     ),
                     interNoteGapMs = 10,
                     relativeLoudnessScale = 1.0
@@ -134,53 +184,63 @@ object SoundSynthesisSpec {
                 SignalType.PREP_TICK -> SignalPatternSpec(
                     notes = listOf(
                         ToneNoteSpec(
-                            frequencyHz = 783.99,
-                            overtoneRatio = 2.76,
-                            overtoneAmplitude = 0.25,
+                            frequencyHz = 1174.66, // D6
+                            overtoneRatio = 2.4,
+                            overtoneAmplitude = 0.46,
+                            thirdHarmonicRatio = 3.2,
+                            thirdHarmonicAmplitude = 0.24,
                             durationMs = 55,
-                            exponentialDecayRate = 1.8
+                            exponentialDecayRate = 1.1
                         )
                     ),
                     interNoteGapMs = 0,
-                    relativeLoudnessScale = 0.82
+                    relativeLoudnessScale = 0.86
                 )
                 SignalType.CONTRACTION -> SignalPatternSpec(
-                    // Чистый светлый перелив вверх (Соль5 -> Ре6) с умеренным затуханием без потери громкости
+                    // Звонкий хрустальный перелив вверх (D6 1174.66 Гц -> A6 1760 Гц)
                     notes = listOf(
                         ToneNoteSpec(
-                            frequencyHz = 783.99,
-                            overtoneRatio = 2.76,
-                            overtoneAmplitude = 0.28,
-                            durationMs = 75,
-                            exponentialDecayRate = 1.8
+                            frequencyHz = 1174.66,
+                            overtoneRatio = 2.4,
+                            overtoneAmplitude = 0.48,
+                            thirdHarmonicRatio = 3.2,
+                            thirdHarmonicAmplitude = 0.26,
+                            durationMs = 72,
+                            exponentialDecayRate = 1.0
                         ),
                         ToneNoteSpec(
-                            frequencyHz = 1174.66,
-                            overtoneRatio = 2.76,
-                            overtoneAmplitude = 0.24,
+                            frequencyHz = 1760.00,
+                            overtoneRatio = 2.4,
+                            overtoneAmplitude = 0.44,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.22,
                             durationMs = 95,
-                            exponentialDecayRate = 1.9
+                            exponentialDecayRate = 1.0
                         )
                     ),
                     interNoteGapMs = 12,
                     relativeLoudnessScale = 1.0
                 )
                 SignalType.RELAXATION -> SignalPatternSpec(
-                    // Чистый перелив вниз (Ля5 -> Ми5)
+                    // Звонкий хрустальный перелив вниз (F#6 1479.98 Гц -> A5 880 Гц)
                     notes = listOf(
                         ToneNoteSpec(
-                            frequencyHz = 880.00,
-                            overtoneRatio = 2.76,
-                            overtoneAmplitude = 0.24,
-                            durationMs = 75,
-                            exponentialDecayRate = 1.8
+                            frequencyHz = 1479.98,
+                            overtoneRatio = 2.4,
+                            overtoneAmplitude = 0.46,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.24,
+                            durationMs = 72,
+                            exponentialDecayRate = 1.0
                         ),
                         ToneNoteSpec(
-                            frequencyHz = 659.25,
-                            overtoneRatio = 2.76,
-                            overtoneAmplitude = 0.26,
-                            durationMs = 100,
-                            exponentialDecayRate = 1.9
+                            frequencyHz = 880.00,
+                            overtoneRatio = 2.4,
+                            overtoneAmplitude = 0.50,
+                            thirdHarmonicRatio = 3.2,
+                            thirdHarmonicAmplitude = 0.28,
+                            durationMs = 95,
+                            exponentialDecayRate = 1.0
                         )
                     ),
                     interNoteGapMs = 12,
@@ -189,38 +249,42 @@ object SoundSynthesisSpec {
                 SignalType.PAUSED -> SignalPatternSpec(
                     notes = listOf(
                         ToneNoteSpec(
-                            frequencyHz = 659.25,
-                            overtoneRatio = 2.5,
-                            overtoneAmplitude = 0.22,
+                            frequencyHz = 1046.50,
+                            overtoneRatio = 2.4,
+                            overtoneAmplitude = 0.42,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.22,
                             durationMs = 65,
-                            exponentialDecayRate = 1.8
+                            exponentialDecayRate = 1.1
                         ),
                         ToneNoteSpec(
-                            frequencyHz = 523.25,
-                            overtoneRatio = 2.5,
-                            overtoneAmplitude = 0.24,
+                            frequencyHz = 783.99,
+                            overtoneRatio = 2.4,
+                            overtoneAmplitude = 0.45,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.24,
                             durationMs = 85,
-                            exponentialDecayRate = 1.8
+                            exponentialDecayRate = 1.1
                         )
                     ),
                     interNoteGapMs = 12,
-                    relativeLoudnessScale = 0.92
+                    relativeLoudnessScale = 0.94
                 )
                 SignalType.SET_COMPLETED -> SignalPatternSpec(
                     notes = listOf(
-                        ToneNoteSpec(frequencyHz = 659.25, overtoneRatio = 2.76, overtoneAmplitude = 0.25, durationMs = 65, exponentialDecayRate = 1.7),
-                        ToneNoteSpec(frequencyHz = 783.99, overtoneRatio = 2.76, overtoneAmplitude = 0.25, durationMs = 65, exponentialDecayRate = 1.7),
-                        ToneNoteSpec(frequencyHz = 1046.50, overtoneRatio = 2.76, overtoneAmplitude = 0.25, durationMs = 110, exponentialDecayRate = 1.9)
+                        ToneNoteSpec(frequencyHz = 987.77, overtoneRatio = 2.4, overtoneAmplitude = 0.45, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.24, durationMs = 65, exponentialDecayRate = 1.0),
+                        ToneNoteSpec(frequencyHz = 1174.66, overtoneRatio = 2.4, overtoneAmplitude = 0.45, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.24, durationMs = 65, exponentialDecayRate = 1.0),
+                        ToneNoteSpec(frequencyHz = 1567.98, overtoneRatio = 2.4, overtoneAmplitude = 0.45, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.24, durationMs = 105, exponentialDecayRate = 1.0)
                     ),
                     interNoteGapMs = 10,
                     relativeLoudnessScale = 1.0
                 )
                 SignalType.GROUP_COMPLETED -> SignalPatternSpec(
                     notes = listOf(
-                        ToneNoteSpec(frequencyHz = 587.33, overtoneRatio = 2.76, overtoneAmplitude = 0.25, durationMs = 60, exponentialDecayRate = 1.7),
-                        ToneNoteSpec(frequencyHz = 783.99, overtoneRatio = 2.76, overtoneAmplitude = 0.25, durationMs = 60, exponentialDecayRate = 1.7),
-                        ToneNoteSpec(frequencyHz = 987.77, overtoneRatio = 2.76, overtoneAmplitude = 0.25, durationMs = 65, exponentialDecayRate = 1.7),
-                        ToneNoteSpec(frequencyHz = 1318.51, overtoneRatio = 2.76, overtoneAmplitude = 0.25, durationMs = 115, exponentialDecayRate = 2.0)
+                        ToneNoteSpec(frequencyHz = 880.00, overtoneRatio = 2.4, overtoneAmplitude = 0.45, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.24, durationMs = 58, exponentialDecayRate = 1.0),
+                        ToneNoteSpec(frequencyHz = 1174.66, overtoneRatio = 2.4, overtoneAmplitude = 0.45, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.24, durationMs = 58, exponentialDecayRate = 1.0),
+                        ToneNoteSpec(frequencyHz = 1479.98, overtoneRatio = 2.4, overtoneAmplitude = 0.45, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.24, durationMs = 62, exponentialDecayRate = 1.0),
+                        ToneNoteSpec(frequencyHz = 1760.00, overtoneRatio = 2.4, overtoneAmplitude = 0.45, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.24, durationMs = 110, exponentialDecayRate = 1.0)
                     ),
                     interNoteGapMs = 10,
                     relativeLoudnessScale = 1.0
@@ -228,60 +292,111 @@ object SoundSynthesisSpec {
                 SignalType.METRONOME_TICK -> resolveMetronomePattern(metronomeStyle)
             }
 
-            SoundPack.CRISP -> when (signal) {
+            SoundPack.SOFT -> when (signal) {
                 SignalType.PREP_TICK -> SignalPatternSpec(
                     notes = listOf(
                         ToneNoteSpec(
-                            frequencyHz = 783.99,
-                            overtoneRatio = 3.0,
-                            overtoneAmplitude = 0.18,
-                            durationMs = 50
+                            frequencyHz = 880.00, // A5 — плотный тактический тон
+                            overtoneRatio = 2.0,
+                            overtoneAmplitude = 0.48,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.26,
+                            durationMs = 58,
+                            exponentialDecayRate = 0.5
                         )
                     ),
                     interNoteGapMs = 0,
-                    relativeLoudnessScale = 0.82
+                    relativeLoudnessScale = 0.86
                 )
                 SignalType.CONTRACTION -> SignalPatternSpec(
-                    // Отчётливый короткий дуплет вверх (740 Гц -> 1108 Гц)
+                    // Тактический сфокусированный подъём (A5 880 Гц -> E6 1318.51 Гц)
                     notes = listOf(
-                        ToneNoteSpec(frequencyHz = 739.99, overtoneRatio = 3.0, overtoneAmplitude = 0.20, durationMs = 65),
-                        ToneNoteSpec(frequencyHz = 1108.73, overtoneRatio = 3.0, overtoneAmplitude = 0.20, durationMs = 85)
+                        ToneNoteSpec(
+                            frequencyHz = 880.00,
+                            overtoneRatio = 2.0,
+                            overtoneAmplitude = 0.50,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.28,
+                            durationMs = 75,
+                            exponentialDecayRate = 0.5
+                        ),
+                        ToneNoteSpec(
+                            frequencyHz = 1318.51,
+                            overtoneRatio = 2.0,
+                            overtoneAmplitude = 0.48,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.26,
+                            durationMs = 95,
+                            exponentialDecayRate = 0.5
+                        )
                     ),
                     interNoteGapMs = 12,
                     relativeLoudnessScale = 1.0
                 )
                 SignalType.RELAXATION -> SignalPatternSpec(
-                    // Отчётливый короткий дуплет вниз (830 Гц -> 587.33 Гц)
+                    // Тактический сфокусированный спад (C6 1046.50 Гц -> G5 783.99 Гц)
                     notes = listOf(
-                        ToneNoteSpec(frequencyHz = 830.61, overtoneRatio = 3.0, overtoneAmplitude = 0.18, durationMs = 65),
-                        ToneNoteSpec(frequencyHz = 587.33, overtoneRatio = 3.0, overtoneAmplitude = 0.22, durationMs = 90)
+                        ToneNoteSpec(
+                            frequencyHz = 1046.50,
+                            overtoneRatio = 2.0,
+                            overtoneAmplitude = 0.48,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.28,
+                            durationMs = 75,
+                            exponentialDecayRate = 0.5
+                        ),
+                        ToneNoteSpec(
+                            frequencyHz = 783.99,
+                            overtoneRatio = 2.0,
+                            overtoneAmplitude = 0.54,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.32,
+                            durationMs = 95,
+                            exponentialDecayRate = 0.5
+                        )
                     ),
                     interNoteGapMs = 12,
                     relativeLoudnessScale = 1.0
                 )
                 SignalType.PAUSED -> SignalPatternSpec(
                     notes = listOf(
-                        ToneNoteSpec(frequencyHz = 622.25, overtoneRatio = 3.0, overtoneAmplitude = 0.16, durationMs = 60),
-                        ToneNoteSpec(frequencyHz = 493.88, overtoneRatio = 3.0, overtoneAmplitude = 0.18, durationMs = 80)
+                        ToneNoteSpec(
+                            frequencyHz = 880.00,
+                            overtoneRatio = 2.0,
+                            overtoneAmplitude = 0.45,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.25,
+                            durationMs = 65,
+                            exponentialDecayRate = 0.5
+                        ),
+                        ToneNoteSpec(
+                            frequencyHz = 659.25,
+                            overtoneRatio = 2.0,
+                            overtoneAmplitude = 0.50,
+                            thirdHarmonicRatio = 3.0,
+                            thirdHarmonicAmplitude = 0.28,
+                            durationMs = 85,
+                            exponentialDecayRate = 0.5
+                        )
                     ),
                     interNoteGapMs = 12,
-                    relativeLoudnessScale = 0.92
+                    relativeLoudnessScale = 0.94
                 )
                 SignalType.SET_COMPLETED -> SignalPatternSpec(
                     notes = listOf(
-                        ToneNoteSpec(frequencyHz = 659.25, overtoneRatio = 3.0, overtoneAmplitude = 0.18, durationMs = 55),
-                        ToneNoteSpec(frequencyHz = 830.61, overtoneRatio = 3.0, overtoneAmplitude = 0.18, durationMs = 55),
-                        ToneNoteSpec(frequencyHz = 987.77, overtoneRatio = 3.0, overtoneAmplitude = 0.18, durationMs = 95)
+                        ToneNoteSpec(frequencyHz = 783.99, overtoneRatio = 2.0, overtoneAmplitude = 0.48, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.26, durationMs = 65, exponentialDecayRate = 0.5),
+                        ToneNoteSpec(frequencyHz = 987.77, overtoneRatio = 2.0, overtoneAmplitude = 0.48, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.26, durationMs = 65, exponentialDecayRate = 0.5),
+                        ToneNoteSpec(frequencyHz = 1318.51, overtoneRatio = 2.0, overtoneAmplitude = 0.48, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.26, durationMs = 105, exponentialDecayRate = 0.5)
                     ),
                     interNoteGapMs = 10,
                     relativeLoudnessScale = 1.0
                 )
                 SignalType.GROUP_COMPLETED -> SignalPatternSpec(
                     notes = listOf(
-                        ToneNoteSpec(frequencyHz = 659.25, overtoneRatio = 3.0, overtoneAmplitude = 0.18, durationMs = 50),
-                        ToneNoteSpec(frequencyHz = 830.61, overtoneRatio = 3.0, overtoneAmplitude = 0.18, durationMs = 50),
-                        ToneNoteSpec(frequencyHz = 987.77, overtoneRatio = 3.0, overtoneAmplitude = 0.18, durationMs = 55),
-                        ToneNoteSpec(frequencyHz = 1318.51, overtoneRatio = 3.0, overtoneAmplitude = 0.18, durationMs = 105)
+                        ToneNoteSpec(frequencyHz = 783.99, overtoneRatio = 2.0, overtoneAmplitude = 0.48, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.26, durationMs = 60, exponentialDecayRate = 0.5),
+                        ToneNoteSpec(frequencyHz = 987.77, overtoneRatio = 2.0, overtoneAmplitude = 0.48, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.26, durationMs = 60, exponentialDecayRate = 0.5),
+                        ToneNoteSpec(frequencyHz = 1174.66, overtoneRatio = 2.0, overtoneAmplitude = 0.48, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.26, durationMs = 65, exponentialDecayRate = 0.5),
+                        ToneNoteSpec(frequencyHz = 1567.98, overtoneRatio = 2.0, overtoneAmplitude = 0.48, thirdHarmonicRatio = 3.0, thirdHarmonicAmplitude = 0.26, durationMs = 110, exponentialDecayRate = 0.5)
                     ),
                     interNoteGapMs = 10,
                     relativeLoudnessScale = 1.0
@@ -296,28 +411,32 @@ object SoundSynthesisSpec {
             MetronomeTickStyle.SOFT -> SignalPatternSpec(
                 notes = listOf(
                     ToneNoteSpec(
-                        frequencyHz = 480.0,
+                        frequencyHz = 1200.0,
                         overtoneRatio = 2.0,
-                        overtoneAmplitude = 0.15,
-                        durationMs = 30,
-                        exponentialDecayRate = 2.4
+                        overtoneAmplitude = 0.42,
+                        thirdHarmonicRatio = 3.0,
+                        thirdHarmonicAmplitude = 0.20,
+                        durationMs = 26,
+                        exponentialDecayRate = 2.0
                     )
                 ),
                 interNoteGapMs = 0,
-                relativeLoudnessScale = 0.42
+                relativeLoudnessScale = 0.48
             )
             MetronomeTickStyle.CRISP -> SignalPatternSpec(
                 notes = listOf(
                     ToneNoteSpec(
-                        frequencyHz = 920.0,
+                        frequencyHz = 1680.0,
                         overtoneRatio = 2.0,
-                        overtoneAmplitude = 0.22,
-                        durationMs = 22,
-                        exponentialDecayRate = 2.8
+                        overtoneAmplitude = 0.48,
+                        thirdHarmonicRatio = 2.5,
+                        thirdHarmonicAmplitude = 0.26,
+                        durationMs = 24,
+                        exponentialDecayRate = 2.2
                     )
                 ),
                 interNoteGapMs = 0,
-                relativeLoudnessScale = 0.42
+                relativeLoudnessScale = 0.48
             )
         }
     }
@@ -334,11 +453,10 @@ object SoundSynthesisSpec {
         val clampedSignal = signalVolume.coerceIn(0f, 1f)
         val clampedMetro = metronomeVolume.coerceIn(0f, 1f)
         return if (signal == SignalType.METRONOME_TICK) {
-            // Метроном всегда заметно тише команд фаз, даже если ползунок метронома выкручен до 100%
             val maxAllowedMetro = if (clampedSignal > 0.05f) {
-                (clampedSignal * 0.65f).coerceAtLeast(0.08f)
+                (clampedSignal * 0.68f).coerceAtLeast(0.10f)
             } else {
-                clampedMetro * 0.55f
+                clampedMetro * 0.58f
             }
             clampedMetro.coerceAtMost(maxAllowedMetro)
         } else {
@@ -365,9 +483,9 @@ object SoundSynthesisSpec {
     }
 
     /**
-     * Генерирует 16-битный моно PCM-буфер со сглаженными косинусными фронтами (raised-cosine window),
+     * Генерирует 16-битный моно PCM-буфер с быстрой чёткой атакой (4 мс) и мягким сглаженным спадом (10 мс),
      * исключающими щелчки в начале и конце каждой ноты, и выравнивает среднеквадратичную громкость (RMS)
-     * между командами, чтобы внутри сессии не возникало провала громкости после стартового сигнала.
+     * на высоком пробивном уровне (TARGET_COMMAND_RMS = 0.56).
      */
     fun synthesizePcm16(
         pattern: SignalPatternSpec,
@@ -392,10 +510,10 @@ object SoundSynthesisSpec {
             val noteSamples = (sampleRate * note.durationMs) / 1000
             if (noteSamples <= 0) continue
 
-            // Плавный косинусный вход (8 мс) и выход (12 мс) без скачка амплитуды
-            val attackSamples = ((sampleRate * 8) / 1000).coerceIn(1, (noteSamples / 3).coerceAtLeast(1))
-            val releaseSamples = ((sampleRate * 12) / 1000).coerceIn(1, (noteSamples / 2).coerceAtLeast(1))
-            val normFactor = 1.0 + note.overtoneAmplitude
+            // Быстрая звонкая атака (4 мс) и чистый спад (10 мс)
+            val attackSamples = ((sampleRate * 4) / 1000).coerceIn(1, (noteSamples / 4).coerceAtLeast(1))
+            val releaseSamples = ((sampleRate * 10) / 1000).coerceIn(1, (noteSamples / 3).coerceAtLeast(1))
+            val normFactor = 1.0 + note.overtoneAmplitude + note.thirdHarmonicAmplitude
 
             for (s in 0 until noteSamples) {
                 if (writeIdx >= rawFloat.size) break
@@ -422,6 +540,9 @@ object SoundSynthesisSpec {
                 if (note.overtoneAmplitude > 0.0 && note.overtoneRatio > 0.0) {
                     wave += note.overtoneAmplitude * sin(2.0 * PI * note.frequencyHz * note.overtoneRatio * t)
                 }
+                if (note.thirdHarmonicAmplitude > 0.0 && note.thirdHarmonicRatio > 0.0) {
+                    wave += note.thirdHarmonicAmplitude * sin(2.0 * PI * note.frequencyHz * note.thirdHarmonicRatio * t)
+                }
                 wave = (wave / normFactor) * env * decay * note.noteGain
 
                 rawFloat[writeIdx++] = wave
@@ -441,18 +562,18 @@ object SoundSynthesisSpec {
             }
         }
 
-        // Выравнивание RMS по целевому уровню (с мягким ограничением пиков без клиппинга)
+        // Выравнивание RMS по высокому целевому уровню без клиппинга
         val rawRms = if (activeSamplesCount > 0) {
             sqrt(activeSamplesSumSq / activeSamplesCount.toDouble()).coerceAtLeast(0.05)
         } else {
             0.5
         }
         val targetRms = TARGET_COMMAND_RMS * pattern.relativeLoudnessScale * clampedVol.toDouble()
-        val rmsGain = (targetRms / rawRms).coerceAtMost(0.92 * clampedVol.toDouble())
+        val rmsGain = (targetRms / rawRms).coerceAtMost(1.45 * clampedVol.toDouble())
 
         val pcm = ShortArray(totalSamples)
         for (i in 0 until totalSamples) {
-            val scaled = (rawFloat[i] * rmsGain).coerceIn(-0.92, 0.92)
+            val scaled = (rawFloat[i] * rmsGain).coerceIn(-0.98, 0.98)
             pcm[i] = (scaled * Short.MAX_VALUE).toInt()
                 .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
                 .toShort()

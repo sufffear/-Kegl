@@ -1334,16 +1334,16 @@ private fun PeriodHorizontalTab(
     val palette = LocalVelarisPalette.current
 
     val backgroundBrush = when {
-        isCompleted && isSelected -> Brush.verticalGradient(
+        isCompleted && isSelected -> Brush.horizontalGradient(
             listOf(
-                palette.successAccent.copy(alpha = 0.36f),
-                palette.successAccent.copy(alpha = 0.22f)
+                Color(0xFF10B981),
+                Color(0xFF059669)
             )
         )
         isCompleted -> Brush.verticalGradient(
             listOf(
-                palette.successAccent.copy(alpha = 0.24f),
-                palette.successAccent.copy(alpha = 0.14f)
+                Color(0xFFD1FAE5),
+                Color(0xFFA7F3D0)
             )
         )
         isSelected -> Brush.horizontalGradient(
@@ -1355,20 +1355,22 @@ private fun PeriodHorizontalTab(
     }
 
     val borderColor = when {
-        isCompleted -> palette.successAccent
+        isCompleted -> Color(0xFF059669)
         isSelected -> palette.primaryAccent
-        else -> Color.Transparent
+        else -> palette.outline.copy(alpha = 0.45f)
     }
 
     val titleColor = when {
-        isCompleted -> palette.successAccent
+        isCompleted && isSelected -> Color.White
+        isCompleted -> Color(0xFF065F46)
         isSelected -> palette.onPrimaryAccent
         else -> palette.textPrimary
     }
 
     val badgeColor = when {
-        isCompleted -> palette.successAccent
-        isSelected -> palette.onPrimaryAccent.copy(alpha = 0.90f)
+        isCompleted && isSelected -> Color.White.copy(alpha = 0.95f)
+        isCompleted -> Color(0xFF047857)
+        isSelected -> palette.onPrimaryAccent.copy(alpha = 0.92f)
         else -> palette.textSecondary
     }
 

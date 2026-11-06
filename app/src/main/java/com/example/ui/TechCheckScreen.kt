@@ -336,6 +336,12 @@ fun TechCheckScreen(
                     .fillMaxWidth()
                     .background(palette.surface)
             ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(palette.outline.copy(alpha = 0.45f))
+                )
                 if (showCompactWorkoutBar) {
                     CompactActiveWorkoutBar(
                         snapshot = snapshot,
@@ -380,9 +386,9 @@ fun TechCheckScreen(
                                 )
                             },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = palette.onPrimaryAccent,
+                                selectedIconColor = palette.primaryAccent,
                                 selectedTextColor = palette.primaryAccent,
-                                indicatorColor = palette.primaryAccent,
+                                indicatorColor = palette.selectedContainer,
                                 unselectedIconColor = palette.textSecondary,
                                 unselectedTextColor = palette.textSecondary
                             ),

@@ -35,51 +35,51 @@ enum class SignalType(val labelRu: String) {
 }
 
 /**
- * Три локальных офлайн-набора звуков согласно заданию:
- * - «Мягкий» — спокойные приглушённые тоны;
- * - «Колокольчики» — короткие чистые переливы;
- * - «Чёткий» — отчётливо различимые короткие сигналы.
+ * Три звонких, отчётливых офлайн-профиля звука:
+ * - «Радар» (id="soft") — плотный сфокусированный тактический сигнал (880–1320 Гц);
+ * - «Кристалл» (id="chimes") — звонкий хрустальный колокольчик с яркой атакой (1175–1760 Гц);
+ * - «Импульс Pro» (id="crisp") — резкий, пробивной спортивный таймер (1046–1568 Гц), отлично слышимый поверх YouTube и музыки.
  */
 enum class SoundPack(
     val id: String,
     val titleRu: String,
     val descriptionRu: String
 ) {
-    SOFT(
-        id = "soft",
-        titleRu = "Мягкий",
-        descriptionRu = "Спокойные приглушённые тоны без резких верхов"
+    CRISP(
+        id = "crisp",
+        titleRu = "Импульс Pro",
+        descriptionRu = "Резкий, звонкий спортивный сигнал — отлично слышно поверх видео и музыки"
     ),
     CHIMES(
         id = "chimes",
-        titleRu = "Колокольчики",
-        descriptionRu = "Короткие чистые переливы с мягким затуханием"
+        titleRu = "Кристалл",
+        descriptionRu = "Звонкий хрустальный перелив с яркой атакой и высокой чёткостью"
     ),
-    CRISP(
-        id = "crisp",
-        titleRu = "Чёткий",
-        descriptionRu = "Отчётливо различимые короткие сигналы"
+    SOFT(
+        id = "soft",
+        titleRu = "Радар",
+        descriptionRu = "Плотный сфокусированный тактический сигнал без глухих тонов"
     );
 
     companion object {
         fun fromId(id: String?): SoundPack =
-            entries.firstOrNull { it.id == id } ?: SOFT
+            entries.firstOrNull { it.id == id } ?: CRISP
     }
 }
 
 /**
- * Два варианта тика метронома: мягкий и чёткий.
+ * Два звонких варианта тика метронома.
  */
 enum class MetronomeTickStyle(
     val id: String,
     val titleRu: String
 ) {
-    SOFT("soft_tick", "Мягкий"),
-    CRISP("crisp_tick", "Чёткий");
+    SOFT("soft_tick", "Кварцевый клик"),
+    CRISP("crisp_tick", "Звонкий тик");
 
     companion object {
         fun fromId(id: String?): MetronomeTickStyle =
-            entries.firstOrNull { it.id == id } ?: SOFT
+            entries.firstOrNull { it.id == id } ?: CRISP
     }
 }
 
