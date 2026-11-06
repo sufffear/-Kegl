@@ -1734,9 +1734,9 @@ fun VelarisSettingsScreen(
                                 )
                             }
 
-                            // Выбор звонкого звукового профиля
+                            // Выбор звукового профиля (мягкие приятные + звонкие) с мгновенным сравнением «Сжать» и «Отдых»
                             Text(
-                                text = "Звуковой профиль (при нажатии звучит предпросмотр):",
+                                text = "Звуковой профиль («Сжать» и «Отдых» кардинально отличаются):",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = palette.textSecondary,
                                 fontWeight = FontWeight.SemiBold
@@ -1744,17 +1744,17 @@ fun VelarisSettingsScreen(
 
                             SoundPack.entries.forEach { pack ->
                                 val isSelected = settings.soundPack == pack
-                                Row(
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
+                                        .clip(RoundedCornerShape(14.dp))
                                         .background(
                                             if (isSelected) palette.selectedContainer else palette.surfaceElevated
                                         )
                                         .border(
                                             width = if (isSelected) 1.5.dp else 1.dp,
                                             color = if (isSelected) palette.selectedBorder else palette.outline.copy(alpha = 0.28f),
-                                            shape = RoundedCornerShape(12.dp)
+                                            shape = RoundedCornerShape(14.dp)
                                         )
                                         .clickable {
                                             onSoundPackChange(pack)
@@ -1762,34 +1762,153 @@ fun VelarisSettingsScreen(
                                                 onPlaySample(SignalType.CONTRACTION)
                                             }
                                         }
-                                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                                        .padding(horizontal = 10.dp, vertical = 9.dp)
                                         .testTag("sound_pack_${pack.id}"),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    RadioButton(
-                                        selected = isSelected,
-                                        onClick = {
-                                            onSoundPackChange(pack)
-                                            if (!snapshot.isRunningOrPreparing) {
-                                                onPlaySample(SignalType.CONTRACTION)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = isSelected,
+                                            onClick = {
+                                                onSoundPackChange(pack)
+                                                if (!snapshot.isRunningOrPreparing) {
+                                                    onPlaySample(SignalType.CONTRACTION)
+                                                }
+                                            },
+                                            colors = RadioButtonDefaults.colors(selectedColor = palette.primaryAccent),
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Text(
+                                                    text = pack.titleRu,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = palette.textPrimary,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Surface(
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    color = if (pack.isSoftProfile) {
+                                                        palette.successAccent.copy(alpha = 0.16f)
+                                                    } else {
+                                                        palette.primaryAccent.copy(alpha = 0.14f)
+                                                    }
+                                                ) {
+                                                    Text(
+                                                        text = if (pack.isSoftProfile) "Мягкий" else "Звонкий",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = if (pack.isSoftProfile) palette.successAccent else palette.primaryAccent,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
                                             }
-                                        },
-                                        colors = RadioButtonDefaults.colors(selectedColor = palette.primaryAccent),
-                                        modifier = Modifier.size(32.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = pack.titleRu,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = palette.textPrimary,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = pack.descriptionRu,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = palette.textSecondary
-                                        )
+                                            Text(
+                                                text = pack.descriptionRu,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = palette.textSecondary
+                                            )
+                                        }
+                                    }
+
+                                    if (pack.contractionSummaryRu.isNotEmpty() && pack.relaxationSummaryRu.isNotEmpty()) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(palette.surface.copy(alpha = 0.72f))
+                                                .padding(horizontal = 9.dp, vertical = 6.dp),
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            Text(
+                                                text = pack.contractionSummaryRu,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = palette.phaseHoldAccent,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Text(
+                                                text = pack.relaxationSummaryRu,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = palette.phaseRelaxAccent,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        FilledTonalButton(
+                                            onClick = {
+                                                onSoundPackChange(pack)
+                                                if (!snapshot.isRunningOrPreparing) {
+                                                    onPlaySample(SignalType.CONTRACTION)
+                                                }
+                                            },
+                                            enabled = !snapshot.isRunningOrPreparing,
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                            colors = ButtonDefaults.filledTonalButtonColors(
+                                                containerColor = palette.phaseHoldAccent.copy(alpha = 0.14f),
+                                                contentColor = palette.phaseHoldAccent
+                                            ),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .heightIn(min = 34.dp)
+                                                .testTag("sound_pack_preview_hold_${pack.id}")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.PlayArrow,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "▲ Тест: Сжать",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1
+                                            )
+                                        }
+
+                                        FilledTonalButton(
+                                            onClick = {
+                                                onSoundPackChange(pack)
+                                                if (!snapshot.isRunningOrPreparing) {
+                                                    onPlaySample(SignalType.RELAXATION)
+                                                }
+                                            },
+                                            enabled = !snapshot.isRunningOrPreparing,
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                            colors = ButtonDefaults.filledTonalButtonColors(
+                                                containerColor = palette.phaseRelaxAccent.copy(alpha = 0.14f),
+                                                contentColor = palette.phaseRelaxAccent
+                                            ),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .heightIn(min = 34.dp)
+                                                .testTag("sound_pack_preview_relax_${pack.id}")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.PlayArrow,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "▼ Тест: Отдых",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1802,9 +1921,10 @@ fun VelarisSettingsScreen(
                                 fontWeight = FontWeight.SemiBold
                             )
 
-                            Row(
+                            FlowRow(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 MetronomeTickStyle.entries.forEach { style ->
                                     val isSelected = settings.metronomeTickStyle == style
@@ -1820,8 +1940,7 @@ fun VelarisSettingsScreen(
                                             contentColor = if (isSelected) palette.onPrimaryAccent else palette.textPrimary
                                         ),
                                         modifier = Modifier
-                                            .weight(1f)
-                                            .heightIn(min = 42.dp)
+                                            .heightIn(min = 40.dp)
                                             .testTag("metronome_style_${style.id}")
                                     ) {
                                         Text(

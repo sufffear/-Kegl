@@ -35,51 +35,88 @@ enum class SignalType(val labelRu: String) {
 }
 
 /**
- * Три звонких, отчётливых офлайн-профиля звука:
- * - «Радар» (id="soft") — плотный сфокусированный тактический сигнал (880–1320 Гц);
- * - «Кристалл» (id="chimes") — звонкий хрустальный колокольчик с яркой атакой (1175–1760 Гц);
- * - «Импульс Pro» (id="crisp") — резкий, пробивной спортивный таймер (1046–1568 Гц), отлично слышимый поверх YouTube и музыки.
+ * Шесть офлайн-профилей звука (4 мягких обволакивающих + 2 звонких спортивных/хрустальных)
+ * с кардинальным акустическим различием между фазами «Удержание» (Сжать) и «Отдых» (Расслабить):
+ * - На «Удержание» всегда звучит бодрый восходящий импульс из 3 нот в верхнем регистре («Раз-Два-ВВЕРХ ▲»);
+ * - На «Отдых» всегда звучит протяжный, тёплый нисходящий выдох из 2 длинных нот с бархатным суб-тоном на 2 октавы ниже («Плавный выдох ВНИЗ ▼»).
  */
 enum class SoundPack(
     val id: String,
     val titleRu: String,
-    val descriptionRu: String
+    val descriptionRu: String,
+    val isSoftProfile: Boolean = true,
+    val contractionSummaryRu: String = "",
+    val relaxationSummaryRu: String = ""
 ) {
-    CRISP(
-        id = "crisp",
-        titleRu = "Импульс Pro",
-        descriptionRu = "Резкий, звонкий спортивный сигнал — отлично слышно поверх видео и музыки"
+    VELVET_BOWL(
+        id = "velvet_bowl",
+        titleRu = "Тибетская чаша",
+        descriptionRu = "Мягкий медитативный дзен-тембр: светлый перезвон на сжатие и глубокий бархатный выдох чаши на отдых",
+        isSoftProfile = true,
+        contractionSummaryRu = "▲ Сжать: 3 светлых колокольчика вверх (F5 → A5 → D6)",
+        relaxationSummaryRu = "▼ Отдых: глубокий певучий выдох чаши вниз (C5 → F4 + бас)"
+    ),
+    WARM_MARIMBA(
+        id = "warm_marimba",
+        titleRu = "Тёплая маримба",
+        descriptionRu = "Уютный деревянный акустический звук без резких металлических частот",
+        isSoftProfile = true,
+        contractionSummaryRu = "▲ Сжать: бодрая тройная дробь клавиш вверх (G5 → B5 → E6)",
+        relaxationSummaryRu = "▼ Отдых: мягкий протяжный бамбуковый спад (B4 → E4)"
+    ),
+    HARP_BREEZE(
+        id = "harp_breeze",
+        titleRu = "Шёлковая арфа",
+        descriptionRu = "Воздушный перебор струн для спокойных дневных и вечерних тренировок",
+        isSoftProfile = true,
+        contractionSummaryRu = "▲ Сжать: искристый перебор 3 струн вверх (A5 → C#6 → E6)",
+        relaxationSummaryRu = "▼ Отдых: тёплый бархатный выдох виолончели вниз (D5 → G4)"
+    ),
+    SOFT(
+        id = "soft",
+        titleRu = "Мягкий бархат",
+        descriptionRu = "Округлый, деликатный флейтово-бархатный профиль с максимально плавной атакой",
+        isSoftProfile = true,
+        contractionSummaryRu = "▲ Сжать: 3 упругих мягких импульса вверх (G5 → C6 → E6)",
+        relaxationSummaryRu = "▼ Отдых: глубокий спокойный спуск на 2 октавы ниже (C5 → F4)"
     ),
     CHIMES(
         id = "chimes",
         titleRu = "Кристалл",
-        descriptionRu = "Звонкий хрустальный перелив с яркой атакой и высокой чёткостью"
+        descriptionRu = "Прозрачный хрустальный перезвон с ярким верхом на сжатие и тёплым карильоном на отдых",
+        isSoftProfile = false,
+        contractionSummaryRu = "▲ Сжать: звонкий тройной перелив вверх (A5 → D6 → F#6)",
+        relaxationSummaryRu = "▼ Отдых: плавный нисходящий карильон (E5 → A4)"
     ),
-    SOFT(
-        id = "soft",
-        titleRu = "Радар",
-        descriptionRu = "Плотный сфокусированный тактический сигнал без глухих тонов"
+    CRISP(
+        id = "crisp",
+        titleRu = "Импульс Pro",
+        descriptionRu = "Звонкий спортивный таймер — отлично слышно поверх видео и музыки",
+        isSoftProfile = false,
+        contractionSummaryRu = "▲ Сжать: 3 чётких стартовых импульса вверх (A5 → D6 → G6)",
+        relaxationSummaryRu = "▼ Отдых: мягкий низкий двухнотный спад (D5 → G4)"
     );
 
     companion object {
         fun fromId(id: String?): SoundPack =
-            entries.firstOrNull { it.id == id } ?: CRISP
+            entries.firstOrNull { it.id == id } ?: VELVET_BOWL
     }
 }
 
 /**
- * Два звонких варианта тика метронома.
+ * Три варианта тика метронома (два мягких акустических и один звонкий).
  */
 enum class MetronomeTickStyle(
     val id: String,
     val titleRu: String
 ) {
-    SOFT("soft_tick", "Кварцевый клик"),
+    SOFT("soft_tick", "Мягкая капля"),
+    VELVET_WOOD("wood_tick", "Тёплое дерево"),
     CRISP("crisp_tick", "Звонкий тик");
 
     companion object {
         fun fromId(id: String?): MetronomeTickStyle =
-            entries.firstOrNull { it.id == id } ?: CRISP
+            entries.firstOrNull { it.id == id } ?: SOFT
     }
 }
 

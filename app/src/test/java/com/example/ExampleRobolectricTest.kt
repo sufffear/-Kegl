@@ -125,14 +125,19 @@ class ExampleRobolectricTest {
         composeTestRule.onNodeWithTag("theme_option_theme_sunset").assertExists()
         composeTestRule.onNodeWithTag("theme_option_theme_sakura").assertExists()
 
-        // Раскрываем спойлер «Звук, профили и вибрация» и проверяем 3 звонких профиля
+        // Раскрываем спойлер «Звук, профили и вибрация» и проверяем мягкие и звонкие профили + кнопки сравнения Сжать/Отдых
         composeTestRule.onNodeWithTag("sound_settings_header")
             .performScrollTo()
             .performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("sound_pack_crisp").assertExists()
-        composeTestRule.onNodeWithTag("sound_pack_chimes").assertExists()
+        composeTestRule.onNodeWithTag("sound_pack_velvet_bowl").assertExists()
+        composeTestRule.onNodeWithTag("sound_pack_warm_marimba").assertExists()
+        composeTestRule.onNodeWithTag("sound_pack_harp_breeze").assertExists()
         composeTestRule.onNodeWithTag("sound_pack_soft").assertExists()
+        composeTestRule.onNodeWithTag("sound_pack_chimes").assertExists()
+        composeTestRule.onNodeWithTag("sound_pack_crisp").assertExists()
+        composeTestRule.onNodeWithTag("sound_pack_preview_hold_velvet_bowl", useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithTag("sound_pack_preview_relax_velvet_bowl", useUnmergedTree = true).assertExists()
 
         // Раскрываем спойлер «Прослушать образцы команд»
         composeTestRule.onNodeWithTag("sound_samples_header")

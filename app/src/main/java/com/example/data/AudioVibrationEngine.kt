@@ -463,12 +463,12 @@ class AudioVibrationEngine(
                 intArrayOf(0, 185)
             )
             SignalType.CONTRACTION -> Pair(
-                longArrayOf(0L, 120L, 65L, 190L),
-                intArrayOf(0, 235, 0, 255)
+                longArrayOf(0L, 65L, 40L, 65L, 40L, 140L),
+                intArrayOf(0, 210, 0, 235, 0, 255)
             )
             SignalType.RELAXATION -> Pair(
-                longArrayOf(0L, 260L),
-                intArrayOf(0, 200)
+                longArrayOf(0L, 290L),
+                intArrayOf(0, 175)
             )
             SignalType.PAUSED -> Pair(
                 longArrayOf(0L, 95L, 75L, 95L),

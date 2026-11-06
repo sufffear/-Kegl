@@ -427,6 +427,52 @@ class ExampleUnitTest {
     }
 
     @Test
+    fun `all 6 sound packs including soft profiles have radically distinct contraction vs relaxation by rhythm, pitch direction, and spectrum`() {
+        assertEquals(6, SoundPack.entries.size)
+        assertEquals(4, SoundPack.entries.count { it.isSoftProfile })
+
+        for (pack in SoundPack.entries) {
+            val holdSpec = SoundSynthesisSpec.resolveSignalPattern(pack, SignalType.CONTRACTION)
+            val relaxSpec = SoundSynthesisSpec.resolveSignalPattern(pack, SignalType.RELAXATION)
+
+            // 1. Кардинальное различие по ритмическому рисунку: Сжатие = 3 коротких восходящих импульса, Отдых = 2 протяжных тона
+            assertEquals("В профиле ${pack.id} команда сжатия должна состоять из 3 восходящих импульсов", 3, holdSpec.notes.size)
+            assertEquals("В профиле ${pack.id} команда отдыха должна состоять из 2 протяжных тонов выдоха", 2, relaxSpec.notes.size)
+
+            // 2. Противоположное направление высоты тона и разнесение по регистрам (> 2.5 раза по финальной частоте)
+            assertTrue(
+                "Сжатие в ${pack.id} должно строго подниматься по частоте вверх",
+                holdSpec.notes[0].frequencyHz < holdSpec.notes[1].frequencyHz &&
+                    holdSpec.notes[1].frequencyHz < holdSpec.notes[2].frequencyHz
+            )
+            assertTrue(
+                "Отдых в ${pack.id} должен плавно спускаться по частоте вниз",
+                relaxSpec.notes[0].frequencyHz > relaxSpec.notes[1].frequencyHz &&
+                    relaxSpec.notes[1].endFrequencyHz < relaxSpec.notes[1].frequencyHz
+            )
+            assertTrue(
+                "Финальная частота сжатия должна быть минимум в 2.8 раза выше финальной частоты отдыха в ${pack.id}",
+                holdSpec.notes.last().frequencyHz > relaxSpec.notes.last().endFrequencyHz * 2.8
+            )
+
+            // 3. Различие тембра и огибающей: у отдыха мягкая бархатная атака и глубокий суб-октавный бас
+            assertTrue(relaxSpec.notes.all { it.attackMs >= 16 && it.subHarmonicAmplitude >= 0.35 })
+            assertTrue(holdSpec.notes.all { it.attackMs <= 8 && it.subHarmonicAmplitude == 0.0 })
+
+            // 4. Объективное спектральное различие синтезированного PCM-сигнала (Zero-Crossing Rate отличается > 2 раз)
+            val holdPcm = SoundSynthesisSpec.synthesizePcm16(holdSpec, volume = 0.85f)
+            val relaxPcm = SoundSynthesisSpec.synthesizePcm16(relaxSpec, volume = 0.85f)
+            val holdZcrHz = SoundSynthesisSpec.computeZeroCrossingRateHz(holdPcm)
+            val relaxZcrHz = SoundSynthesisSpec.computeZeroCrossingRateHz(relaxPcm)
+
+            assertTrue(
+                "Спектральная частота сжатия ($holdZcrHz Гц) должна быть минимум вдвое выше частоты отдыха ($relaxZcrHz Гц) в ${pack.id}",
+                holdZcrHz > relaxZcrHz * 2.0
+            )
+        }
+    }
+
+    @Test
     fun `markdown novel parser parses 3 acts and 12 chapters, Cyrillic, long paragraphs, dividers, and preserves exact author text in both modes`() {
         val rawMarkdown = NeutralTestMarkdownFactory.buildThreeActsTwelveChaptersMarkdown()
         val rawBytes = rawMarkdown.toByteArray(Charsets.UTF_8)
