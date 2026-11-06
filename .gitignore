@@ -16,3 +16,13 @@
 local.properties
 .env
 debug.keystore
+
+# Node & Web
+node_modules/
+dist/
+coverage/
+*.log
+.env*
+!.env.example
+bun.lock
+public/assets/aistudio/

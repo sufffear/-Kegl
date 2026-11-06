@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.animation.ValueAnimator
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -59,6 +60,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.BenchSignalSettings
+import com.example.data.CompletedSessionItem
 import com.example.data.DailySlotEntity
 import com.example.data.DailySlotWithCompletion
 import com.example.data.FreeIntervalTemplateEntity
@@ -71,6 +73,9 @@ import com.example.domain.PlanGroup
 import com.example.domain.WorkoutDifficulty
 import com.example.domain.calculateFreeCycles
 import com.example.ui.theme.LocalVelarisPalette
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private fun formatSecondsMinSec(totalSec: Int): String {
@@ -653,13 +658,59 @@ private fun formatHoldDurationCompactRu(holdSeconds: Int): String {
     }
 }
 
+private fun monthFullTitleRu(month: Int, year: Int): String {
+    val name = when (month) {
+        1 -> "Январь"
+        2 -> "Февраль"
+        3 -> "Март"
+        4 -> "Апрель"
+        5 -> "Май"
+        6 -> "Июнь"
+        7 -> "Июль"
+        8 -> "Август"
+        9 -> "Сентябрь"
+        10 -> "Октябрь"
+        11 -> "Ноябрь"
+        12 -> "Декабрь"
+        else -> ""
+    }
+    return "$name $year"
+}
+
+private fun dayOfWeekShortLabelRu(isoDay: Int): String = when (isoDay) {
+    1 -> "Пн"
+    2 -> "Вт"
+    3 -> "Ср"
+    4 -> "Чт"
+    5 -> "Пт"
+    6 -> "Сб"
+    7 -> "Вс"
+    else -> ""
+}
+
+private fun monthGenitiveShortRu(month: Int): String = when (month) {
+    1 -> "янв."
+    2 -> "февр."
+    3 -> "мар."
+    4 -> "апр."
+    5 -> "мая"
+    6 -> "июн."
+    7 -> "июл."
+    8 -> "авг."
+    9 -> "сент."
+    10 -> "окт."
+    11 -> "нояб."
+    12 -> "дек."
+    else -> ""
+}
+
 /**
- * Календарь «Цепочка стабильности» и 7/28-дневный обзор:
- * - Живая серия дней (Streak) + Рекорд + Кристаллы заморозки (❄️ до 3 шт.);
- * - Коллекционная витрина «Жетоны рубежей» с тактильным салютом и фанфарой (3 → 7 → 14 → 21 → 30 → 60 → 100 дн.);
- * - Экстренный микро-протокол «⚡ Блиц-спасение серии за 60 сек» (30 сжиманий 1с/1с);
- * - Сравнение «Эта неделя против прошлой» (дельта прогресса в % и секундах чистого сжатия);
- * - Переключатель «Неделя (7 дн.)» ↔ «Тепловая карта (28 дн.)» с 4 уровнями свечения и заморозкой пропусков.
+ * Переработанный блок статистики Velaris для Samsung S25 Ultra:
+ * - Крупная, спокойная типографика без визуального шума и лишних рамок;
+ * - Единый календарь с переключением месяцев (без переключателя «Неделя / Тепловая карта»);
+ * - Каждая ячейка объединяет дату, интенсивность активности и число сессий без сложной легенды;
+ * - По нажатию на день показывается краткий итог: обязательная программа, дополнительные занятия и время тренировки;
+ * - Подробный список сессий вынесен ниже в раскрываемую историю занятий.
  */
 @Composable
 fun WeeklyOverviewCard(
@@ -674,12 +725,23 @@ fun WeeklyOverviewCard(
     modifier: Modifier = Modifier
 ) {
     val palette = LocalVelarisPalette.current
-    var showMonthHeatmap by rememberSaveable { mutableStateOf(false) }
+    var monthOffset by rememberSaveable { mutableStateOf(0) }
+    var isHistoryExpanded by rememberSaveable { mutableStateOf(false) }
     var inspectedMilestoneDays by rememberSaveable { mutableStateOf<Int?>(null) }
 
-    val selectedSummary: WeeklyDaySummary? = overview.selectedDaySummary
-    val activeDaysCount = overview.days.count { it.completedCount > 0 }
-    val maxDayCount = overview.days.maxOfOrNull { it.completedCount }?.coerceAtLeast(1) ?: 1
+    val todayDateStr = remember(overview.days) {
+        overview.days.lastOrNull()?.localDate ?: LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+    }
+    val todayDate = remember(todayDateStr) {
+        runCatching { LocalDate.parse(todayDateStr) }.getOrElse { LocalDate.now() }
+    }
+    val displayedYearMonth = remember(todayDate, monthOffset) {
+        YearMonth.from(todayDate).plusMonths(monthOffset.toLong())
+    }
+
+    val selectedSummary: WeeklyDaySummary? = remember(overview, todayDateStr) {
+        overview.selectedDaySummary ?: overview.days.lastOrNull()
+    }
 
     val activeSaluteMilestone: StreakMilestoneInfo? = celebratedMilestone
         ?: overview.milestones.firstOrNull { it.targetDays == inspectedMilestoneDays }
@@ -687,176 +749,91 @@ fun WeeklyOverviewCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .border(1.dp, palette.outline.copy(alpha = 0.32f), RoundedCornerShape(20.dp))
+            .border(1.dp, palette.outline.copy(alpha = 0.22f), RoundedCornerShape(24.dp))
             .testTag("weekly_overview_card"),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = palette.surface)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Шапка карточки
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Цепочка стабильности",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = palette.textPrimary,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "Серия, заморозка и тепловая карта тонуса",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = palette.textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                StatusPillBadge(
-                    text = "$activeDaysCount/7 дн.",
-                    accentColor = palette.primaryAccent
-                )
-            }
-
-            // 1. Мотивационный блок «Серия + Щиты заморозки + Ранг»
+            // 1. Крупная спокойная шапка статистики + Серия и Заморозка
             Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = palette.surfaceElevated.copy(alpha = 0.88f),
+                shape = RoundedCornerShape(20.dp),
+                color = palette.surfaceElevated.copy(alpha = 0.72f),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(
-                        width = 1.dp,
-                        color = if (overview.isTodayActiveInStreak) {
-                            palette.successAccent.copy(alpha = 0.45f)
-                        } else if (overview.isStreakAtRiskToday) {
-                            palette.phasePauseAccent.copy(alpha = 0.55f)
-                        } else {
-                            palette.primaryAccent.copy(alpha = 0.28f)
-                        },
-                        shape = RoundedCornerShape(16.dp)
-                    )
                     .testTag("streak_motivation_banner")
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    palette.heroGradientStart.copy(alpha = 0.75f),
-                                    palette.heroGradientEnd.copy(alpha = 0.55f)
-                                )
-                            )
-                        )
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Слева: Огонь серии и рекорд
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.weight(1f)
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
-                            val streakBadgeColor = when {
-                                overview.isTodayActiveInStreak -> palette.successAccent
-                                overview.isStreakAtRiskToday -> palette.phasePauseAccent
-                                else -> palette.primaryAccent
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(streakBadgeColor.copy(alpha = 0.16f))
-                                    .border(1.dp, streakBadgeColor.copy(alpha = 0.45f), RoundedCornerShape(10.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (overview.isTodayActiveInStreak) "🔥" else if (overview.currentStreakDays > 0) "⚡" else "🌱",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                            }
-
-                            Column {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Text(
-                                        text = "Серия: ${overview.currentStreakDays} дн.",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = palette.textPrimary,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        maxLines = 1,
-                                        softWrap = false,
-                                        modifier = Modifier.testTag("streak_current_days_text")
-                                    )
+                            Text(
+                                text = "Статистика и ритм",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = palette.textSecondary,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "Серия ${overview.currentStreakDays} дн.",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = palette.textPrimary,
+                                fontWeight = FontWeight.ExtraBold,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.testTag("streak_current_days_text")
+                            )
+                            Text(
+                                text = buildString {
+                                    append(overview.rankTitleRu)
                                     if (overview.bestStreakDays > 0) {
-                                        Text(
-                                            text = "· Рекорд ${overview.bestStreakDays}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = palette.secondaryAccent,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
+                                        append(" · Рекорд ${overview.bestStreakDays} дн.")
                                     }
-                                }
-                                Text(
-                                    text = "Ранг: ${overview.rankTitleRu}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = palette.textSecondary,
-                                    fontWeight = FontWeight.Medium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.textSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
 
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
 
-                        // Справа: Кристаллы заморозки серии
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = palette.surface.copy(alpha = 0.90f),
-                            modifier = Modifier
-                                .border(
-                                    1.dp,
-                                    palette.secondaryAccent.copy(alpha = 0.38f),
-                                    RoundedCornerShape(10.dp)
-                                )
-                                .testTag("streak_freeze_shields_badge")
+                            shape = RoundedCornerShape(14.dp),
+                            color = palette.surface,
+                            modifier = Modifier.testTag("streak_freeze_shields_badge")
                         ) {
                             Column(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 Text(
                                     text = "❄️ ${overview.availableFreezeShields}/${overview.maxFreezeShields}",
-                                    style = MaterialTheme.typography.labelMedium,
+                                    style = MaterialTheme.typography.titleSmall,
                                     color = palette.secondaryAccent,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     softWrap = false
                                 )
                                 Text(
-                                    text = "Заморозка",
+                                    text = "Защита серии",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = palette.textSecondary,
                                     maxLines = 1,
@@ -866,9 +843,36 @@ fun WeeklyOverviewCard(
                         }
                     }
 
-                    // Прогресс-бар до следующего рубежа серии
+                    // 3 крупные спокойные плитки ключевых показателей без лишних рамок
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        StatKpiTile(
+                            valueText = overview.totalRealCompletionsInWeek.toString(),
+                            labelText = "За 7 дней",
+                            accentColor = palette.primaryAccent,
+                            modifier = Modifier.weight(1f)
+                        )
+                        StatKpiTile(
+                            valueText = formatHoldDurationCompactRu(
+                                if (overview.totalHoldSecondsInWeek > 0) overview.totalHoldSecondsInWeek else overview.totalHoldSecondsAllTime
+                            ),
+                            labelText = "Чистое сжатие",
+                            accentColor = palette.secondaryAccent,
+                            modifier = Modifier.weight(1f)
+                        )
+                        StatKpiTile(
+                            valueText = overview.totalRealCompletionsAllTime.toString(),
+                            labelText = "Всего сессий",
+                            accentColor = palette.successAccent,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    // Прогресс до следующего рубежа и компактная строка жетонов
                     Column(
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("streak_milestone_progress_row")
@@ -880,17 +884,18 @@ fun WeeklyOverviewCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Следующий титул: «${overview.nextMilestoneTitleRu}» (${overview.nextMilestoneDays} дн.)",
-                                style = MaterialTheme.typography.labelSmall,
+                                text = "Цель: «${overview.nextMilestoneTitleRu}» (${overview.nextMilestoneDays} дн.)",
+                                style = MaterialTheme.typography.bodySmall,
                                 color = palette.textSecondary,
+                                fontWeight = FontWeight.Medium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "Ещё $remainingToMilestone дн.",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.bodySmall,
                                 color = palette.primaryAccent,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
@@ -901,7 +906,7 @@ fun WeeklyOverviewCard(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(6.dp)
+                                .height(8.dp)
                                 .clip(RoundedCornerShape(999.dp))
                                 .background(palette.surface)
                         ) {
@@ -909,7 +914,7 @@ fun WeeklyOverviewCard(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth(barFill)
-                                    .height(6.dp)
+                                    .height(8.dp)
                                     .clip(RoundedCornerShape(999.dp))
                                     .background(
                                         Brush.horizontalGradient(
@@ -918,56 +923,22 @@ fun WeeklyOverviewCard(
                                     )
                             )
                         }
-                    }
 
-                    // Коллекционная витрина «Жетоны рубежей» (7 жетонов от 3 до 100 дней)
-                    if (overview.milestones.isNotEmpty()) {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(5.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("milestone_tokens_showcase_section")
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Витрина жетонов рубежей",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = palette.textSecondary,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                val unlockedCount = overview.milestones.count { it.isUnlocked }
-                                Text(
-                                    text = "Открыто: $unlockedCount/${overview.milestones.size} (нажмите для салюта)",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = palette.secondaryAccent,
-                                    fontWeight = FontWeight.Medium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-
+                        if (overview.milestones.isNotEmpty()) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .testTag("milestone_tokens_showcase_section")
                                     .testTag("milestone_tokens_showcase_row"),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 overview.milestones.forEach { badge ->
                                     val isInspected = activeSaluteMilestone?.targetDays == badge.targetDays
                                     val tokenBg = when {
-                                        badge.isUnlocked -> palette.successAccent.copy(alpha = 0.18f)
-                                        badge.isCurrentTarget -> palette.primaryAccent.copy(alpha = 0.14f)
-                                        else -> palette.surface.copy(alpha = 0.72f)
-                                    }
-                                    val tokenBorder = when {
-                                        isInspected -> palette.selectedBorder
-                                        badge.isUnlocked -> palette.successAccent.copy(alpha = 0.65f)
-                                        badge.isCurrentTarget -> palette.primaryAccent.copy(alpha = 0.50f)
-                                        else -> palette.outline.copy(alpha = 0.22f)
+                                        isInspected -> palette.selectedContainer
+                                        badge.isUnlocked -> palette.successAccent.copy(alpha = 0.16f)
+                                        badge.isCurrentTarget -> palette.primaryAccent.copy(alpha = 0.12f)
+                                        else -> palette.surface.copy(alpha = 0.85f)
                                     }
                                     val labelColor = when {
                                         badge.isUnlocked -> palette.successAccent
@@ -978,29 +949,25 @@ fun WeeklyOverviewCard(
                                     Column(
                                         modifier = Modifier
                                             .weight(1f)
-                                            .clip(RoundedCornerShape(10.dp))
+                                            .heightIn(min = 48.dp)
+                                            .clip(RoundedCornerShape(12.dp))
                                             .background(tokenBg)
-                                            .border(
-                                                width = if (isInspected || badge.isUnlocked) 1.5.dp else 1.dp,
-                                                color = tokenBorder,
-                                                shape = RoundedCornerShape(10.dp)
-                                            )
                                             .clickable {
                                                 inspectedMilestoneDays = badge.targetDays
                                                 onTriggerMilestoneSalute(badge)
                                             }
-                                            .padding(vertical = 5.dp, horizontal = 2.dp)
+                                            .padding(vertical = 6.dp, horizontal = 2.dp)
                                             .testTag("milestone_token_${badge.targetDays}"),
                                         horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(1.dp)
+                                        verticalArrangement = Arrangement.Center
                                     ) {
                                         Text(
                                             text = badge.badgeEmoji,
-                                            style = MaterialTheme.typography.labelMedium,
+                                            style = MaterialTheme.typography.bodyMedium,
                                             maxLines = 1
                                         )
                                         Text(
-                                            text = if (badge.isUnlocked) "✓${badge.targetDays}д" else "${badge.targetDays}д",
+                                            text = "${badge.targetDays}д",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = labelColor,
                                             fontWeight = FontWeight.Bold,
@@ -1013,31 +980,18 @@ fun WeeklyOverviewCard(
                         }
                     }
 
-                    // Карточка выбранного жетона и Тактильного салюта рубежа
+                    // Детали выбранного жетона (по клику)
                     if (activeSaluteMilestone != null) {
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (activeSaluteMilestone.isUnlocked) {
-                                palette.successAccent.copy(alpha = 0.14f)
-                            } else {
-                                palette.surface.copy(alpha = 0.92f)
-                            },
+                            shape = RoundedCornerShape(14.dp),
+                            color = palette.surface,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .border(
-                                    1.dp,
-                                    if (activeSaluteMilestone.isUnlocked) {
-                                        palette.successAccent.copy(alpha = 0.55f)
-                                    } else {
-                                        palette.primaryAccent.copy(alpha = 0.40f)
-                                    },
-                                    RoundedCornerShape(12.dp)
-                                )
                                 .testTag("milestone_salute_banner")
                         ) {
                             Column(
-                                modifier = Modifier.padding(10.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -1045,49 +999,48 @@ fun WeeklyOverviewCard(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "${activeSaluteMilestone.badgeEmoji} Жетон «${activeSaluteMilestone.titleRu}» (${activeSaluteMilestone.targetDays} дн.)",
-                                        style = MaterialTheme.typography.labelLarge,
+                                        text = "${activeSaluteMilestone.badgeEmoji} ${activeSaluteMilestone.titleRu} · ${activeSaluteMilestone.targetDays} дн.",
+                                        style = MaterialTheme.typography.titleSmall,
                                         color = palette.textPrimary,
-                                        fontWeight = FontWeight.ExtraBold,
+                                        fontWeight = FontWeight.Bold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         modifier = Modifier.weight(1f)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    StatusPillBadge(
-                                        text = if (activeSaluteMilestone.isUnlocked) "Получен ✓" else "Рубеж",
-                                        accentColor = if (activeSaluteMilestone.isUnlocked) palette.successAccent else palette.primaryAccent
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (activeSaluteMilestone.isUnlocked) "Открыт ✓" else "Впереди",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (activeSaluteMilestone.isUnlocked) palette.successAccent else palette.primaryAccent,
+                                        fontWeight = FontWeight.Bold
                                     )
                                 }
 
                                 if (activeSaluteMilestone.descriptionRu.isNotBlank()) {
                                     Text(
                                         text = activeSaluteMilestone.descriptionRu,
-                                        style = MaterialTheme.typography.labelSmall,
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = palette.textSecondary
                                     )
                                 }
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     OutlinedButton(
                                         onClick = { onTriggerMilestoneSalute(activeSaluteMilestone) },
-                                        shape = RoundedCornerShape(9.dp),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(10.dp),
                                         modifier = Modifier
-                                            .weight(1.4f)
-                                            .heightIn(min = 34.dp)
+                                            .weight(1.3f)
+                                            .heightIn(min = 42.dp)
                                             .testTag("btn_play_milestone_salute")
                                     ) {
                                         Text(
-                                            text = "🎉 Фанфара и салют",
-                                            style = MaterialTheme.typography.labelSmall,
+                                            text = "🎉 Салют",
+                                            style = MaterialTheme.typography.labelMedium,
                                             color = palette.primaryAccent,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1,
-                                            softWrap = false
+                                            fontWeight = FontWeight.Bold
                                         )
                                     }
 
@@ -1096,20 +1049,17 @@ fun WeeklyOverviewCard(
                                             inspectedMilestoneDays = null
                                             onDismissMilestoneSalute()
                                         },
-                                        shape = RoundedCornerShape(9.dp),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(10.dp),
                                         modifier = Modifier
-                                            .weight(0.8f)
-                                            .heightIn(min = 34.dp)
+                                            .weight(1f)
+                                            .heightIn(min = 42.dp)
                                             .testTag("btn_close_milestone_salute")
                                     ) {
                                         Text(
                                             text = "Скрыть",
-                                            style = MaterialTheme.typography.labelSmall,
+                                            style = MaterialTheme.typography.labelMedium,
                                             color = palette.textSecondary,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1,
-                                            softWrap = false
+                                            fontWeight = FontWeight.SemiBold
                                         )
                                     }
                                 }
@@ -1117,607 +1067,393 @@ fun WeeklyOverviewCard(
                         }
                     }
 
-                    // Ежедневный квест / Микро-цель дня + Экстренный 60-секундный Блиц-протокол спасения серии
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = palette.surface.copy(alpha = 0.88f),
+                    // Спокойный блок задачи дня и быстрого 60-сек блица
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .border(1.dp, palette.outline.copy(alpha = 0.22f), RoundedCornerShape(12.dp))
                             .testTag("daily_motivation_quest_box")
                     ) {
-                        Column(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = overview.dailyQuestTitleRu,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = if (overview.dailyQuestProgress >= 1f) palette.successAccent else palette.textPrimary,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "${(overview.dailyQuestProgress * 100).toInt().coerceIn(0, 100)}%",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (overview.dailyQuestProgress >= 1f) palette.successAccent else palette.primaryAccent,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
-                            }
-                            Text(
-                                text = overview.dailyQuestSubtitleRu,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = palette.textSecondary,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-
-                            // Кнопка «⚡ Блиц-спасение серии за 60 секунд» (доступна, когда нет активного таймера)
-                            if (!isWorkoutActiveOrPaused) {
-                                val isUrgentRescue = !overview.isTodayActiveInStreak
-                                Button(
-                                    onClick = onStartStreakRescueBlitz,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (isUrgentRescue) {
-                                            palette.primaryAccent
-                                        } else {
-                                            palette.secondaryAccent.copy(alpha = 0.16f)
-                                        },
-                                        contentColor = if (isUrgentRescue) {
-                                            palette.onPrimaryAccent
-                                        } else {
-                                            palette.secondaryAccent
-                                        }
-                                    ),
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 38.dp)
-                                        .testTag("btn_streak_rescue_blitz")
-                                ) {
-                                    Text(
-                                        text = if (isUrgentRescue) {
-                                            "⚡ Блиц-спасение серии за 60 сек (30×1с)"
-                                        } else {
-                                            "⚡ Быстрый блиц-подход +60 сек в копилку"
-                                        },
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 2. 4 компактные KPI-плитки статистики (включая Чистое сжатие и Идеальные дни)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                StatKpiTile(
-                    valueText = overview.totalRealCompletionsInWeek.toString(),
-                    labelText = "За 7 дней",
-                    accentColor = palette.primaryAccent,
-                    modifier = Modifier.weight(1f)
-                )
-                StatKpiTile(
-                    valueText = formatHoldDurationCompactRu(
-                        if (overview.totalHoldSecondsInWeek > 0) overview.totalHoldSecondsInWeek else overview.totalHoldSecondsAllTime
-                    ),
-                    labelText = "Чистое сжатие",
-                    accentColor = palette.secondaryAccent,
-                    modifier = Modifier.weight(1f)
-                )
-                StatKpiTile(
-                    valueText = "${overview.perfectDaysInMonth}/28",
-                    labelText = "Сильных дн.",
-                    accentColor = palette.successAccent,
-                    modifier = Modifier.weight(1f)
-                )
-                StatKpiTile(
-                    valueText = overview.totalRealCompletionsAllTime.toString(),
-                    labelText = "За всё время",
-                    accentColor = palette.primaryAccent,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            // 2Б. Сравнение «Эта неделя против прошлой» (Дельта прогресса в % и секундах)
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = palette.surfaceElevated.copy(alpha = 0.85f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(
-                        1.dp,
-                        if (overview.weekHoldDeltaSeconds >= 0 && overview.totalHoldSecondsInWeek > 0) {
-                            palette.successAccent.copy(alpha = 0.38f)
-                        } else {
-                            palette.outline.copy(alpha = 0.25f)
-                        },
-                        RoundedCornerShape(14.dp)
-                    )
-                    .testTag("week_vs_prev_week_banner")
-            ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Эта неделя против прошлой",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = palette.textPrimary,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        val deltaColor = when {
-                            overview.totalHoldSecondsInWeek > 0 && overview.weekHoldDeltaSeconds >= 0 -> palette.successAccent
-                            overview.weekHoldDeltaSeconds < 0 -> palette.secondaryAccent
-                            else -> palette.primaryAccent
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(999.dp),
-                            color = deltaColor.copy(alpha = 0.15f),
+                        Row(
                             modifier = Modifier
-                                .border(1.dp, deltaColor.copy(alpha = 0.42f), RoundedCornerShape(999.dp))
-                                .testTag("week_delta_badge")
+                                .fillMaxWidth()
+                                .testTag("week_vs_prev_week_banner"),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Text(
+                                text = overview.dailyQuestTitleRu,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = palette.textPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = overview.weekDeltaBadgeTextRu,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = deltaColor,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = palette.secondaryAccent,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 softWrap = false,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                modifier = Modifier.testTag("week_delta_badge")
                             )
                         }
-                    }
 
-                    // Сравнительная шкала 2 недель
-                    val maxHoldComparison = maxOf(overview.totalHoldSecondsInWeek, overview.previousWeekHoldSeconds, 60)
-                    val curWeekFraction = (overview.totalHoldSecondsInWeek.toFloat() / maxHoldComparison.toFloat()).coerceIn(0.06f, 1f)
-                    val prevWeekFraction = (overview.previousWeekHoldSeconds.toFloat() / maxHoldComparison.toFloat()).coerceIn(0.06f, 1f)
-
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = "Эта",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = palette.textPrimary,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.width(48.dp)
-                            )
-                            Box(
+                        if (!isWorkoutActiveOrPaused) {
+                            val isUrgentRescue = !overview.isTodayActiveInStreak
+                            Button(
+                                onClick = onStartStreakRescueBlitz,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isUrgentRescue) {
+                                        palette.primaryAccent
+                                    } else {
+                                        palette.surface
+                                    },
+                                    contentColor = if (isUrgentRescue) {
+                                        palette.onPrimaryAccent
+                                    } else {
+                                        palette.primaryAccent
+                                    }
+                                ),
+                                shape = RoundedCornerShape(14.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .height(6.dp)
-                                    .clip(RoundedCornerShape(999.dp))
-                                    .background(palette.surface)
+                                    .fillMaxWidth()
+                                    .heightIn(min = 46.dp)
+                                    .testTag("btn_streak_rescue_blitz")
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(curWeekFraction)
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(999.dp))
-                                        .background(
-                                            Brush.horizontalGradient(
-                                                listOf(palette.primaryAccent, palette.successAccent)
-                                            )
-                                        )
+                                Text(
+                                    text = if (isUrgentRescue) {
+                                        "⚡ Блиц-спасение серии за 60 сек"
+                                    } else {
+                                        "⚡ Быстрый блиц-подход (60 сек)"
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            Text(
-                                text = formatHoldDurationCompactRu(overview.totalHoldSecondsInWeek),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = palette.successAccent,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = "Прошл.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = palette.textSecondary,
-                                modifier = Modifier.width(48.dp)
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(6.dp)
-                                    .clip(RoundedCornerShape(999.dp))
-                                    .background(palette.surface)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(prevWeekFraction)
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(999.dp))
-                                        .background(palette.secondaryAccent.copy(alpha = 0.55f))
-                                )
-                            }
-                            Text(
-                                text = formatHoldDurationCompactRu(overview.previousWeekHoldSeconds),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = palette.textSecondary,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                softWrap = false
-                            )
                         }
                     }
-
-                    Text(
-                        text = overview.weekDeltaSubtitleRu,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = palette.textSecondary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
             }
 
             if (!overview.hasAnyRealData) {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = palette.surfaceElevated,
+                    shape = RoundedCornerShape(16.dp),
+                    color = palette.surfaceElevated.copy(alpha = 0.65f),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("weekly_overview_empty_state")
                 ) {
                     Text(
-                        text = "Завершите любую тренировку — цепочка стабильности и тепловая карта зажгутся автоматически.",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = "Завершите первую тренировку — в календаре появятся выполненные сессии и время занятий.",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = palette.textSecondary,
-                        modifier = Modifier.padding(10.dp)
+                        modifier = Modifier.padding(14.dp)
                     )
                 }
             }
 
-            // 3. Переключатель вида календаря: «Неделя (7 дн.)» ↔ «Тепловая карта (28 дн.)»
-            Row(
+            // 2. Единый календарь с переключением месяцев (без переключателя «Неделя / Тепловая карта» и без сложной легенды)
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = palette.surfaceElevated.copy(alpha = 0.65f),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(palette.surfaceElevated)
-                    .padding(3.dp)
-                    .testTag("calendar_mode_toggle_row"),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    .testTag("monthly_calendar_section")
             ) {
-                val isWeekMode = !showMonthHeatmap
-                Surface(
-                    shape = RoundedCornerShape(9.dp),
-                    color = if (isWeekMode) palette.surface else Color.Transparent,
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(9.dp))
-                        .clickable { showMonthHeatmap = false }
-                        .testTag("calendar_mode_week")
-                ) {
-                    Text(
-                        text = "Неделя · 7 дн.",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (isWeekMode) palette.primaryAccent else palette.textSecondary,
-                        fontWeight = if (isWeekMode) FontWeight.Bold else FontWeight.Medium,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier.padding(vertical = 7.dp, horizontal = 6.dp)
-                    )
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(9.dp),
-                    color = if (showMonthHeatmap) palette.surface else Color.Transparent,
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(9.dp))
-                        .clickable { showMonthHeatmap = true }
-                        .testTag("calendar_mode_month")
-                ) {
-                    Text(
-                        text = "Тепловая карта · 28 дн.",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (showMonthHeatmap) palette.primaryAccent else palette.textSecondary,
-                        fontWeight = if (showMonthHeatmap) FontWeight.Bold else FontWeight.Medium,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier.padding(vertical = 7.dp, horizontal = 6.dp)
-                    )
-                }
-            }
-
-            if (!showMonthHeatmap) {
-                // 7-дневная гистограмма активности с индикаторами этапов и заморозки
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("weekly_days_row"),
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
-                    overview.days.forEach { day ->
-                        val isSelected = day.localDate == selectedSummary?.localDate
-                        val hasCompletions = day.completedCount > 0
-                        val barFraction = when {
-                            hasCompletions -> (day.completedCount.toFloat() / maxDayCount.toFloat()).coerceIn(0.28f, 1f)
-                            day.isFrozen -> 0.45f
-                            else -> 0.12f
-                        }
-
-                        val cellBg = when {
-                            isSelected -> palette.selectedContainer
-                            day.isFrozen -> palette.secondaryAccent.copy(alpha = 0.12f)
-                            hasCompletions -> palette.surfaceElevated
-                            else -> palette.surfaceElevated.copy(alpha = 0.65f)
-                        }
-                        val borderColor = when {
-                            isSelected -> palette.selectedBorder
-                            day.isToday -> palette.secondaryAccent.copy(alpha = 0.70f)
-                            day.isFrozen -> palette.secondaryAccent.copy(alpha = 0.50f)
-                            hasCompletions -> palette.successAccent.copy(alpha = 0.40f)
-                            else -> palette.outline.copy(alpha = 0.22f)
-                        }
-
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(cellBg)
-                                .border(
-                                    width = if (isSelected || day.isToday) 1.5.dp else 1.dp,
-                                    color = borderColor,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                .clickable { onSelectDay(day.localDate) }
-                                .padding(vertical = 6.dp, horizontal = 2.dp)
-                                .semantics {
-                                    contentDescription = "${day.shortLabelRu} ${day.dayOfMonthLabel}: выполнено ${day.completedCount}"
-                                }
-                                .testTag("weekly_day_${day.localDate}"),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = day.shortLabelRu,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (isSelected) palette.primaryAccent else palette.textSecondary,
-                                fontWeight = if (isSelected || day.isToday) FontWeight.Bold else FontWeight.Medium,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-
-                            Text(
-                                text = day.dayOfMonthLabel,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = palette.textPrimary,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-
-                            Box(
-                                modifier = Modifier
-                                    .width(8.dp)
-                                    .height(28.dp)
-                                    .clip(RoundedCornerShape(999.dp))
-                                    .background(palette.backgroundTop.copy(alpha = 0.65f)),
-                                contentAlignment = Alignment.BottomCenter
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height((28f * barFraction).dp)
-                                        .clip(RoundedCornerShape(999.dp))
-                                        .background(
-                                            when {
-                                                hasCompletions && isSelected -> Brush.verticalGradient(
-                                                    listOf(palette.secondaryAccent, palette.primaryAccent)
-                                                )
-                                                hasCompletions -> Brush.verticalGradient(
-                                                    listOf(palette.primaryAccent, palette.successAccent)
-                                                )
-                                                day.isFrozen -> Brush.verticalGradient(
-                                                    listOf(
-                                                        palette.secondaryAccent.copy(alpha = 0.75f),
-                                                        palette.primaryAccent.copy(alpha = 0.55f)
-                                                    )
-                                                )
-                                                day.isToday -> Brush.verticalGradient(
-                                                    listOf(
-                                                        palette.secondaryAccent.copy(alpha = 0.45f),
-                                                        palette.secondaryAccent.copy(alpha = 0.45f)
-                                                    )
-                                                )
-                                                else -> Brush.verticalGradient(
-                                                    listOf(
-                                                        palette.outline.copy(alpha = 0.25f),
-                                                        palette.outline.copy(alpha = 0.25f)
-                                                    )
-                                                )
-                                            }
-                                        )
-                                )
-                            }
-
-                            Text(
-                                text = when {
-                                    hasCompletions && day.intensityLevel >= 3 -> "${day.completedCount}★"
-                                    hasCompletions -> "${day.completedCount}"
-                                    day.isFrozen -> "❄️"
-                                    else -> "·"
-                                },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = when {
-                                    hasCompletions -> palette.successAccent
-                                    day.isFrozen -> palette.secondaryAccent
-                                    else -> palette.textSecondary
-                                },
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                    }
-                }
-            } else {
-                // 28-дневная тепловая матрица «Цепочка стабильности» (4 недели × 7 дней)
-                val weeks = remember(overview.heatmapDays) {
-                    overview.heatmapDays.chunked(7)
-                }
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("stability_heatmap_grid"),
-                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    weeks.forEachIndexed { weekIndex, weekDays ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    // Шапка календаря с крупными кнопками переключения месяцев (Samsung S25 Ultra: 44dp+ зоны касания)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("monthly_calendar_header"),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = palette.surface,
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    monthOffset = (monthOffset - 1).coerceAtLeast(-11)
+                                }
+                                .testTag("btn_calendar_prev_month")
                         ) {
-                            weekDays.forEach { day ->
-                                val isSelected = day.localDate == selectedSummary?.localDate
-                                val cellColor = when {
-                                    day.intensityLevel >= 3 -> palette.successAccent.copy(alpha = 0.28f)
-                                    day.intensityLevel == 2 -> palette.successAccent.copy(alpha = 0.18f)
-                                    day.intensityLevel == 1 -> palette.primaryAccent.copy(alpha = 0.14f)
-                                    day.isFrozen -> palette.secondaryAccent.copy(alpha = 0.15f)
-                                    else -> palette.surfaceElevated.copy(alpha = 0.65f)
-                                }
-                                val cellBorder = when {
-                                    isSelected -> palette.selectedBorder
-                                    day.isToday -> palette.primaryAccent
-                                    day.intensityLevel >= 3 -> palette.successAccent.copy(alpha = 0.70f)
-                                    day.intensityLevel == 2 -> palette.successAccent.copy(alpha = 0.45f)
-                                    day.intensityLevel == 1 -> palette.primaryAccent.copy(alpha = 0.38f)
-                                    day.isFrozen -> palette.secondaryAccent.copy(alpha = 0.55f)
-                                    else -> palette.outline.copy(alpha = 0.20f)
-                                }
-                                val badgeLabel = when {
-                                    day.intensityLevel >= 3 -> "★${day.completedCount}"
-                                    day.completedCount > 0 -> "${day.completedCount}"
-                                    day.isFrozen -> "❄️"
-                                    else -> "·"
-                                }
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "‹",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = palette.textPrimary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
 
-                                Column(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(cellColor)
-                                        .border(
-                                            width = if (isSelected || day.isToday) 1.5.dp else 1.dp,
-                                            color = cellBorder,
-                                            shape = RoundedCornerShape(10.dp)
-                                        )
-                                        .clickable { onSelectDay(day.localDate) }
-                                        .padding(vertical = 5.dp, horizontal = 2.dp)
-                                        .testTag("heatmap_day_${day.localDate}"),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(1.dp)
-                                ) {
-                                    if (weekIndex == 0) {
-                                        Text(
-                                            text = day.shortLabelRu,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = palette.textSecondary,
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
-                                    }
-                                    Text(
-                                        text = day.dayOfMonthLabel,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = palette.textPrimary,
-                                        fontWeight = if (isSelected || day.isToday) FontWeight.ExtraBold else FontWeight.SemiBold,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                    Text(
-                                        text = badgeLabel,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = when {
-                                            day.intensityLevel >= 2 -> palette.successAccent
-                                            day.intensityLevel == 1 -> palette.primaryAccent
-                                            day.isFrozen -> palette.secondaryAccent
-                                            else -> palette.textSecondary
-                                        },
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable(enabled = monthOffset != 0) { monthOffset = 0 }
+                        ) {
+                            Text(
+                                text = monthFullTitleRu(displayedYearMonth.monthValue, displayedYearMonth.year),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = palette.textPrimary,
+                                fontWeight = FontWeight.ExtraBold,
+                                maxLines = 1,
+                                modifier = Modifier.testTag("monthly_calendar_title")
+                            )
+                            Text(
+                                text = if (monthOffset == 0) {
+                                    "Нажмите на день для итогов"
+                                } else {
+                                    "Нажмите, чтобы вернуться к текущему месяцу"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (monthOffset == 0) palette.textSecondary else palette.primaryAccent,
+                                maxLines = 1
+                            )
+                        }
+
+                        val canGoNext = monthOffset < 0
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (canGoNext) palette.surface else palette.surface.copy(alpha = 0.45f),
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable(enabled = canGoNext) {
+                                    if (monthOffset < 0) monthOffset += 1
                                 }
+                                .testTag("btn_calendar_next_month")
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "›",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = if (canGoNext) palette.textPrimary else palette.disabledContent,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
                     }
 
-                    // Компактная легенда уровней тепловой карты
+                    // Дни недели (Пн .. Вс)
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс").forEach { dayName ->
+                            Text(
+                                text = dayName,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = palette.textSecondary,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    // Сетка дней выбранного месяца (объединяет дату, интенсивность и количество сессий)
+                    val firstDayOfMonth = remember(displayedYearMonth) { displayedYearMonth.atDay(1) }
+                    val daysInMonth = remember(displayedYearMonth) { displayedYearMonth.lengthOfMonth() }
+                    val leadingEmptyCells = remember(firstDayOfMonth) { firstDayOfMonth.dayOfWeek.value - 1 }
+                    val totalCells = remember(leadingEmptyCells, daysInMonth) {
+                        val raw = leadingEmptyCells + daysInMonth
+                        val rem = raw % 7
+                        if (rem == 0) raw else raw + (7 - rem)
+                    }
+                    val weeksCount = totalCells / 7
+
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 2.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .testTag("stability_heatmap_grid"),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = "Уровни дня: · 0   1–2 старт   3–5 этап   ★ 6–9 идеал   ❄️ щит",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = palette.textSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        for (weekIdx in 0 until weeksCount) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                for (dayOfWeekIdx in 0 until 7) {
+                                    val cellIndex = weekIdx * 7 + dayOfWeekIdx
+                                    val dayNumber = cellIndex - leadingEmptyCells + 1
+                                    if (dayNumber !in 1..daysInMonth) {
+                                        Spacer(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(54.dp)
+                                        )
+                                    } else {
+                                        val cellDate = displayedYearMonth.atDay(dayNumber)
+                                        val cellDateKey = cellDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                                        val dayData = overview.calendarDaysByDate[cellDateKey]
+                                            ?: overview.heatmapDays.firstOrNull { it.localDate == cellDateKey }
+                                            ?: WeeklyDaySummary(
+                                                localDate = cellDateKey,
+                                                shortLabelRu = dayOfWeekShortLabelRu(cellDate.dayOfWeek.value),
+                                                dayOfMonthLabel = dayNumber.toString(),
+                                                monthShortRu = monthGenitiveShortRu(cellDate.monthValue),
+                                                isToday = cellDateKey == todayDateStr,
+                                                completedCount = 0,
+                                                assignedCount = 9,
+                                                plannedCompletedCount = 0,
+                                                freeCompletedCount = 0,
+                                                completedTitlesRu = emptyList()
+                                            )
+
+                                        val isSelected = dayData.localDate == selectedSummary?.localDate
+                                        val hasSessions = dayData.completedCount > 0
+
+                                        val cellBg = when {
+                                            dayData.intensityLevel >= 3 -> palette.successAccent.copy(alpha = 0.24f)
+                                            dayData.intensityLevel == 2 -> palette.primaryAccent.copy(alpha = 0.17f)
+                                            dayData.intensityLevel == 1 -> palette.primaryAccent.copy(alpha = 0.10f)
+                                            dayData.isFrozen -> palette.secondaryAccent.copy(alpha = 0.14f)
+                                            isSelected -> palette.selectedContainer.copy(alpha = 0.55f)
+                                            else -> palette.surface.copy(alpha = 0.88f)
+                                        }
+
+                                        val borderMod = when {
+                                            isSelected -> Modifier.border(
+                                                width = 2.dp,
+                                                color = palette.selectedBorder,
+                                                shape = RoundedCornerShape(14.dp)
+                                            )
+                                            dayData.isToday -> Modifier.border(
+                                                width = 1.5.dp,
+                                                color = palette.primaryAccent.copy(alpha = 0.65f),
+                                                shape = RoundedCornerShape(14.dp)
+                                            )
+                                            else -> Modifier
+                                        }
+
+                                        val sessionLabel = when {
+                                            hasSessions -> "${dayData.completedCount}"
+                                            dayData.isFrozen -> "❄️"
+                                            else -> ""
+                                        }
+
+                                        val sessionLabelColor = when {
+                                            dayData.intensityLevel >= 3 -> palette.successAccent
+                                            hasSessions -> palette.primaryAccent
+                                            dayData.isFrozen -> palette.secondaryAccent
+                                            else -> Color.Transparent
+                                        }
+
+                                        val barFraction = when {
+                                            dayData.intensityLevel >= 3 -> 1f
+                                            dayData.intensityLevel == 2 -> 0.66f
+                                            dayData.intensityLevel == 1 -> 0.36f
+                                            dayData.isFrozen -> 0.5f
+                                            else -> 0f
+                                        }
+
+                                        Column(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(54.dp)
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .background(cellBg)
+                                                .then(borderMod)
+                                                .clickable { onSelectDay(dayData.localDate) }
+                                                .padding(vertical = 5.dp, horizontal = 3.dp)
+                                                .semantics {
+                                                    contentDescription = "${dayData.shortLabelRu} ${dayData.dayOfMonthLabel}: сессий ${dayData.completedCount}"
+                                                }
+                                                .testTag("heatmap_day_${dayData.localDate}"),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = dayData.dayOfMonthLabel,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = if (isSelected) palette.primaryAccent else palette.textPrimary,
+                                                fontWeight = if (isSelected || dayData.isToday || hasSessions) FontWeight.ExtraBold else FontWeight.Medium,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+
+                                            if (sessionLabel.isNotEmpty()) {
+                                                Text(
+                                                    text = sessionLabel,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = sessionLabelColor,
+                                                    fontWeight = FontWeight.Bold,
+                                                    maxLines = 1,
+                                                    softWrap = false
+                                                )
+                                            } else {
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                            }
+
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth(0.76f)
+                                                    .height(3.dp)
+                                                    .clip(RoundedCornerShape(999.dp))
+                                                    .background(
+                                                        if (barFraction > 0f) {
+                                                            palette.outline.copy(alpha = 0.18f)
+                                                        } else {
+                                                            Color.Transparent
+                                                        }
+                                                    )
+                                            ) {
+                                                if (barFraction > 0f) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth(barFraction)
+                                                            .height(3.dp)
+                                                            .clip(RoundedCornerShape(999.dp))
+                                                            .background(
+                                                                when {
+                                                                    dayData.intensityLevel >= 3 -> palette.successAccent
+                                                                    dayData.isFrozen -> palette.secondaryAccent
+                                                                    else -> palette.primaryAccent
+                                                                }
+                                                            )
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
 
-            // 4. Детальная карточка выбранного дня + Управление Щитом Заморозки
+            // 3. Краткий итог выбранного дня (Обязательная программа, Дополнительные занятия, Время тренировки)
             if (selectedSummary != null) {
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = palette.surfaceElevated,
+                    shape = RoundedCornerShape(20.dp),
+                    color = palette.surfaceElevated.copy(alpha = 0.78f),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(1.dp, palette.outline.copy(alpha = 0.22f), RoundedCornerShape(14.dp))
                         .testTag("weekly_selected_day_details")
                 ) {
                     Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         val dateSuffix = if (selectedSummary.monthShortRu.isNotBlank()) {
                             "${selectedSummary.dayOfMonthLabel} ${selectedSummary.monthShortRu}"
@@ -1725,10 +1461,11 @@ fun WeeklyOverviewCard(
                             selectedSummary.dayOfMonthLabel
                         }
                         val dayHeader = if (selectedSummary.isToday) {
-                            "Сегодня (${selectedSummary.shortLabelRu}, $dateSuffix)"
+                            "Сегодня · ${selectedSummary.shortLabelRu}, $dateSuffix"
                         } else {
                             "${selectedSummary.shortLabelRu}, $dateSuffix"
                         }
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1736,7 +1473,7 @@ fun WeeklyOverviewCard(
                         ) {
                             Text(
                                 text = dayHeader,
-                                style = MaterialTheme.typography.titleSmall,
+                                style = MaterialTheme.typography.titleMedium,
                                 color = palette.textPrimary,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
@@ -1744,7 +1481,7 @@ fun WeeklyOverviewCard(
                                 modifier = Modifier.weight(1f)
                             )
 
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
 
                             val statusColor = when {
                                 selectedSummary.completedCount > 0 -> palette.successAccent
@@ -1754,10 +1491,10 @@ fun WeeklyOverviewCard(
                             Text(
                                 text = when {
                                     selectedSummary.completedCount > 0 -> "Сессий: ${selectedSummary.completedCount}"
-                                    selectedSummary.isFrozen -> "❄️ Заморожен"
-                                    else -> "Без записей"
+                                    selectedSummary.isFrozen -> "❄️ Защищён"
+                                    else -> "Без занятий"
                                 },
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = statusColor,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
@@ -1765,35 +1502,71 @@ fun WeeklyOverviewCard(
                             )
                         }
 
-                        if (selectedSummary.completedCount == 0) {
-                            Text(
-                                text = if (selectedSummary.isFrozen) {
-                                    "В этот день тренировок не было, но серия защищена кристаллом заморозки ❄️."
-                                } else {
-                                    "В выбранный день завершённых тренировок не было."
+                        val totalDurationSec = if (selectedSummary.totalWorkoutSeconds > 0) {
+                            selectedSummary.totalWorkoutSeconds
+                        } else {
+                            selectedSummary.holdSecondsTotal
+                        }
+
+                        // 3 крупных блока краткого итога дня
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("weekly_selected_day_breakdown"),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            DaySummaryMetricBlock(
+                                label = "Обязательная",
+                                value = "${selectedSummary.plannedCompletedCount} из ${selectedSummary.assignedCount}",
+                                subtext = when {
+                                    selectedSummary.plannedCompletedCount >= selectedSummary.assignedCount && selectedSummary.assignedCount > 0 -> "План закрыт ✓"
+                                    selectedSummary.closedPeriodsCount > 0 -> "Этапов: ${selectedSummary.closedPeriodsCount}/3"
+                                    selectedSummary.plannedCompletedCount > 0 -> "В процессе"
+                                    else -> "Не начата"
                                 },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = palette.textSecondary
+                                accentColor = if (selectedSummary.plannedCompletedCount > 0) palette.successAccent else palette.textSecondary,
+                                modifier = Modifier.weight(1f)
                             )
 
-                            // Кнопка ручного включения/снятия щита заморозки для пропущенного прошлого дня
-                            if (!selectedSummary.isToday && (selectedSummary.isFrozen || overview.availableFreezeShields > 0)) {
+                            DaySummaryMetricBlock(
+                                label = "Дополнительно",
+                                value = if (selectedSummary.freeCompletedCount > 0) "+${selectedSummary.freeCompletedCount}" else "0",
+                                subtext = if (selectedSummary.freeCompletedCount > 0) "Своб. сессии" else "Без доп.",
+                                accentColor = if (selectedSummary.freeCompletedCount > 0) palette.primaryAccent else palette.textSecondary,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            DaySummaryMetricBlock(
+                                label = "Время",
+                                value = formatHoldDurationCompactRu(totalDurationSec),
+                                subtext = if (selectedSummary.holdSecondsTotal > 0) {
+                                    "Сжатие ${formatHoldDurationCompactRu(selectedSummary.holdSecondsTotal)}"
+                                } else {
+                                    "0 с сжатия"
+                                },
+                                accentColor = if (totalDurationSec > 0) palette.secondaryAccent else palette.textSecondary,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        if (selectedSummary.completedCount == 0 && !selectedSummary.isToday) {
+                            if (selectedSummary.isFrozen || overview.availableFreezeShields > 0) {
                                 OutlinedButton(
                                     onClick = { onToggleFreezeDate(selectedSummary.localDate) },
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .heightIn(min = 38.dp)
+                                        .heightIn(min = 44.dp)
                                         .testTag("btn_toggle_freeze_day")
                                 ) {
                                     Text(
                                         text = if (selectedSummary.isFrozen) {
-                                            "Снять щит заморозки с этого дня"
+                                            "Снять защиту заморозки с этого дня"
                                         } else {
-                                            "❄️ Защитить пропуск щитом (${overview.availableFreezeShields} дост.)"
+                                            "❄️ Защитить пропуск заморозкой (${overview.availableFreezeShields} дост.)"
                                         },
-                                        style = MaterialTheme.typography.labelMedium,
+                                        style = MaterialTheme.typography.bodyMedium,
                                         color = palette.secondaryAccent,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
@@ -1801,46 +1574,216 @@ fun WeeklyOverviewCard(
                                     )
                                 }
                             }
-                        } else {
-                            Text(
-                                text = "По расписанию: ${selectedSummary.plannedCompletedCount} · Дополнительно: ${selectedSummary.freeCompletedCount} · Сжатие: ${formatHoldDurationCompactRu(selectedSummary.holdSecondsTotal)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = palette.secondaryAccent,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.testTag("weekly_selected_day_breakdown")
-                            )
+                        }
+                    }
+                }
+            }
 
-                            if (selectedSummary.completedTitlesRu.isNotEmpty()) {
-                                Column(
-                                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                                    modifier = Modifier.testTag("weekly_completed_titles_list")
-                                ) {
-                                    selectedSummary.completedTitlesRu.forEach { title ->
+            // 4. Раскрываемая история занятий (подробный список сессий перенесён ниже)
+            val selectedDayTitles = selectedSummary?.completedTitlesRu.orEmpty()
+            val selectedDaySessions = selectedSummary?.completedSessions.orEmpty()
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = palette.surfaceElevated.copy(alpha = 0.65f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("expandable_session_history_section")
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 54.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable { isHistoryExpanded = !isHistoryExpanded }
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .testTag("expandable_session_history_header"),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = "История занятий",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = palette.textPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = if (selectedDayTitles.isNotEmpty()) {
+                                    "За выбранный день: ${selectedDayTitles.size} сесс."
+                                } else {
+                                    "Подробный список выполненных сессий"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.textSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Text(
+                            text = if (isHistoryExpanded) "Свернуть ▲" else "Развернуть ▼",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = palette.primaryAccent,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    AnimatedVisibility(visible = isHistoryExpanded) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+                                .testTag("weekly_completed_titles_list"),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (selectedDaySessions.isNotEmpty()) {
+                                selectedDaySessions.forEach { session ->
+                                    Surface(
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = palette.surface,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
                                         Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.CheckCircle,
+                                                    contentDescription = null,
+                                                    tint = if (session.isMandatory) palette.successAccent else palette.primaryAccent,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                    Text(
+                                                        text = session.titleRu,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        color = palette.textPrimary,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Text(
+                                                        text = if (session.isMandatory) "Обязательная программа" else "Дополнительное занятие",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = palette.textSecondary
+                                                    )
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = formatHoldDurationCompactRu(session.durationSeconds),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = palette.secondaryAccent,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
+                                    }
+                                }
+                            } else if (selectedDayTitles.isNotEmpty()) {
+                                selectedDayTitles.forEach { title ->
+                                    Surface(
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = palette.surface,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 14.dp, vertical = 12.dp),
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.CheckCircle,
                                                 contentDescription = null,
                                                 tint = palette.successAccent,
-                                                modifier = Modifier.size(13.dp)
+                                                modifier = Modifier.size(18.dp)
                                             )
                                             Text(
                                                 text = title,
-                                                style = MaterialTheme.typography.labelSmall,
+                                                style = MaterialTheme.typography.bodyMedium,
                                                 color = palette.textPrimary,
+                                                fontWeight = FontWeight.SemiBold,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
                                         }
                                     }
                                 }
+                            } else {
+                                Text(
+                                    text = "В выбранный день записей о сессиях нет. Выберите активную дату в календаре выше, чтобы посмотреть список упражнений.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = palette.textSecondary,
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DaySummaryMetricBlock(
+    label: String,
+    value: String,
+    subtext: String,
+    accentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalVelarisPalette.current
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = palette.surface,
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = palette.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                color = accentColor,
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 1,
+                softWrap = false
+            )
+            Text(
+                text = subtext,
+                style = MaterialTheme.typography.labelSmall,
+                color = palette.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -1854,22 +1797,18 @@ private fun StatKpiTile(
 ) {
     val palette = LocalVelarisPalette.current
     Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = palette.surfaceElevated,
-        modifier = modifier.border(
-            1.dp,
-            accentColor.copy(alpha = 0.25f),
-            RoundedCornerShape(12.dp)
-        )
+        shape = RoundedCornerShape(16.dp),
+        color = palette.surface,
+        modifier = modifier
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             Text(
                 text = valueText,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.titleMedium,
                 color = accentColor,
                 fontWeight = FontWeight.ExtraBold,
                 maxLines = 1,
@@ -1877,7 +1816,7 @@ private fun StatKpiTile(
             )
             Text(
                 text = labelText,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.bodySmall,
                 color = palette.textSecondary,
                 maxLines = 1,
                 softWrap = false,

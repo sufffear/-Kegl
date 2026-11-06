@@ -11,6 +11,14 @@ import com.example.domain.WorkoutDifficulty
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
+data class CompletedSessionItem(
+    val id: String,
+    val titleRu: String,
+    val isMandatory: Boolean,
+    val durationSeconds: Int,
+    val holdSeconds: Int
+)
+
 data class WeeklyDaySummary(
     val localDate: String,
     val shortLabelRu: String,
@@ -23,9 +31,11 @@ data class WeeklyDaySummary(
     val freeCompletedCount: Int,
     val completedTitlesRu: List<String>,
     val holdSecondsTotal: Int = 0,
+    val totalWorkoutSeconds: Int = 0,
     val closedPeriodsCount: Int = 0,
     val intensityLevel: Int = 0,
-    val isFrozen: Boolean = false
+    val isFrozen: Boolean = false,
+    val completedSessions: List<CompletedSessionItem> = emptyList()
 )
 
 data class StreakMilestoneInfo(
@@ -40,6 +50,7 @@ data class StreakMilestoneInfo(
 data class WeeklyOverviewState(
     val days: List<WeeklyDaySummary> = emptyList(),
     val heatmapDays: List<WeeklyDaySummary> = emptyList(),
+    val calendarDaysByDate: Map<String, WeeklyDaySummary> = emptyMap(),
     val selectedDate: String = "",
     val totalRealCompletionsInWeek: Int = 0,
     val totalRealCompletionsAllTime: Int = 0,
@@ -54,6 +65,8 @@ data class WeeklyOverviewState(
     val activeDaysInMonth: Int = 0,
     val totalHoldSecondsInWeek: Int = 0,
     val totalHoldSecondsAllTime: Int = 0,
+    val totalWorkoutSecondsInWeek: Int = 0,
+    val totalWorkoutSecondsAllTime: Int = 0,
     val previousWeekCompletions: Int = 0,
     val previousWeekHoldSeconds: Int = 0,
     val weekHoldDeltaSeconds: Int = 0,
@@ -75,7 +88,8 @@ data class WeeklyOverviewState(
         get() = totalRealCompletionsAllTime > 0 || totalRealCompletionsInWeek > 0
 
     val selectedDaySummary: WeeklyDaySummary?
-        get() = heatmapDays.firstOrNull { it.localDate == selectedDate }
+        get() = calendarDaysByDate[selectedDate]
+            ?: heatmapDays.firstOrNull { it.localDate == selectedDate }
             ?: days.firstOrNull { it.localDate == selectedDate }
             ?: days.lastOrNull()
 }
@@ -355,7 +369,40 @@ class WorkoutPersistenceRepository(
             return 100
         }
 
-        val heatmapSummaries = heatmapDates.map { date ->
+        fun computeCompletionTotalSeconds(comp: WorkoutCompletionEntity): Int {
+            val slot = allSlotsMap[comp.slotId]
+            if (slot != null) {
+                return (((slot.contractionMs + slot.relaxationMs) * slot.repetitions) / 1000L).toInt().coerceAtLeast(1)
+            }
+            val run = allRunsMap[comp.runId]
+            if (run != null) {
+                val fromProto = (((run.contractionMs + run.relaxationMs) * run.repetitions) / 1000L).toInt()
+                val fromConfirmed = (run.confirmedActiveMs / 1000L).toInt()
+                return maxOf(fromProto, fromConfirmed, 1)
+            }
+            return 200
+        }
+
+        fun resolveCompletionTitleRu(comp: WorkoutCompletionEntity): String {
+            return if (comp.isFreeMode) {
+                val runTitle = allRunsMap[comp.runId]?.titleRu
+                runTitle?.takeIf { it.isNotBlank() } ?: "Свободный подход"
+            } else {
+                val slotEntity = allSlotsMap[comp.slotId]
+                if (slotEntity != null) {
+                    val groupTitle = PlanGroup.fromCode(slotEntity.groupCode).titleRu
+                    if (slotEntity.titleRu.startsWith(groupTitle)) {
+                        slotEntity.titleRu
+                    } else {
+                        "$groupTitle · ${slotEntity.titleRu}"
+                    }
+                } else {
+                    "Подход выполнен"
+                }
+            }
+        }
+
+        fun buildSummaryForDate(date: LocalDate): WeeklyDaySummary {
             val key = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
             val daySlots = realSlotsByDate[key].orEmpty()
             val dayCompletions = realCompletionsByDate[key].orEmpty()
@@ -363,26 +410,19 @@ class WorkoutPersistenceRepository(
             val freeCompletions = dayCompletions.filter { it.isFreeMode }
             val completedSlotIds = dayCompletions.map { it.slotId }.toSet()
 
-            val completedTitles = dayCompletions.map { comp ->
-                if (comp.isFreeMode) {
-                    val runTitle = allRunsMap[comp.runId]?.titleRu
-                    runTitle?.takeIf { it.isNotBlank() } ?: "Свободный подход"
-                } else {
-                    val slotEntity = allSlotsMap[comp.slotId]
-                    if (slotEntity != null) {
-                        val groupTitle = PlanGroup.fromCode(slotEntity.groupCode).titleRu
-                        if (slotEntity.titleRu.startsWith(groupTitle)) {
-                            slotEntity.titleRu
-                        } else {
-                            "$groupTitle · ${slotEntity.titleRu}"
-                        }
-                    } else {
-                        "Подход выполнен"
-                    }
-                }
+            val completedSessions = dayCompletions.map { comp ->
+                CompletedSessionItem(
+                    id = comp.runId.ifBlank { comp.slotId },
+                    titleRu = resolveCompletionTitleRu(comp),
+                    isMandatory = !comp.isFreeMode,
+                    durationSeconds = computeCompletionTotalSeconds(comp),
+                    holdSeconds = computeCompletionHoldSeconds(comp)
+                )
             }
+            val completedTitles = completedSessions.map { it.titleRu }
 
-            val holdSecondsForDay = dayCompletions.sumOf { computeCompletionHoldSeconds(it) }
+            val holdSecondsForDay = completedSessions.sumOf { it.holdSeconds }
+            val totalSecondsForDay = completedSessions.sumOf { it.durationSeconds }
 
             val closedPeriods = if (daySlots.isNotEmpty()) {
                 daySlots.groupBy { it.groupCode }.count { (_, groupSlots) ->
@@ -401,7 +441,7 @@ class WorkoutPersistenceRepository(
                 else -> 0
             }
 
-            WeeklyDaySummary(
+            return WeeklyDaySummary(
                 localDate = key,
                 shortLabelRu = dayOfWeekShortRu(date.dayOfWeek.value),
                 dayOfMonthLabel = date.dayOfMonth.toString(),
@@ -413,10 +453,31 @@ class WorkoutPersistenceRepository(
                 freeCompletedCount = freeCompletions.size,
                 completedTitlesRu = completedTitles,
                 holdSecondsTotal = holdSecondsForDay,
+                totalWorkoutSeconds = totalSecondsForDay,
                 closedPeriodsCount = closedPeriods,
                 intensityLevel = intensity,
-                isFrozen = isDayFrozen
+                isFrozen = isDayFrozen,
+                completedSessions = completedSessions
             )
+        }
+
+        val heatmapSummaries = heatmapDates.map { date -> buildSummaryForDate(date) }
+
+        val calendarMap = mutableMapOf<String, WeeklyDaySummary>()
+        val earliestMonthStart = baseDate.withDayOfMonth(1).minusMonths(5)
+        val latestMonthEnd = baseDate.withDayOfMonth(baseDate.lengthOfMonth())
+        var calCursor = earliestMonthStart
+        while (!calCursor.isAfter(latestMonthEnd)) {
+            val summary = buildSummaryForDate(calCursor)
+            calendarMap[summary.localDate] = summary
+            calCursor = calCursor.plusDays(1)
+        }
+        (realCompletionsByDate.keys + effectiveFrozenDates + listOfNotNull(selectedDateStr)).forEach { dateStr ->
+            if (dateStr !in calendarMap) {
+                runCatching { LocalDate.parse(dateStr) }.getOrNull()?.let { parsed ->
+                    calendarMap[dateStr] = buildSummaryForDate(parsed)
+                }
+            }
         }
 
         val last7Days = heatmapSummaries.takeLast(7)
@@ -431,6 +492,8 @@ class WorkoutPersistenceRepository(
         val totalHoldWeek = last7Days.sumOf { it.holdSecondsTotal }
         val prevWeekHoldSeconds = prev7Days.sumOf { it.holdSecondsTotal }
         val totalHoldAllTime = allRealCompletions.sumOf { computeCompletionHoldSeconds(it) }
+        val totalWorkoutWeek = last7Days.sumOf { it.totalWorkoutSeconds }
+        val totalWorkoutAllTime = allRealCompletions.sumOf { computeCompletionTotalSeconds(it) }
 
         val weekHoldDeltaSec = totalHoldWeek - prevWeekHoldSeconds
         val weekSessDelta = totalWeek - prevWeekCompletions
@@ -626,7 +689,7 @@ class WorkoutPersistenceRepository(
             )
         }
 
-        val resolvedSelected = if (selectedDateStr != null && heatmapKeys.contains(selectedDateStr)) {
+        val resolvedSelected = if (!selectedDateStr.isNullOrBlank() && selectedDateStr in calendarMap) {
             selectedDateStr
         } else {
             todayDateStr
@@ -635,6 +698,7 @@ class WorkoutPersistenceRepository(
         return WeeklyOverviewState(
             days = last7Days,
             heatmapDays = heatmapSummaries,
+            calendarDaysByDate = calendarMap,
             selectedDate = resolvedSelected,
             totalRealCompletionsInWeek = totalWeek,
             totalRealCompletionsAllTime = totalAllTime,
@@ -649,6 +713,8 @@ class WorkoutPersistenceRepository(
             activeDaysInMonth = activeDaysMonth,
             totalHoldSecondsInWeek = totalHoldWeek,
             totalHoldSecondsAllTime = totalHoldAllTime,
+            totalWorkoutSecondsInWeek = totalWorkoutWeek,
+            totalWorkoutSecondsAllTime = totalWorkoutAllTime,
             previousWeekCompletions = prevWeekCompletions,
             previousWeekHoldSeconds = prevWeekHoldSeconds,
             weekHoldDeltaSeconds = weekHoldDeltaSec,

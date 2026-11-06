@@ -1105,8 +1105,17 @@ class ExampleRobolectricTest {
         composeTestRule.onNodeWithTag("btn_streak_rescue_blitz").assertExists()
         composeTestRule.onNodeWithTag("week_vs_prev_week_banner").assertExists()
         composeTestRule.onNodeWithTag("week_delta_badge").assertExists()
-        composeTestRule.onNodeWithTag("calendar_mode_toggle_row").assertExists()
-        composeTestRule.onNodeWithTag("weekly_days_row").assertExists()
+
+        // Переключатель «Неделя / Тепловая карта» убран; используется единый календарь с переключением месяцев
+        composeTestRule.onNodeWithTag("calendar_mode_toggle_row").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("monthly_calendar_section").assertExists()
+        composeTestRule.onNodeWithTag("monthly_calendar_header").assertExists()
+        composeTestRule.onNodeWithTag("btn_calendar_prev_month").assertExists()
+        composeTestRule.onNodeWithTag("btn_calendar_next_month").assertExists()
+        composeTestRule.onNodeWithTag("stability_heatmap_grid").assertExists()
+        composeTestRule.onNodeWithTag("weekly_selected_day_details").assertExists()
+        composeTestRule.onNodeWithTag("weekly_selected_day_breakdown").assertExists()
+        composeTestRule.onNodeWithTag("expandable_session_history_section").assertExists()
 
         // Открываем жетон «Искра ритма» (3 дня) в витрине и проверяем баннер тактильного салюта
         composeTestRule.onNodeWithTag("milestone_token_3")
@@ -1121,19 +1130,25 @@ class ExampleRobolectricTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("milestone_salute_banner").assertDoesNotExist()
 
-        // Переключаемся на 28-дневную тепловую карту
-        composeTestRule.onNodeWithTag("calendar_mode_month")
+        // Проверяем переключение месяцев в едином календаре (назад и вперёд)
+        composeTestRule.onNodeWithTag("btn_calendar_prev_month")
             .performScrollTo()
             .performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("stability_heatmap_grid").assertExists()
 
-        // Возвращаемся на 7-дневный вид
-        composeTestRule.onNodeWithTag("calendar_mode_week")
+        composeTestRule.onNodeWithTag("btn_calendar_next_month")
             .performScrollTo()
             .performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("weekly_days_row").assertExists()
+        composeTestRule.onNodeWithTag("stability_heatmap_grid").assertExists()
+
+        // Проверяем раскрытие истории занятий
+        composeTestRule.onNodeWithTag("expandable_session_history_header")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("weekly_completed_titles_list").assertExists()
 
         // Проверяем запуск 60-секундного протокола «Блиц-спасение серии»
         composeTestRule.onNodeWithTag("btn_streak_rescue_blitz")
