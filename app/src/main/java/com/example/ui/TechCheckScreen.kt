@@ -299,6 +299,7 @@ fun TechCheckScreen(
     val backupOperationBanner by viewModel.backupOperationBanner.collectAsStateWithLifecycle()
     val backupErrorMessage by viewModel.backupErrorMessage.collectAsStateWithLifecycle()
     val lastCompletedDifficulty by viewModel.lastCompletedSlotDifficulty.collectAsStateWithLifecycle()
+    val celebratedMilestone by viewModel.celebratedMilestone.collectAsStateWithLifecycle()
     val databaseErrorMessage by viewModel.databaseErrorMessage.collectAsStateWithLifecycle()
 
     val palette = LocalVelarisPalette.current
@@ -469,7 +470,12 @@ fun TechCheckScreen(
                                     onStartFreeTemplate = { template -> viewModel.startFreeWorkoutAndOpenWorkout(template) },
                                     onOpenPlan = { viewModel.navigateTo(VelarisNavDestination.PLAN) },
                                     onOpenReader = { viewModel.navigateTo(VelarisNavDestination.HOME) },
-                                    onSelectOverviewDay = { dateStr -> viewModel.selectWeeklyOverviewDate(dateStr) }
+                                    onSelectOverviewDay = { dateStr -> viewModel.selectWeeklyOverviewDate(dateStr) },
+                                    onToggleFreezeDate = { dateStr -> viewModel.toggleFreezeDate(dateStr) },
+                                    onStartStreakRescueBlitz = { viewModel.startStreakRescueBlitzAndOpenWorkout() },
+                                    celebratedMilestone = celebratedMilestone,
+                                    onTriggerMilestoneSalute = { m -> viewModel.triggerMilestoneSalute(m) },
+                                    onDismissMilestoneSalute = { viewModel.dismissMilestoneSalute() }
                                 )
                             }
 

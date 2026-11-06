@@ -83,6 +83,7 @@ class TechCheckViewModel(
     val backupOperationBanner: StateFlow<String?> = BenchSessionCoordinator.backupOperationBanner
     val backupErrorMessage: StateFlow<String?> = BenchSessionCoordinator.backupErrorMessage
     val lastCompletedSlotDifficulty: StateFlow<WorkoutDifficulty?> = BenchSessionCoordinator.lastCompletedSlotDifficulty
+    val celebratedMilestone: StateFlow<com.example.data.StreakMilestoneInfo?> = BenchSessionCoordinator.celebratedMilestone
     val databaseErrorMessage: StateFlow<String?> = BenchSessionCoordinator.databaseErrorMessage
 
     val availableProtocols: List<DemoProtocolConfig> = BenchSessionCoordinator.availableProtocols
@@ -186,6 +187,26 @@ class TechCheckViewModel(
 
     fun selectWeeklyOverviewDate(localDate: String) {
         BenchSessionCoordinator.selectWeeklyOverviewDate(localDate)
+    }
+
+    fun toggleFreezeDate(localDate: String) {
+        BenchSessionCoordinator.toggleFreezeDate(localDate)
+    }
+
+    fun startStreakRescueBlitzAndOpenWorkout() {
+        val started = BenchSessionCoordinator.startStreakRescueBlitzSession()
+        if (started) {
+            _currentDestination.value = VelarisNavDestination.WORKOUT
+            BenchTimerService.sendCommand(appContext, BenchTimerService.ACTION_START_FREE)
+        }
+    }
+
+    fun triggerMilestoneSalute(milestone: com.example.data.StreakMilestoneInfo) {
+        BenchSessionCoordinator.triggerMilestoneSalute(milestone)
+    }
+
+    fun dismissMilestoneSalute() {
+        BenchSessionCoordinator.dismissMilestoneSalute()
     }
 
     // --- Управление офлайн-читателем и импортом Markdown ---

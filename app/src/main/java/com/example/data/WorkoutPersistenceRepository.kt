@@ -15,30 +15,74 @@ data class WeeklyDaySummary(
     val localDate: String,
     val shortLabelRu: String,
     val dayOfMonthLabel: String,
+    val monthShortRu: String = "",
     val isToday: Boolean,
     val completedCount: Int,
     val assignedCount: Int,
     val plannedCompletedCount: Int,
     val freeCompletedCount: Int,
-    val completedTitlesRu: List<String>
+    val completedTitlesRu: List<String>,
+    val holdSecondsTotal: Int = 0,
+    val closedPeriodsCount: Int = 0,
+    val intensityLevel: Int = 0,
+    val isFrozen: Boolean = false
+)
+
+data class StreakMilestoneInfo(
+    val targetDays: Int,
+    val titleRu: String,
+    val badgeEmoji: String,
+    val descriptionRu: String = "",
+    val isUnlocked: Boolean = false,
+    val isCurrentTarget: Boolean = false
 )
 
 data class WeeklyOverviewState(
     val days: List<WeeklyDaySummary> = emptyList(),
+    val heatmapDays: List<WeeklyDaySummary> = emptyList(),
     val selectedDate: String = "",
     val totalRealCompletionsInWeek: Int = 0,
-    val totalRealCompletionsAllTime: Int = 0
+    val totalRealCompletionsAllTime: Int = 0,
+    val currentStreakDays: Int = 0,
+    val bestStreakDays: Int = 0,
+    val isTodayActiveInStreak: Boolean = false,
+    val isStreakAtRiskToday: Boolean = false,
+    val availableFreezeShields: Int = 1,
+    val maxFreezeShields: Int = 3,
+    val usedFreezeDates: Set<String> = emptySet(),
+    val perfectDaysInMonth: Int = 0,
+    val activeDaysInMonth: Int = 0,
+    val totalHoldSecondsInWeek: Int = 0,
+    val totalHoldSecondsAllTime: Int = 0,
+    val previousWeekCompletions: Int = 0,
+    val previousWeekHoldSeconds: Int = 0,
+    val weekHoldDeltaSeconds: Int = 0,
+    val weekSessionsDelta: Int = 0,
+    val weekHoldDeltaPercent: Int = 0,
+    val weekDeltaBadgeTextRu: String = "Ждёт старта недели",
+    val weekDeltaSubtitleRu: String = "Выполните подход, чтобы сравнить темп с прошлой неделей",
+    val rankTitleRu: String = "Старт пути",
+    val rankLevel: Int = 1,
+    val nextMilestoneDays: Int = 3,
+    val nextMilestoneTitleRu: String = "Искра ритма",
+    val milestoneProgressFraction: Float = 0f,
+    val milestones: List<StreakMilestoneInfo> = emptyList(),
+    val dailyQuestTitleRu: String = "Зажечь звено дня",
+    val dailyQuestSubtitleRu: String = "Выполните 1 тренировку, чтобы запустить цепочку стабильности",
+    val dailyQuestProgress: Float = 0f
 ) {
     val hasAnyRealData: Boolean
         get() = totalRealCompletionsAllTime > 0 || totalRealCompletionsInWeek > 0
 
     val selectedDaySummary: WeeklyDaySummary?
-        get() = days.firstOrNull { it.localDate == selectedDate } ?: days.lastOrNull()
+        get() = heatmapDays.firstOrNull { it.localDate == selectedDate }
+            ?: days.firstOrNull { it.localDate == selectedDate }
+            ?: days.lastOrNull()
 }
 
 /**
  * Репозиторий хранения планов, дневных снимков (DailyPlan + DailySlot), попыток (WorkoutRun),
- * контрольных точек, атомарных завершений (WorkoutCompletion) и 7-дневного обзора в Room.
+ * контрольных точек, атомарных завершений (WorkoutCompletion) и 7/28-дневного обзора в Room.
  */
 class WorkoutPersistenceRepository(
     private val dao: VelarisDao,
@@ -247,32 +291,82 @@ class WorkoutPersistenceRepository(
     }
 
     /**
-     * Формирует компактный 7-дневный обзор строго по реальным сохранённым записям (`isDemo = false`).
-     * Демо-результаты (`isDemo = true`) не попадают в реальную статистику.
+     * Формирует 7-дневный и 28-дневный обзор «Цепочка стабильности» строго по реальным
+     * сохранённым записям (`isDemo = false`). Демо-результаты (`isDemo = true`) не попадают в статистику.
      */
     suspend fun loadWeeklyOverview(
         todayDateStr: String = timeProvider.currentLocalDate(),
-        selectedDateStr: String? = null
+        selectedDateStr: String? = null,
+        manualFrozenDates: Set<String> = emptySet()
     ): WeeklyOverviewState {
         val baseDate = runCatching { LocalDate.parse(todayDateStr) }.getOrElse { LocalDate.now() }
-        val dates = (6 downTo 0).map { offset -> baseDate.minusDays(offset.toLong()) }
-        val dateKeys = dates.map { it.format(DateTimeFormatter.ISO_LOCAL_DATE) }
+        val heatmapDates = (27 downTo 0).map { offset -> baseDate.minusDays(offset.toLong()) }
+        val heatmapKeys = heatmapDates.map { it.format(DateTimeFormatter.ISO_LOCAL_DATE) }
 
-        val realSlotsByDate = dao.getSlotsForDates(localDates = dateKeys, isDemo = false)
-            .groupBy { it.localDate }
-        val realCompletionsByDate = dao.getCompletionsForDates(localDates = dateKeys, isDemo = false)
-            .groupBy { it.localDate }
-        val allSlotsMap = realSlotsByDate.values.flatten().associateBy { it.id }
+        val allRealCompletions = dao.getRealWorkoutCompletions()
+        val allRealSlots = dao.getRealDailySlots()
+        val allRealRuns = dao.getRealWorkoutRuns()
 
-        val days = dates.map { date ->
+        val allSlotsMap = allRealSlots.associateBy { it.id }
+        val allRunsMap = allRealRuns.associateBy { it.id }
+        val realSlotsByDate = allRealSlots.groupBy { it.localDate }
+        val realCompletionsByDate = allRealCompletions.groupBy { it.localDate }
+
+        val activeDatesSet = realCompletionsByDate.filterValues { it.isNotEmpty() }.keys
+
+        // Расчёт кристаллов «Заморозка серии» (1 базовый + 1 за каждые 3 активных дня)
+        val totalEarnedShields = 1 + (activeDatesSet.size / 3)
+        val effectiveFrozenDates = mutableSetOf<String>()
+
+        // 1) Учитываем вручную замороженные пользователем пропущенные дни (где 0 тренировок)
+        manualFrozenDates.sortedDescending().forEach { dateStr ->
+            if (dateStr !in activeDatesSet && dateStr != todayDateStr && effectiveFrozenDates.size < totalEarnedShields) {
+                effectiveFrozenDates.add(dateStr)
+            }
+        }
+
+        // 2) Автоматическая защита одиночного пропуска в текущей цепочке, если остались щиты
+        for (offset in 1..14) {
+            if (effectiveFrozenDates.size >= totalEarnedShields) break
+            val d = baseDate.minusDays(offset.toLong())
+            val dKey = d.format(DateTimeFormatter.ISO_LOCAL_DATE)
+            val prevKey = d.minusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
+            val nextKey = d.plusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
+            val isSingleDayBridge = dKey !in activeDatesSet &&
+                dKey !in effectiveFrozenDates &&
+                prevKey in activeDatesSet &&
+                (nextKey in activeDatesSet || dKey == baseDate.minusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE))
+            if (isSingleDayBridge) {
+                effectiveFrozenDates.add(dKey)
+            }
+        }
+
+        val availableFreezeShields = (totalEarnedShields - effectiveFrozenDates.size).coerceIn(0, 3)
+
+        fun computeCompletionHoldSeconds(comp: WorkoutCompletionEntity): Int {
+            val slot = allSlotsMap[comp.slotId]
+            if (slot != null) {
+                return ((slot.contractionMs * slot.repetitions) / 1000L).toInt().coerceAtLeast(1)
+            }
+            val run = allRunsMap[comp.runId]
+            if (run != null) {
+                return ((run.contractionMs * run.repetitions) / 1000L).toInt().coerceAtLeast(1)
+            }
+            return 100
+        }
+
+        val heatmapSummaries = heatmapDates.map { date ->
             val key = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
             val daySlots = realSlotsByDate[key].orEmpty()
             val dayCompletions = realCompletionsByDate[key].orEmpty()
             val plannedCompletions = dayCompletions.filter { !it.isFreeMode }
             val freeCompletions = dayCompletions.filter { it.isFreeMode }
+            val completedSlotIds = dayCompletions.map { it.slotId }.toSet()
+
             val completedTitles = dayCompletions.map { comp ->
                 if (comp.isFreeMode) {
-                    "Свободный подход"
+                    val runTitle = allRunsMap[comp.runId]?.titleRu
+                    runTitle?.takeIf { it.isNotBlank() } ?: "Свободный подход"
                 } else {
                     val slotEntity = allSlotsMap[comp.slotId]
                     if (slotEntity != null) {
@@ -287,32 +381,290 @@ class WorkoutPersistenceRepository(
                     }
                 }
             }
+
+            val holdSecondsForDay = dayCompletions.sumOf { computeCompletionHoldSeconds(it) }
+
+            val closedPeriods = if (daySlots.isNotEmpty()) {
+                daySlots.groupBy { it.groupCode }.count { (_, groupSlots) ->
+                    groupSlots.isNotEmpty() && groupSlots.all { it.id in completedSlotIds }
+                }
+            } else {
+                (dayCompletions.size / 3).coerceAtMost(3)
+            }
+
+            val isDayFrozen = (key in effectiveFrozenDates) && dayCompletions.isEmpty()
+
+            val intensity = when {
+                dayCompletions.size >= 6 || (daySlots.isNotEmpty() && dayCompletions.size >= daySlots.size && daySlots.size >= 3) -> 3
+                dayCompletions.size >= 3 || closedPeriods >= 1 -> 2
+                dayCompletions.isNotEmpty() -> 1
+                else -> 0
+            }
+
             WeeklyDaySummary(
                 localDate = key,
                 shortLabelRu = dayOfWeekShortRu(date.dayOfWeek.value),
                 dayOfMonthLabel = date.dayOfMonth.toString(),
+                monthShortRu = monthShortRu(date.monthValue),
                 isToday = (key == todayDateStr),
                 completedCount = dayCompletions.size,
-                assignedCount = daySlots.size,
+                assignedCount = daySlots.size.coerceAtLeast(9),
                 plannedCompletedCount = plannedCompletions.size,
                 freeCompletedCount = freeCompletions.size,
-                completedTitlesRu = completedTitles
+                completedTitlesRu = completedTitles,
+                holdSecondsTotal = holdSecondsForDay,
+                closedPeriodsCount = closedPeriods,
+                intensityLevel = intensity,
+                isFrozen = isDayFrozen
             )
         }
 
-        val totalWeek = days.sumOf { it.completedCount }
-        val totalAllTime = dao.countCompletionsByDemoFlag(isDemo = false)
-        val resolvedSelected = if (selectedDateStr != null && dateKeys.contains(selectedDateStr)) {
+        val last7Days = heatmapSummaries.takeLast(7)
+        val prev7Days = if (heatmapSummaries.size >= 14) {
+            heatmapSummaries.subList(heatmapSummaries.size - 14, heatmapSummaries.size - 7)
+        } else {
+            emptyList()
+        }
+        val totalWeek = last7Days.sumOf { it.completedCount }
+        val prevWeekCompletions = prev7Days.sumOf { it.completedCount }
+        val totalAllTime = allRealCompletions.size
+        val totalHoldWeek = last7Days.sumOf { it.holdSecondsTotal }
+        val prevWeekHoldSeconds = prev7Days.sumOf { it.holdSecondsTotal }
+        val totalHoldAllTime = allRealCompletions.sumOf { computeCompletionHoldSeconds(it) }
+
+        val weekHoldDeltaSec = totalHoldWeek - prevWeekHoldSeconds
+        val weekSessDelta = totalWeek - prevWeekCompletions
+        val weekHoldDeltaPct = when {
+            prevWeekHoldSeconds > 0 -> (((totalHoldWeek - prevWeekHoldSeconds) * 100.0) / prevWeekHoldSeconds).toInt()
+            totalHoldWeek > 0 -> 100
+            else -> 0
+        }
+
+        fun formatHoldShortRu(sec: Int): String {
+            val s = kotlin.math.abs(sec)
+            if (s == 0) return "0 с"
+            val m = s / 60
+            val rem = s % 60
+            return when {
+                m == 0 -> "${rem}с"
+                rem == 0 -> "${m}м"
+                else -> "${m}м ${rem}с"
+            }
+        }
+
+        val weekDeltaBadge = when {
+            prevWeekHoldSeconds > 0 && weekHoldDeltaPct > 0 -> "+${weekHoldDeltaPct}% к прошлой нед."
+            prevWeekHoldSeconds > 0 && weekHoldDeltaPct == 0 -> "100% темп прошлой нед."
+            prevWeekHoldSeconds > 0 && weekHoldDeltaPct < 0 -> "${weekHoldDeltaPct}% к прошлой нед."
+            totalHoldWeek > 0 -> "+100% старт недели"
+            else -> "Сравнение недель"
+        }
+
+        val weekDeltaSubtitle = when {
+            totalWeek == 0 && prevWeekCompletions == 0 ->
+                "Завершите подход, чтобы запустить сравнение с прошлой неделей."
+            weekHoldDeltaSec > 0 ->
+                "Прирост +${formatHoldShortRu(weekHoldDeltaSec)} чистого сжатия (эта нед.: ${totalWeek} сесс. / ${formatHoldShortRu(totalHoldWeek)}, прошлая: ${prevWeekCompletions} сесс. / ${formatHoldShortRu(prevWeekHoldSeconds)})."
+            weekHoldDeltaSec == 0 ->
+                "Точное совпадение с прошлой неделей: ${totalWeek} сесс. (${formatHoldShortRu(totalHoldWeek)} сжатия)."
+            else ->
+                "До рекорда прошлой недели осталось ${formatHoldShortRu(-weekHoldDeltaSec)} сжатия (сейчас ${formatHoldShortRu(totalHoldWeek)} из ${formatHoldShortRu(prevWeekHoldSeconds)})."
+        }
+
+        // Расчёт текущей непрерывной серии (Current Streak)
+        val isTodayActive = todayDateStr in activeDatesSet
+        var currentStreak = 0
+        var cursorDate = if (isTodayActive) baseDate else baseDate.minusDays(1)
+        while (true) {
+            val key = cursorDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
+            when {
+                key in activeDatesSet -> {
+                    currentStreak++
+                    cursorDate = cursorDate.minusDays(1)
+                }
+                key in effectiveFrozenDates -> {
+                    cursorDate = cursorDate.minusDays(1)
+                }
+                else -> break
+            }
+        }
+
+        // Расчёт лучшей серии за всё время (Best Streak)
+        val allKnownDates = (activeDatesSet + effectiveFrozenDates).mapNotNull {
+            runCatching { LocalDate.parse(it) }.getOrNull()
+        }
+        var bestStreak = currentStreak
+        if (allKnownDates.isNotEmpty()) {
+            val minDate = allKnownDates.minOrNull() ?: baseDate
+            var d = minDate
+            var running = 0
+            while (!d.isAfter(baseDate)) {
+                val k = d.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                when {
+                    k in activeDatesSet -> {
+                        running++
+                        if (running > bestStreak) bestStreak = running
+                    }
+                    k in effectiveFrozenDates -> {
+                        // Замороженный день удерживает цепь, но не накручивает ложные активные дни сам по себе
+                    }
+                    else -> {
+                        running = 0
+                    }
+                }
+                d = d.plusDays(1)
+            }
+        }
+
+        val isStreakAtRisk = !isTodayActive && currentStreak > 0
+        val perfectDaysMonth = heatmapSummaries.count { it.intensityLevel >= 2 }
+        val activeDaysMonth = heatmapSummaries.count { it.completedCount > 0 }
+
+        // Коллекционная витрина «Жетоны рубежей»
+        val rawMilestones = listOf(
+            StreakMilestoneInfo(
+                targetDays = 3,
+                titleRu = "Искра ритма",
+                badgeEmoji = "🔥",
+                descriptionRu = "3 дня подряд: запуск нейромышечного отклика и включение базовой привычки."
+            ),
+            StreakMilestoneInfo(
+                targetDays = 7,
+                titleRu = "Железная неделя",
+                badgeEmoji = "⚡",
+                descriptionRu = "7 дней подряд: полная неделя дисциплины и уверенный контроль быстрых сжиманий."
+            ),
+            StreakMilestoneInfo(
+                targetDays = 14,
+                titleRu = "Двойной контур",
+                badgeEmoji = "🛡️",
+                descriptionRu = "14 дней подряд: синхронное укрепление быстрых и медленных мышечных волокон."
+            ),
+            StreakMilestoneInfo(
+                targetDays = 21,
+                titleRu = "Нейро-привычка",
+                badgeEmoji = "💎",
+                descriptionRu = "21 день подряд: тренировки стали автоматическим утренним, дневным и вечерним ритуалом."
+            ),
+            StreakMilestoneInfo(
+                targetDays = 30,
+                titleRu = "Мастер контроля",
+                badgeEmoji = "👑",
+                descriptionRu = "30 дней подряд: месяц без обрыва цепи и высокая выносливость на 25-секундных удержаниях."
+            ),
+            StreakMilestoneInfo(
+                targetDays = 60,
+                titleRu = "Титан тонуса",
+                badgeEmoji = "🏆",
+                descriptionRu = "60 дней подряд: глубокий мышечный тонус и эталонная стабильность."
+            ),
+            StreakMilestoneInfo(
+                targetDays = 100,
+                titleRu = "Легенда Velaris",
+                badgeEmoji = "🌟",
+                descriptionRu = "100 дней подряд: высший титул дисциплины и мастерства Velaris."
+            )
+        )
+        val nextMilestoneRaw = rawMilestones.firstOrNull { it.targetDays > currentStreak } ?: rawMilestones.last()
+        val maxUnlockedStreak = maxOf(currentStreak, bestStreak)
+        val milestones = rawMilestones.map { m ->
+            m.copy(
+                isUnlocked = maxUnlockedStreak >= m.targetDays,
+                isCurrentTarget = m.targetDays == nextMilestoneRaw.targetDays && maxUnlockedStreak < m.targetDays
+            )
+        }
+
+        val nextMilestone = milestones.firstOrNull { it.targetDays > currentStreak } ?: milestones.last()
+        val prevMilestoneDays = milestones.lastOrNull { it.targetDays <= currentStreak }?.targetDays ?: 0
+        val achievedMilestone = milestones.lastOrNull { it.targetDays <= currentStreak }
+
+        val rankTitle = when {
+            achievedMilestone != null -> achievedMilestone.titleRu
+            currentStreak >= 1 || totalAllTime >= 1 -> "Первое звено"
+            else -> "Старт пути"
+        }
+        val rankLevel = milestones.indexOfFirst { it.targetDays > currentStreak }
+            .let { if (it == -1) milestones.size else it + 1 }
+
+        val span = (nextMilestone.targetDays - prevMilestoneDays).coerceAtLeast(1)
+        val progressInSpan = (currentStreak - prevMilestoneDays).coerceAtLeast(0)
+        val milestoneFraction = (progressInSpan.toFloat() / span.toFloat()).coerceIn(0f, 1f)
+
+        // Ежедневный квест на сегодня
+        val todaySummary = last7Days.lastOrNull()
+        val todayCount = todaySummary?.completedCount ?: 0
+        val (questTitle, questSubtitle, questProgress) = when {
+            todayCount == 0 && isStreakAtRisk -> Triple(
+                "Спасите серию $currentStreak дн.!",
+                "Выполните 1 подход или запустите «⚡ Блиц-спасение за 60 сек», чтобы сохранить цепочку.",
+                0.08f
+            )
+            todayCount == 0 -> Triple(
+                "Зажечь сегодняшнее звено",
+                "Сделайте 1 тренировку по плану или «⚡ Блиц за 60 сек», чтобы открыть серию дня.",
+                0.05f
+            )
+            todayCount in 1..2 -> Triple(
+                "Цель: закрыть 1-й этап ($todayCount из 3)",
+                "Осталось ${3 - todayCount} сессии до полного закрытия этапа (Утро/Обед/Вечер).",
+                (todayCount / 3f).coerceIn(0.15f, 0.95f)
+            )
+            todayCount in 3..5 -> Triple(
+                "Золотой экватор ($todayCount из 6)",
+                "Первый этап закрыт! Выполните ещё ${6 - todayCount} сессии для двойного тонуса.",
+                (todayCount / 6f).coerceIn(0.45f, 0.95f)
+            )
+            todayCount in 6..8 -> Triple(
+                "Рывок до Абсолютного дня ($todayCount из 9)",
+                "Осталось ${9 - todayCount} сессии, чтобы закрыть все 3 вкладки дня на 100%!",
+                (todayCount / 9f).coerceIn(0.65f, 0.98f)
+            )
+            else -> Triple(
+                "Абсолютный день выполнен! ★",
+                "Все 3 этапа (Утро, Обед и Вечер) полностью закрыты. Идеальная дисциплина!",
+                1.0f
+            )
+        }
+
+        val resolvedSelected = if (selectedDateStr != null && heatmapKeys.contains(selectedDateStr)) {
             selectedDateStr
         } else {
             todayDateStr
         }
 
         return WeeklyOverviewState(
-            days = days,
+            days = last7Days,
+            heatmapDays = heatmapSummaries,
             selectedDate = resolvedSelected,
             totalRealCompletionsInWeek = totalWeek,
-            totalRealCompletionsAllTime = totalAllTime
+            totalRealCompletionsAllTime = totalAllTime,
+            currentStreakDays = currentStreak,
+            bestStreakDays = bestStreak,
+            isTodayActiveInStreak = isTodayActive,
+            isStreakAtRiskToday = isStreakAtRisk,
+            availableFreezeShields = availableFreezeShields,
+            maxFreezeShields = 3,
+            usedFreezeDates = effectiveFrozenDates,
+            perfectDaysInMonth = perfectDaysMonth,
+            activeDaysInMonth = activeDaysMonth,
+            totalHoldSecondsInWeek = totalHoldWeek,
+            totalHoldSecondsAllTime = totalHoldAllTime,
+            previousWeekCompletions = prevWeekCompletions,
+            previousWeekHoldSeconds = prevWeekHoldSeconds,
+            weekHoldDeltaSeconds = weekHoldDeltaSec,
+            weekSessionsDelta = weekSessDelta,
+            weekHoldDeltaPercent = weekHoldDeltaPct,
+            weekDeltaBadgeTextRu = weekDeltaBadge,
+            weekDeltaSubtitleRu = weekDeltaSubtitle,
+            rankTitleRu = rankTitle,
+            rankLevel = rankLevel,
+            nextMilestoneDays = nextMilestone.targetDays,
+            nextMilestoneTitleRu = nextMilestone.titleRu,
+            milestoneProgressFraction = milestoneFraction,
+            milestones = milestones,
+            dailyQuestTitleRu = questTitle,
+            dailyQuestSubtitleRu = questSubtitle,
+            dailyQuestProgress = questProgress
         )
     }
 
@@ -325,6 +677,22 @@ class WorkoutPersistenceRepository(
         6 -> "Сб"
         7 -> "Вс"
         else -> "Дн"
+    }
+
+    private fun monthShortRu(month: Int): String = when (month) {
+        1 -> "янв."
+        2 -> "февр."
+        3 -> "мар."
+        4 -> "апр."
+        5 -> "мая"
+        6 -> "июн."
+        7 -> "июл."
+        8 -> "авг."
+        9 -> "сент."
+        10 -> "окт."
+        11 -> "нояб."
+        12 -> "дек."
+        else -> ""
     }
 
     suspend fun updateCompletionDifficulty(slotId: String, difficulty: WorkoutDifficulty?) {

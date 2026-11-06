@@ -118,6 +118,9 @@ object BenchSessionCoordinator {
     private val _lastCompletedSlotDifficulty = MutableStateFlow<WorkoutDifficulty?>(null)
     val lastCompletedSlotDifficulty: StateFlow<WorkoutDifficulty?> = _lastCompletedSlotDifficulty.asStateFlow()
 
+    private val _celebratedMilestone = MutableStateFlow<com.example.data.StreakMilestoneInfo?>(null)
+    val celebratedMilestone: StateFlow<com.example.data.StreakMilestoneInfo?> = _celebratedMilestone.asStateFlow()
+
     private val _databaseErrorMessage = MutableStateFlow<String?>(null)
     val databaseErrorMessage: StateFlow<String?> = _databaseErrorMessage.asStateFlow()
 
@@ -189,10 +192,11 @@ object BenchSessionCoordinator {
             coordinatorScope.launch {
                 prefs.signalSettingsFlow.collect { loadedSettings ->
                     val prevRealEnabled = _settings.value.isRealProgramEnabled
+                    val prevFrozen = _settings.value.frozenDates
                     _settings.value = loadedSettings
                     phaseEngine.isMetronomeEnabled = loadedSettings.metronomeEnabled
                     refreshHardwareStatus()
-                    if (prevRealEnabled != loadedSettings.isRealProgramEnabled) {
+                    if (prevRealEnabled != loadedSettings.isRealProgramEnabled || prevFrozen != loadedSettings.frozenDates) {
                         refreshDailySlotsAsync()
                     }
                 }
@@ -226,7 +230,8 @@ object BenchSessionCoordinator {
             _realCompletionsCount.value = repo.countRealCompletions()
             _weeklyOverview.value = repo.loadWeeklyOverview(
                 todayDateStr = timeProvider.currentLocalDate(),
-                selectedDateStr = _weeklyOverview.value.selectedDate.ifEmpty { null }
+                selectedDateStr = _weeklyOverview.value.selectedDate.ifEmpty { null },
+                manualFrozenDates = _settings.value.frozenDates
             )
 
             // Загружаем офлайн-читалку независимо (ошибки читалки изолированы внутри StoryRepository)
@@ -338,7 +343,8 @@ object BenchSessionCoordinator {
                 _realCompletionsCount.value = repo.countRealCompletions()
                 _weeklyOverview.value = repo.loadWeeklyOverview(
                     todayDateStr = timeProvider.currentLocalDate(),
-                    selectedDateStr = _weeklyOverview.value.selectedDate.ifEmpty { null }
+                    selectedDateStr = _weeklyOverview.value.selectedDate.ifEmpty { null },
+                    manualFrozenDates = _settings.value.frozenDates
                 )
 
                 if (slots.isNotEmpty() && !phaseEngine.currentSnapshot().isActiveOrPaused) {
@@ -368,7 +374,28 @@ object BenchSessionCoordinator {
             runCatching {
                 _weeklyOverview.value = repo.loadWeeklyOverview(
                     todayDateStr = timeProvider.currentLocalDate(),
-                    selectedDateStr = localDate
+                    selectedDateStr = localDate,
+                    manualFrozenDates = _settings.value.frozenDates
+                )
+            }
+        }
+    }
+
+    fun toggleFreezeDate(localDate: String) {
+        val currentFrozen = _settings.value.frozenDates
+        val updatedFrozen = if (localDate in currentFrozen) {
+            currentFrozen - localDate
+        } else {
+            currentFrozen + localDate
+        }
+        updateSettings { it.copy(frozenDates = updatedFrozen) }
+        val repo = persistenceRepository ?: return
+        coordinatorScope.launch {
+            runCatching {
+                _weeklyOverview.value = repo.loadWeeklyOverview(
+                    todayDateStr = timeProvider.currentLocalDate(),
+                    selectedDateStr = localDate,
+                    manualFrozenDates = updatedFrozen
                 )
             }
         }
@@ -704,6 +731,7 @@ object BenchSessionCoordinator {
         coordinatorScope.launch {
             try {
                 if (trigger == CheckpointTrigger.COMPLETE) {
+                    val prevStreak = _weeklyOverview.value.currentStreakDays
                     _lastCompletedSlotDifficulty.value = null
                     val inserted = repo.completeRunAtomically(snapshot)
                     if (inserted) {
@@ -726,10 +754,25 @@ object BenchSessionCoordinator {
                     _dailySlots.value = slots
                     _demoCompletionsCount.value = repo.countDemoCompletions()
                     _realCompletionsCount.value = repo.countRealCompletions()
-                    _weeklyOverview.value = repo.loadWeeklyOverview(
+                    val updatedOverview = repo.loadWeeklyOverview(
                         todayDateStr = timeProvider.currentLocalDate(),
-                        selectedDateStr = _weeklyOverview.value.selectedDate.ifEmpty { null }
+                        selectedDateStr = _weeklyOverview.value.selectedDate.ifEmpty { null },
+                        manualFrozenDates = _settings.value.frozenDates
                     )
+                    _weeklyOverview.value = updatedOverview
+                    if (inserted && updatedOverview.currentStreakDays > prevStreak) {
+                        val unlockedNow = updatedOverview.milestones.firstOrNull {
+                            it.targetDays == updatedOverview.currentStreakDays
+                        }
+                        if (unlockedNow != null) {
+                            _celebratedMilestone.value = unlockedNow
+                            audioVibrationEngine?.playSignal(
+                                signal = SignalType.GROUP_COMPLETED,
+                                settings = _settings.value,
+                                isSamplePreview = true
+                            )
+                        }
+                    }
                 } else {
                     repo.saveRunCheckpoint(snapshot)
                 }
@@ -1039,6 +1082,85 @@ object BenchSessionCoordinator {
             )
         }
         return started
+    }
+
+    /**
+     * Экстренный 60-секундный микро-протокол «⚡ Блиц-спасение серии (60 сек)»:
+     * 30 быстрых циклов по 1 с сжатия / 1 с отдыха (ровно 60 секунд).
+     * Записывается как реальная завершённая тренировка за сегодня и мгновенно зажигает звено серии.
+     */
+    @Synchronized
+    fun startStreakRescueBlitzSession(): Boolean {
+        if (phaseEngine.currentSnapshot().isActiveOrPaused) {
+            appendLog(
+                "GUARD",
+                "Нельзя запустить блиц-спасение серии: уже активна другая попытка (${phaseEngine.currentSnapshot().status})"
+            )
+            return false
+        }
+
+        refreshHardwareStatus()
+        val hw = _hardwareStatus.value
+        if (_settings.value.soundEnabled && (!hw.isSilentOrVibrateRinger || hw.isHeadphonesConnected)) {
+            audioVibrationEngine?.requestSessionAudioFocus(_settings.value.duckOtherApps)
+        }
+
+        val proto = DemoProtocolConfig(
+            id = "streak_rescue_blitz_60s",
+            titleRu = "⚡ Блиц-спасение серии (60 сек)",
+            contractionMs = 1_000L,
+            relaxationMs = 1_000L,
+            repetitions = 30,
+            isLastInGroup = true,
+            group = PlanGroup.EVENING
+        )
+
+        val runId = "blitz_run_${UUID.randomUUID()}"
+        val slotId = "blitz_60s_${UUID.randomUUID()}"
+        val startDate = timeProvider.currentLocalDate()
+        val zoneId = timeProvider.currentZoneId()
+        val currentSettings = _settings.value
+        _lastCompletedSlotDifficulty.value = null
+
+        val started = phaseEngine.start(
+            protocol = proto,
+            runId = runId,
+            slotId = slotId,
+            startDate = startDate,
+            zoneId = zoneId,
+            isDemo = false,
+            isFreeMode = true,
+            soundPackSnapshot = currentSettings.soundPack,
+            metronomeStyleSnapshot = currentSettings.metronomeTickStyle
+        )
+        _engineSnapshot.value = phaseEngine.currentSnapshot()
+        if (started) {
+            appendLog(
+                "BLITZ_START",
+                "Запущен 60-секундный протокол «Блиц-спасение серии» (30 циклов по 1с/1с)"
+            )
+        }
+        return started
+    }
+
+    fun triggerMilestoneSalute(milestone: com.example.data.StreakMilestoneInfo) {
+        _celebratedMilestone.value = milestone
+        if (!_engineSnapshot.value.isRunningOrPreparing) {
+            refreshHardwareStatus()
+            audioVibrationEngine?.playSignal(
+                signal = SignalType.GROUP_COMPLETED,
+                settings = _settings.value,
+                isSamplePreview = true
+            )
+        }
+        appendLog(
+            "MILESTONE_SALUTE",
+            "Салют жетона рубежа: ${milestone.badgeEmoji} «${milestone.titleRu}» (${milestone.targetDays} дн.)"
+        )
+    }
+
+    fun dismissMilestoneSalute() {
+        _celebratedMilestone.value = null
     }
 
     @Synchronized

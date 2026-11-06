@@ -1087,4 +1087,124 @@ class ExampleRobolectricTest {
             db.close()
         }
     }
+
+    @Test
+    fun `stability chain calendar computes 28-day heatmap, streak freeze bridge, pure hold seconds, and switches UI mode`() = runBlocking {
+        composeTestRule.waitForIdle()
+
+        // Проверяем элементы мотивации, витрину жетонов, дельту недель и 60-сек блиц на Главной
+        composeTestRule.onNodeWithTag("streak_motivation_banner").assertExists()
+        composeTestRule.onNodeWithTag("streak_freeze_shields_badge").assertExists()
+        composeTestRule.onNodeWithTag("milestone_tokens_showcase_row").assertExists()
+        composeTestRule.onNodeWithTag("daily_motivation_quest_box").assertExists()
+        composeTestRule.onNodeWithTag("btn_streak_rescue_blitz").assertExists()
+        composeTestRule.onNodeWithTag("week_vs_prev_week_banner").assertExists()
+        composeTestRule.onNodeWithTag("week_delta_badge").assertExists()
+        composeTestRule.onNodeWithTag("calendar_mode_toggle_row").assertExists()
+        composeTestRule.onNodeWithTag("weekly_days_row").assertExists()
+
+        // Открываем жетон «Искра ритма» (3 дня) в витрине и проверяем баннер тактильного салюта
+        composeTestRule.onNodeWithTag("milestone_token_3")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("milestone_salute_banner").assertExists()
+        composeTestRule.onNodeWithTag("btn_play_milestone_salute").assertExists()
+        composeTestRule.onNodeWithTag("btn_close_milestone_salute")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("milestone_salute_banner").assertDoesNotExist()
+
+        // Переключаемся на 28-дневную тепловую карту
+        composeTestRule.onNodeWithTag("calendar_mode_month")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("stability_heatmap_grid").assertExists()
+
+        // Возвращаемся на 7-дневный вид
+        composeTestRule.onNodeWithTag("calendar_mode_week")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("weekly_days_row").assertExists()
+
+        // Проверяем запуск 60-секундного протокола «Блиц-спасение серии»
+        composeTestRule.onNodeWithTag("btn_streak_rescue_blitz")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("active_workout_screen").assertExists()
+        assertEquals(30, com.example.service.BenchSessionCoordinator.engineSnapshot.value.totalRepetitions)
+        com.example.service.BenchSessionCoordinator.resetToIdle()
+        composeTestRule.waitForIdle()
+
+        // Проверяем расчёт серии, щита заморозки, витрины жетонов и сравнения с прошлой неделей в репозитории
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = Room.inMemoryDatabaseBuilder(context, VelarisDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val clock = FakeControllableTimeProvider(localDate = "2026-11-05")
+            val repo = WorkoutPersistenceRepository(db.velarisDao(), clock)
+
+            suspend fun completeFirstSlotOn(dateStr: String) {
+                val slots = repo.getOrCreateDailySlots(
+                    localDate = dateStr,
+                    planId = WorkoutPersistenceRepository.REAL_PLAN_STANDARD_3,
+                    isDemo = false
+                )
+                val firstSlot = slots.first().slot
+                val proto = repo.slotToProtocolConfig(firstSlot)
+                val snap = PhaseEngineSnapshot(
+                    status = RunStatus.COMPLETED,
+                    protocol = proto,
+                    currentRepetition = proto.repetitions,
+                    totalRepetitions = proto.repetitions,
+                    currentPhase = PhaseType.RELAXATION,
+                    phaseRemainingMs = 0L,
+                    phaseDurationMs = proto.relaxationMs,
+                    prepRemainingMs = 0L,
+                    confirmedActiveMs = proto.totalActiveDurationMs,
+                    totalActiveDurationMs = proto.totalActiveDurationMs,
+                    interruptionReason = null,
+                    isStopDialogVisible = false,
+                    lastSchedulerDriftMs = 0L,
+                    maxSchedulerDriftMs = 0L,
+                    snapshotElapsedRealtimeMs = clock.elapsedMs,
+                    runId = "run_$dateStr",
+                    slotId = firstSlot.id,
+                    startDate = dateStr,
+                    zoneId = "Europe/Moscow",
+                    isDemo = false,
+                    soundPackSnapshot = SoundPack.CRISP,
+                    metronomeStyleSnapshot = MetronomeTickStyle.CRISP
+                )
+                assertTrue(repo.completeRunAtomically(snap))
+            }
+
+            // 1 тренировка на прошлой неделе (2026-10-25 = 100 с сжатия)
+            completeFirstSlotOn("2026-10-25")
+
+            // 3 тренировки на этой неделе: 2026-11-02, 2026-11-03, пропуск 2026-11-04 (защищается щитом заморозки!), активен 2026-11-05
+            completeFirstSlotOn("2026-11-02")
+            completeFirstSlotOn("2026-11-03")
+            completeFirstSlotOn("2026-11-05")
+
+            val overview = repo.loadWeeklyOverview(todayDateStr = "2026-11-05")
+            assertEquals(28, overview.heatmapDays.size)
+            assertEquals(7, overview.days.size)
+            assertTrue("Пропущенный день 2026-11-04 должен быть защищён щитом заморозки", "2026-11-04" in overview.usedFreezeDates)
+            assertEquals("Серия должна составлять 3 активных дня благодаря мосту заморозки", 3, overview.currentStreakDays)
+            assertEquals("Искра ритма", overview.rankTitleRu)
+            assertEquals(300, overview.totalHoldSecondsInWeek)
+            assertEquals(100, overview.previousWeekHoldSeconds)
+            assertEquals(200, overview.weekHoldDeltaSeconds)
+            assertEquals(200, overview.weekHoldDeltaPercent)
+            assertTrue("Жетон 3 дней должен быть разблокирован", overview.milestones.first { it.targetDays == 3 }.isUnlocked)
+        } finally {
+            db.close()
+        }
+    }
 }

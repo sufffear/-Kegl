@@ -35,7 +35,8 @@ data class BenchSignalSettings(
     val readerLineSpacing: ReaderLineSpacing = ReaderLineSpacing.COMFORTABLE,
     val isRealProgramEnabled: Boolean = true,
     val realProgramSource: String = DEFAULT_REAL_PROGRAM_SOURCE,
-    val duckOtherApps: Boolean = false
+    val duckOtherApps: Boolean = false,
+    val frozenDates: Set<String> = emptySet()
 ) {
     companion object {
         const val DEFAULT_REAL_PROGRAM_SOURCE = "Личный базовый протокол (Утро / Обед / Вечер)"
@@ -51,6 +52,11 @@ class PreferencesRepository(private val dataStore: DataStore<Preferences>) {
     constructor(context: Context) : this(context.applicationContext.velarisDataStore)
 
     val signalSettingsFlow: Flow<BenchSignalSettings> = dataStore.data.map { prefs ->
+        val rawFrozen = prefs[KEY_FROZEN_DATES_CSV].orEmpty()
+        val parsedFrozen = rawFrozen.split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toSet()
         BenchSignalSettings(
             soundEnabled = prefs[KEY_SOUND_ENABLED] ?: true,
             vibrationEnabled = prefs[KEY_VIBRATION_ENABLED] ?: true,
@@ -66,7 +72,8 @@ class PreferencesRepository(private val dataStore: DataStore<Preferences>) {
             isRealProgramEnabled = prefs[KEY_REAL_PROGRAM_ENABLED] ?: true,
             realProgramSource = prefs[KEY_REAL_PROGRAM_SOURCE]
                 ?: BenchSignalSettings.DEFAULT_REAL_PROGRAM_SOURCE,
-            duckOtherApps = prefs[KEY_DUCK_OTHER_APPS] ?: false
+            duckOtherApps = prefs[KEY_DUCK_OTHER_APPS] ?: false,
+            frozenDates = parsedFrozen
         )
     }
 
@@ -138,6 +145,7 @@ class PreferencesRepository(private val dataStore: DataStore<Preferences>) {
             prefs[KEY_REAL_PROGRAM_ENABLED] = settings.isRealProgramEnabled
             prefs[KEY_REAL_PROGRAM_SOURCE] = settings.realProgramSource
             prefs[KEY_DUCK_OTHER_APPS] = settings.duckOtherApps
+            prefs[KEY_FROZEN_DATES_CSV] = settings.frozenDates.sorted().joinToString(",")
         }
     }
 
@@ -156,5 +164,6 @@ class PreferencesRepository(private val dataStore: DataStore<Preferences>) {
         private val KEY_REAL_PROGRAM_ENABLED = booleanPreferencesKey("real_program_enabled")
         private val KEY_REAL_PROGRAM_SOURCE = stringPreferencesKey("real_program_source")
         private val KEY_DUCK_OTHER_APPS = booleanPreferencesKey("duck_other_apps")
+        private val KEY_FROZEN_DATES_CSV = stringPreferencesKey("frozen_dates_csv")
     }
 }
