@@ -84,13 +84,29 @@ interface VelarisDao {
      * благодаря уникальному индексу по `slotId` и проверке внутри транзакции.
      */
     @Transaction
+    suspend fun persistRunCheckpoint(
+        run: WorkoutRunEntity,
+        completedAtEpochMs: Long? = null,
+        optionalDifficulty: String? = null
+    ): Boolean {
+        val existing = getRunById(run.id)
+        if (existing?.status in listOf(RunStatus.COMPLETED.name, RunStatus.STOPPED.name)) return false
+        if (existing != null && existing.confirmedActiveMs > run.confirmedActiveMs) return false
+        if (existing == null) insertRun(run) else updateRun(run)
+        return if (completedAtEpochMs != null) {
+            completeRunAtomically(run.id, completedAtEpochMs, optionalDifficulty)
+        } else false
+    }
+
+    @Transaction
     suspend fun completeRunAtomically(
         runId: String,
         completedAtEpochMs: Long,
         optionalDifficulty: String? = null
     ): Boolean {
         val run = getRunById(runId) ?: return false
-        val totalMs = (run.contractionMs + run.relaxationMs) * run.repetitions
+        val totalMs = if (run.status == RunStatus.COMPLETED.name) run.confirmedActiveMs
+            else (run.contractionMs + run.relaxationMs) * run.repetitions
 
         val updatedRun = run.copy(
             status = RunStatus.COMPLETED.name,

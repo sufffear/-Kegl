@@ -1,0 +1,9 @@
+# Agreed experience direction
+
+Native Android app with consistent cozy fantasy styling: parchment maps, wood, moss, amber and readable large type. Current illustrated map is the visual reference. The map should later support pan/zoom, tappable regions, clear unlock conditions and Chantal's personal annotations.
+
+Chantal is a talking fox with personality, humor, opinions and changing traits. Return stories should usually have 10–12 full sentences, vary in structure and tone (funny, sad, mysterious, unexpected), and include dialogue and meaningful consequences. Three decisions follow, with Chantal's reaction and a trait change.
+
+Future AI context should contain concise persistent memories: previous events, relationships, promises, unresolved clues and recent plot patterns. Callbacks may appear several adventures later. World and narrative should have their own identity in a cozy adventure fantasy tradition.
+
+Implementation order agreed with the owner: reliable core workouts and saves, unified accessible Android layout, interactive map, then AI story integration. These are product requirements, not claims that these features already exist.

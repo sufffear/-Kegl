@@ -30,6 +30,7 @@ import com.example.domain.PhaseEngine
 import com.example.domain.PhaseEngineSnapshot
 import com.example.domain.PhaseType
 import com.example.domain.PlanGroup
+import com.example.domain.RunStatus
 import com.example.domain.SignalType
 import com.example.domain.SoundPack
 import com.example.domain.SystemTimeProvider
@@ -41,6 +42,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
@@ -728,9 +730,14 @@ object BenchSessionCoordinator {
         return res
     }
 
+    private var checkpointJob: Job? = null
+
+    @Synchronized
     private fun persistCheckpointAsync(snapshot: PhaseEngineSnapshot, trigger: CheckpointTrigger) {
         val repo = persistenceRepository ?: return
-        coordinatorScope.launch {
+        val previous = checkpointJob
+        checkpointJob = coordinatorScope.launch {
+            previous?.join()
             try {
                 if (trigger == CheckpointTrigger.COMPLETE) {
                     val prevStreak = _weeklyOverview.value.currentStreakDays
@@ -1219,7 +1226,7 @@ object BenchSessionCoordinator {
     fun confirmStopWithoutCredit(): PhaseEngineSnapshot {
         val snap = phaseEngine.confirmStop()
         _engineSnapshot.value = snap
-        audioVibrationEngine?.abandonSessionAudioFocus()
+        if (snap.status == RunStatus.STOPPED) audioVibrationEngine?.abandonSessionAudioFocus()
         return snap
     }
 

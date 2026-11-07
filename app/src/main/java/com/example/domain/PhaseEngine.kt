@@ -42,6 +42,8 @@ class PhaseEngine(
             onLog("ENGINE", "Отклонена смена протокола во время активной попытки (${snapshot.status})")
             return false
         }
+        customExecutionSteps = emptyList()
+        currentCustomStepIndex = 0
         val now = clock.elapsedRealtimeMs()
         snapshot = PhaseEngineSnapshot(
             status = RunStatus.IDLE,
@@ -81,6 +83,8 @@ class PhaseEngine(
             return false
         }
         val now = clock.elapsedRealtimeMs()
+        customExecutionSteps = emptyList()
+        currentCustomStepIndex = 0
         lastTickRealtimeMs = now
         lastPrepSecondEmitted = 3
         lastMetronomeSecondEmitted = -1
@@ -167,7 +171,7 @@ class PhaseEngine(
 
         snapshot = PhaseEngineSnapshot(
             runId = runId,
-            slotId = "prog_${program.id}",
+            slotId = "prog_${program.id}_$runId",
             startDate = startDate,
             zoneId = zoneId,
             status = RunStatus.PREPARING,
@@ -227,6 +231,8 @@ class PhaseEngine(
     ): PhaseEngineSnapshot {
         val now = clock.elapsedRealtimeMs()
         lastTickRealtimeMs = now
+        customExecutionSteps = emptyList()
+        currentCustomStepIndex = 0
         val clampedConfirmed = confirmedActiveMs.coerceIn(0L, protocol.totalActiveDurationMs)
         lastCheckpointActiveMs = clampedConfirmed
         val phaseDur = if (currentPhase == PhaseType.CONTRACTION) {
@@ -632,6 +638,8 @@ class PhaseEngine(
      * Подтверждение «Завершить» в диалоге остановки: переводит в STOPPED без зачёта.
      */
     fun confirmStop(): PhaseEngineSnapshot {
+        if (!snapshot.isStopDialogVisible ||
+            snapshot.status !in listOf(RunStatus.PAUSED, RunStatus.INTERRUPTED)) return snapshot
         val now = clock.elapsedRealtimeMs()
         snapshot = snapshot.copy(
             status = RunStatus.STOPPED,

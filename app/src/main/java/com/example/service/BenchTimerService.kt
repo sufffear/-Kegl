@@ -147,8 +147,8 @@ class BenchTimerService : Service() {
             }
 
             ACTION_CONFIRM_STOP -> {
-                BenchSessionCoordinator.confirmStopWithoutCredit()
-                stopLoopAndLeaveForeground()
+                val snap = BenchSessionCoordinator.confirmStopWithoutCredit()
+                if (snap.status == RunStatus.STOPPED) stopLoopAndLeaveForeground()
             }
 
             else -> {
