@@ -931,7 +931,6 @@ fun WeeklyOverviewCard(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .testTag("milestone_tokens_showcase_section")
                                     .testTag("milestone_tokens_showcase_row"),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
