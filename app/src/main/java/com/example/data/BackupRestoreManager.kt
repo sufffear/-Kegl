@@ -13,6 +13,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -60,7 +62,7 @@ class BackupRestoreManager(
         outputStream: OutputStream,
         appVersion: String = APP_VERSION,
         appVersionCode: Int = APP_VERSION_CODE
-    ): Result<BackupManifest> = withContext(Dispatchers.IO) {
+    ): Result<BackupManifest> = serialized {
         runCatching {
             val nowEpochMs = timeProvider.currentWallTimeMs()
             val dateRu = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(nowEpochMs))
@@ -266,9 +268,9 @@ class BackupRestoreManager(
     suspend fun restoreBackup(
         inputStream: InputStream,
         isWorkoutActiveOrPaused: Boolean
-    ): Result<BackupManifest> = withContext(Dispatchers.IO) {
+    ): Result<BackupManifest> = serialized {
         if (isWorkoutActiveOrPaused) {
-            return@withContext Result.failure(
+            return@serialized Result.failure(
                 IllegalStateException("Нельзя восстанавливать данные во время активной тренировки. Завершите или остановите подход.")
             )
         }
@@ -447,9 +449,7 @@ class BackupRestoreManager(
 
                     // 9. Replace the book while the Room transaction is still open.
                     bookWriteStarted = true
-                    if (!targetBooksDir.exists()) {
-                        targetBooksDir.mkdirs()
-                    }
+                    check(targetBooksDir.isDirectory || targetBooksDir.mkdirs()) { "Не удалось открыть каталог книги" }
                     if (stagedBookFile != null) {
                         stagedBookFile.copyTo(originalTargetFile, overwrite = true)
                     } else {
@@ -492,6 +492,10 @@ class BackupRestoreManager(
         }
     }
 
+    private suspend fun <T> serialized(block: suspend () -> T): T = withContext(Dispatchers.IO) {
+        operationMutex.withLock { block() }
+    }
+
     private fun readEntryBytes(zip: ZipInputStream, maxBytes: Long): ByteArray {
         val bos = ByteArrayOutputStream()
         val buffer = ByteArray(4096)
@@ -517,6 +521,7 @@ class BackupRestoreManager(
     }
 
     companion object {
+        private val operationMutex = Mutex()
         const val APP_VERSION = "0.5.0-v1.2"
         const val APP_VERSION_CODE = 5
 

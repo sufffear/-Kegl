@@ -116,6 +116,22 @@ class BackupRestoreTest {
         assertEquals(71, chantal.load().getInt("coins"))
     }
 
+    @Test fun bookStorageFailureRollsBackCompanionAndDatabase() = runBlocking {
+        chantal.save(JSONObject().put("coins", 12))
+        val bytes = archive()
+        val existing = TrainingPlanEntity("keep", 1, "План", "Личный", "2026-11-07", false)
+        db.velarisDao().insertTrainingPlans(listOf(existing))
+        chantal.save(JSONObject().put("coins", 91))
+        // A regular file blocks the book directory, failing AFTER preferences and Chantal writes.
+        val blocker = File(context.filesDir, "imported_books")
+        blocker.writeText("blocked")
+        try {
+            assertTrue(manager().restoreBackup(bytes.inputStream(), false).isFailure)
+            assertEquals(91, chantal.load().getInt("coins"))
+            assertEquals(listOf(existing), db.velarisDao().getRealTrainingPlans())
+        } finally { blocker.delete() }
+    }
+
     @Test fun legacyArchivePreservesExistingCompanion() = runBlocking {
         val legacy = rewrite(archive()) { files ->
             files.remove(BackupManifest.CHANTAL_FILE_NAME)

@@ -32,17 +32,17 @@ class ChantalProgressRepository(context: Context) {
 
     companion object {
         fun validate(raw: String): JSONObject {
-        val snapshot = JSONObject(raw)
-        require(snapshot.getInt("schemaVersion") == 1) { "Unsupported Chantal save version" }
-        // Validate complex values before the screen can overwrite an unreadable save.
-        snapshot.optJSONArray("inventoryList")?.let { a ->
-            repeat(a.length()) { ChantalProgressCodec.decodeChantalInventoryLootItem(a.getJSONObject(it)) }
-        }
-        snapshot.optJSONArray("journalList")?.let { a ->
-            repeat(a.length()) { ChantalProgressCodec.decodeChantalStoryEpisode(a.getJSONObject(it)) }
-        }
-        snapshot.optJSONObject("pendingEpisode")?.let { ChantalProgressCodec.decodeChantalStoryEpisode(it) }
-        snapshot.optJSONObject("rewardPopupData")?.let { ChantalProgressCodec.decodeChantalRewardPopupData(it) }
+            val snapshot = JSONObject(raw)
+            require(snapshot.getInt("schemaVersion") == 1) { "Unsupported Chantal save version" }
+            // Validate complex values before the screen can overwrite an unreadable save.
+            snapshot.optJSONArray("inventoryList")?.let { a ->
+                repeat(a.length()) { ChantalProgressCodec.decodeChantalInventoryLootItem(a.getJSONObject(it)) }
+            }
+            snapshot.optJSONArray("journalList")?.let { a ->
+                repeat(a.length()) { ChantalProgressCodec.decodeChantalStoryEpisode(a.getJSONObject(it)) }
+            }
+            snapshot.optJSONObject("pendingEpisode")?.let { ChantalProgressCodec.decodeChantalStoryEpisode(it) }
+            snapshot.optJSONObject("rewardPopupData")?.let { ChantalProgressCodec.decodeChantalRewardPopupData(it) }
             return snapshot
         }
     }
@@ -55,4 +55,3 @@ class ChantalProgressRepository(context: Context) {
         lastSaved = raw
     }
 }
-

@@ -673,13 +673,13 @@ object BenchSessionCoordinator {
                         )
                     },
                     onFailure = { err ->
-                        _backupErrorMessage.value = "Восстановление не удалось: ${err.message ?: "ошибка данных"}. Текущие данные сохранены без изменений."
+                        _backupErrorMessage.value = "Восстановление не удалось: ${err.message ?: "ошибка данных"}."
                         _backupOperationBanner.value = null
                         appendLog("RESTORE_ERROR", "Ошибка восстановления: ${err.message}")
                     }
                 )
             } catch (e: Exception) {
-                _backupErrorMessage.value = "Восстановление прервано: ${e.message}. Текущие данные сохранены без изменений."
+                _backupErrorMessage.value = "Восстановление прервано: ${e.message}."
                 _backupOperationBanner.value = null
                 appendLog("RESTORE_ERROR", "Исключение при восстановлении: ${e.message}")
             }
