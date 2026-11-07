@@ -69,6 +69,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.example.ui.theme.LocalVelarisPalette
 import com.example.R
 import com.example.domain.ChantalAiProvider
 import com.example.domain.ChantalChoiceOption
@@ -92,17 +93,28 @@ import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
-private val HobbitBg = Color(0xFF15100C)
-private val HobbitCardBg = Color(0xFF1E1712)
-private val HobbitElevatedBg = Color(0xFF281F18)
-private val HobbitBorder = Color(0xFF4D3D2C)
-private val HobbitGold = Color(0xFFF59E0B)
-private val HobbitEmerald = Color(0xFF10B981)
-private val HobbitOrange = Color(0xFFEA580C)
-private val HobbitPink = Color(0xFFEC4899)
-private val HobbitSky = Color(0xFF38BDF8)
-private val HobbitCream = Color(0xFFFFF8EB)
-private val HobbitMuted = Color(0xFFD5C3AA)
+private val HobbitBg: Color
+    @Composable get() = LocalVelarisPalette.current.backgroundMid
+private val HobbitCardBg: Color
+    @Composable get() = LocalVelarisPalette.current.surface
+private val HobbitElevatedBg: Color
+    @Composable get() = LocalVelarisPalette.current.surfaceElevated
+private val HobbitBorder: Color
+    @Composable get() = LocalVelarisPalette.current.outline
+private val HobbitGold: Color
+    @Composable get() = LocalVelarisPalette.current.secondaryAccent
+private val HobbitEmerald: Color
+    @Composable get() = LocalVelarisPalette.current.successAccent
+private val HobbitOrange: Color
+    @Composable get() = LocalVelarisPalette.current.warningAccent
+private val HobbitPink: Color
+    @Composable get() = LocalVelarisPalette.current.secondaryAccent
+private val HobbitSky: Color
+    @Composable get() = LocalVelarisPalette.current.primaryAccent
+private val HobbitCream: Color
+    @Composable get() = LocalVelarisPalette.current.textPrimary
+private val HobbitMuted: Color
+    @Composable get() = LocalVelarisPalette.current.textSecondary
 
 @Composable
 fun VelarisChantalScreen(
@@ -445,7 +457,7 @@ fun VelarisChantalScreen(
                         hasCompletedPrologue = true
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = HobbitOrange,
+                        containerColor = HobbitElevatedBg,
                         contentColor = HobbitCream
                     ),
                     shape = RoundedCornerShape(16.dp),
@@ -586,7 +598,7 @@ fun VelarisChantalScreen(
                     // Описание находки + живая реакция Шанталь
                     Surface(
                         shape = RoundedCornerShape(14.dp),
-                        color = HobbitBg,
+                        color = HobbitCream,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
@@ -658,7 +670,7 @@ fun VelarisChantalScreen(
                         }
                         Button(
                             onClick = { rewardPopupData = null },
-                            colors = ButtonDefaults.buttonColors(containerColor = HobbitOrange),
+                            colors = ButtonDefaults.buttonColors(containerColor = HobbitElevatedBg),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.weight(1f)
                         ) {
@@ -1000,7 +1012,7 @@ fun VelarisChantalScreen(
                                 fillerTextInput = ""
                                 pendingEpisode = null
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = HobbitOrange),
+                            colors = ButtonDefaults.buttonColors(containerColor = HobbitElevatedBg),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Отправить свой текст (Филлер)", color = HobbitCream, fontWeight = FontWeight.Bold)
@@ -1048,7 +1060,7 @@ fun VelarisChantalScreen(
 
                         if (isHeartPulseActive) {
                             Surface(
-                                color = Color.Black.copy(alpha = 0.8f),
+                                color = HobbitCardBg,
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier
                                     .align(Alignment.Center)
@@ -1068,7 +1080,7 @@ fun VelarisChantalScreen(
                         val canPet = !hasUsedPetThisCycle && activeJourneyStartMs == 0L
                         Surface(
                             shape = CircleShape,
-                            color = if (canPet) Color(0xE62A161E) else Color(0xCC15100C),
+                            color = HobbitCardBg,
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(12.dp)
@@ -1362,7 +1374,7 @@ fun VelarisChantalScreen(
                     if (denAccordionTab == "housing") {
                         Surface(
                             shape = RoundedCornerShape(14.dp),
-                            color = HobbitBg,
+                            color = HobbitCream,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .border(1.dp, HobbitEmerald.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
@@ -1384,7 +1396,7 @@ fun VelarisChantalScreen(
                                     )
                                     Surface(
                                         shape = RoundedCornerShape(8.dp),
-                                        color = Color(0xFF065F46),
+                                        color = HobbitElevatedBg,
                                         modifier = Modifier.border(1.dp, HobbitEmerald, RoundedCornerShape(8.dp))
                                     ) {
                                         Text(
@@ -1550,7 +1562,7 @@ fun VelarisChantalScreen(
                                         )
                                         activeJourneyStartMs = 0L
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = HobbitOrange),
+                                    colors = ButtonDefaults.buttonColors(containerColor = HobbitElevatedBg),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text("Встретить Шанталь и прочитать историю", color = HobbitCream, fontWeight = FontWeight.ExtraBold)
@@ -1560,7 +1572,7 @@ fun VelarisChantalScreen(
                     } else {
                         Surface(
                             shape = RoundedCornerShape(16.dp),
-                            color = HobbitBg,
+                            color = HobbitCream,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .border(1.dp, HobbitBorder, RoundedCornerShape(16.dp))
@@ -1572,7 +1584,7 @@ fun VelarisChantalScreen(
                                 // Компактная плашка Оберега (графически показывает +100% защиту и +50% монет)
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
-                                    color = if (hasActiveRoadAmulet) Color(0xFF064E3B) else HobbitElevatedBg,
+                                    color = if (hasActiveRoadAmulet) HobbitElevatedBg else HobbitElevatedBg,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .border(
@@ -1803,7 +1815,7 @@ fun VelarisChantalScreen(
                                                                     }
                                                                 },
                                                                 enabled = coins >= inspectGear.priceCoins,
-                                                                colors = ButtonDefaults.buttonColors(containerColor = HobbitOrange),
+                                                                colors = ButtonDefaults.buttonColors(containerColor = HobbitElevatedBg),
                                                                 shape = RoundedCornerShape(10.dp)
                                                             ) {
                                                                 Text("Купить · ${inspectGear.priceCoins} 🪙", color = HobbitCream, fontWeight = FontWeight.ExtraBold)
@@ -1860,7 +1872,7 @@ fun VelarisChantalScreen(
                                             }
                                         },
                                         enabled = currentEnergy >= requiredJourneyEnergy,
-                                        colors = ButtonDefaults.buttonColors(containerColor = HobbitOrange),
+                                        colors = ButtonDefaults.buttonColors(containerColor = HobbitElevatedBg),
                                         shape = RoundedCornerShape(14.dp),
                                         modifier = Modifier
                                             .weight(1.3f)
@@ -2063,11 +2075,11 @@ fun VelarisChantalScreen(
                                                     }
                                                     selectedBagItemId = null
                                                 },
-                                                colors = ButtonDefaults.buttonColors(containerColor = HobbitGold)
+                                                colors = ButtonDefaults.buttonColors(containerColor = HobbitElevatedBg)
                                             ) {
                                                 Text(
                                                     text = if (item.inspectedBonusClaimed) "✓ Изучено" else "Изучить (+1 Любопытство)",
-                                                    color = HobbitBg,
+                                                    color = HobbitCream,
                                                     fontWeight = FontWeight.ExtraBold
                                                 )
                                             }
@@ -2114,7 +2126,7 @@ fun VelarisChantalScreen(
                                                         inventoryList.removeAll { it.id == item.id }
                                                         selectedBagItemId = null
                                                     },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = HobbitOrange)
+                                                    colors = ButtonDefaults.buttonColors(containerColor = HobbitElevatedBg)
                                                 ) {
                                                     Text("🎁 Подарить (+18 М)", color = HobbitCream, fontWeight = FontWeight.Bold)
                                                 }
@@ -2231,7 +2243,7 @@ fun VelarisChantalScreen(
                             Text(
                                 text = "Лавка на колёсах",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = HobbitBg,
+                                color = HobbitCream,
                                 fontWeight = FontWeight.ExtraBold,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
@@ -2452,7 +2464,7 @@ fun VelarisChantalScreen(
                                             }
                                         },
                                         enabled = !isClaimed && coins >= offer.discountPriceCoins,
-                                        colors = ButtonDefaults.buttonColors(containerColor = HobbitOrange)
+                                        colors = ButtonDefaults.buttonColors(containerColor = HobbitElevatedBg)
                                     ) {
                                         Text(
                                             text = if (isClaimed) "Куплено ✓" else "Купить · ${offer.discountPriceCoins} 🪙",
@@ -2529,7 +2541,7 @@ fun VelarisChantalScreen(
                                             }
                                         },
                                         enabled = coins >= item.priceCoins && (!owned || item.category == ChantalShopCategory.CONSUMABLE),
-                                        colors = ButtonDefaults.buttonColors(containerColor = HobbitOrange)
+                                        colors = ButtonDefaults.buttonColors(containerColor = HobbitElevatedBg)
                                     ) {
                                         Text(
                                             text = if (owned && item.category != ChantalShopCategory.CONSUMABLE) "Куплено ✓" else "Купить · ${item.priceCoins} 🪙",

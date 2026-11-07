@@ -134,19 +134,7 @@ fun VelarisTheme(
     // и фиксируем аккуратный масштаб шрифта, чтобы интерфейс всегда оставался воздушным и компактным.
     val context = androidx.compose.ui.platform.LocalContext.current
     val currentDensity = LocalDensity.current
-    val balancedDensity = remember(currentDensity, context) {
-        val widthPx = context.resources.displayMetrics.widthPixels
-        val rawWidthDp = if (currentDensity.density > 0f) widthPx / currentDensity.density else 412f
-        val normalizedDensity = if (widthPx > 600 && rawWidthDp < 412f) {
-            widthPx / 412f
-        } else {
-            currentDensity.density
-        }
-        Density(
-            density = normalizedDensity,
-            fontScale = 0.92f
-        )
-    }
+    val balancedDensity = currentDensity
 
     CompositionLocalProvider(
         LocalVelarisPalette provides palette,
