@@ -1788,7 +1788,7 @@ fun VelarisChantalScreen(
                                                                     }
                                                                     activeSlotInspectItemId = null
                                                                 },
-                                                                colors = ButtonDefaults.buttonColors(containerColor = HobbitEmerald),
+                                                                colors = ButtonDefaults.buttonColors(containerColor = LocalVelarisPalette.current.selectedContainer),
                                                                 shape = RoundedCornerShape(10.dp)
                                                             ) {
                                                                 Text("Взять / Снять", color = Color.White, fontWeight = FontWeight.Bold)
@@ -2101,7 +2101,7 @@ fun VelarisChantalScreen(
                                                         inventoryList.removeAll { it.id == item.id }
                                                         selectedBagItemId = null
                                                     },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = HobbitEmerald)
+                                                    colors = ButtonDefaults.buttonColors(containerColor = LocalVelarisPalette.current.selectedContainer)
                                                 ) {
                                                     Text("🌿 Заварить", color = Color.White, fontWeight = FontWeight.Bold)
                                                 }
@@ -2175,7 +2175,7 @@ fun VelarisChantalScreen(
                                     }
                                 },
                                 enabled = herbs.isNotEmpty() && (trinkets.isNotEmpty() || herbs.size >= 2),
-                                colors = ButtonDefaults.buttonColors(containerColor = HobbitEmerald),
+                                colors = ButtonDefaults.buttonColors(containerColor = LocalVelarisPalette.current.selectedContainer),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text("Смастерить Оберег", color = Color.White, fontWeight = FontWeight.Bold)
