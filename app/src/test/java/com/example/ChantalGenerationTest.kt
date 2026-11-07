@@ -57,7 +57,7 @@ class ChantalGenerationTest {
     }
     @Test fun generationPromptCarriesApprovedVoiceAndConversationalChoices() {
         val prompt = ChantalStoryGeneration.prompt(episode(), ChantalWorldMemory.empty(), ChantalTraits())
-        assertTrue(prompt.contains("ЛИТЕРАТУРНАЯ ИНСТРУКЦИЯ 3.0"))
+        assertTrue(prompt.contains("ЛИТЕРАТУРНАЯ ИНСТРУКЦИЯ 3.1"))
         assertTrue(prompt.contains("от первого лица"))
         assertTrue(prompt.contains("Нет квоты в 12 предложений"))
         assertTrue(prompt.contains("реплики игрока"))
