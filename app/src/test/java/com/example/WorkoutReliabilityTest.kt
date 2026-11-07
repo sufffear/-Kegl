@@ -29,6 +29,14 @@ class WorkoutReliabilityTest {
         assertEquals(RunStatus.COMPLETED, engine.currentSnapshot().status)
         assertEquals(4000L, engine.currentSnapshot().confirmedActiveMs)
     }
+    @Test fun repeatedConstructorAttemptsHaveDistinctCreditIds() {
+        val program = custom()
+        engine.startCustomProgram(program, runId = "first")
+        val firstSlot = engine.currentSnapshot().slotId
+        advance(5000)
+        engine.startCustomProgram(program, runId = "second")
+        assertNotEquals(firstSlot, engine.currentSnapshot().slotId)
+    }
     @Test fun pauseDoesNotCountWaitingOrResumePreparation() {
         engine.start(protocol)
         advance(3500)
