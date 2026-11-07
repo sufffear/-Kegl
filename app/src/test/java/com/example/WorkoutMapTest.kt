@@ -33,4 +33,38 @@ class WorkoutMapTest {
         compose.onNodeWithTag("choose_map_route").assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals("reg_old_mill", selected) }
     }
+    @Test fun transparentLabelsOpenDetailsWithoutMapControls() {
+        compose.setContent { Column(Modifier.verticalScroll(rememberScrollState())) {
+            ChantalWorldMap(0, "", false) { }
+        } }
+        compose.onNodeWithTag("open_world_map").performScrollTo().performClick()
+        compose.onNodeWithText("Карта троп · приближай двумя пальцами").assertDoesNotExist()
+        compose.onNodeWithText("Сброс").assertDoesNotExist()
+        compose.onNodeWithTag("map_label_1").performClick()
+        compose.onNodeWithTag("map_place_details").assertIsDisplayed()
+        compose.onNodeWithText("Янтарная дубрава").assertIsDisplayed()
+        compose.onNodeWithTag("choose_map_route").assertIsDisplayed().assertIsEnabled()
+        compose.onNodeWithTag("close_map_details").performClick()
+        compose.onNodeWithTag("map_label_3").performClick()
+        compose.onNodeWithTag("choose_map_route").assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithTag("close_map_details").performClick()
+        compose.onNodeWithTag("close_world_map").performClick()
+        compose.onNodeWithTag("map_label_1").assertDoesNotExist()
+    }
+
+    @Test
+    @Config(qualifiers = "w800dp-h360dp")
+    fun placeActionsStayVisibleInLandscape() {
+        compose.setContent { Column(Modifier.verticalScroll(rememberScrollState())) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(androidx.compose.ui.platform.LocalDensity.current.density, 1.5f)) {
+                ChantalWorldMap(0, "", false) { }
+            }
+        } }
+        compose.onNodeWithTag("open_world_map").performScrollTo().performClick()
+        compose.onNodeWithTag("map_label_1").performClick()
+        compose.onNodeWithTag("choose_map_route").assertIsDisplayed()
+        compose.onNodeWithTag("close_map_details").assertIsDisplayed()
+    }
+
 }

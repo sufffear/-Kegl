@@ -62,7 +62,12 @@ internal fun ChantalWorldMap(journeys: Int, selectedId: String, locked: Boolean,
     }
     if (expanded) Dialog(onDismissRequest = { expanded = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = palette.backgroundTop) {
-            MapCanvas(Modifier.fillMaxSize().safeDrawingPadding()) { detailsId = it }
+            Box(Modifier.fillMaxSize().safeDrawingPadding()) {
+                MapCanvas(Modifier.fillMaxSize()) { detailsId = it }
+                IconButton(onClick = { expanded = false }, modifier = Modifier.align(Alignment.TopEnd).testTag("close_world_map")) {
+                    Text("×", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.semantics { contentDescription = "Закрыть карту" })
+                }
+            }
         }
     }
     val region = DEFAULT_CHANTAL_MAP_REGIONS.firstOrNull { it.id == detailsId }
