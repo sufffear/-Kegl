@@ -30,6 +30,8 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -58,6 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import com.example.data.BenchSignalSettings
 import com.example.data.CompletedSessionItem
@@ -2289,7 +2292,7 @@ private fun PeriodWorkoutCard(
 }
 
 @Composable
-private fun ExtraWorkoutsSection(locked: Boolean, onStart: (FreeIntervalTemplateEntity) -> Unit) {
+internal fun ExtraWorkoutsSection(locked: Boolean, onStart: (FreeIntervalTemplateEntity) -> Unit) {
     val palette = LocalVelarisPalette.current
     var pending by remember { mutableStateOf<FreeIntervalTemplateEntity?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
