@@ -95,6 +95,13 @@ class TechCheckViewModel(
         BenchSessionCoordinator.refreshHardwareStatus()
     }
 
+    private val _chantalReturnToken = kotlinx.coroutines.flow.MutableStateFlow(0)
+    val chantalReturnToken: StateFlow<Int> = _chantalReturnToken
+    fun openChantalReturn() {
+        _chantalReturnToken.value++
+        navigateTo(VelarisNavDestination.CHANTAL)
+    }
+
     fun navigateTo(destination: VelarisNavDestination) {
         _currentDestination.value = destination
     }

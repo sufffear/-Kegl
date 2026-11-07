@@ -48,7 +48,7 @@ class MainActivity : ComponentActivity() {
                 factory = TechCheckViewModel.Factory(applicationContext, repository)
             )
             androidx.compose.runtime.LaunchedEffect(returnRequest) {
-                if (returnRequest > 0) viewModel.navigateTo(com.example.ui.VelarisNavDestination.CHANTAL)
+                if (returnRequest > 0) viewModel.openChantalReturn()
             }
             val settings by viewModel.settings.collectAsStateWithLifecycle()
 

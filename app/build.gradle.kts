@@ -94,6 +94,7 @@ googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.W
 // This makes it easy to add them back in the future if needed.
 dependencies {
   implementation("androidx.work:work-runtime-ktx:2.10.1")
+  testImplementation("androidx.work:work-testing:2.10.1")
   implementation(platform(libs.androidx.compose.bom))
   // implementation(platform(libs.firebase.bom))
   // implementation(libs.accompanist.permissions)
