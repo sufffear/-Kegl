@@ -111,8 +111,10 @@ class GeminiStoryTransport(private val secret: String, private val model: String
     }
 }
 
+class GeminiLocalQuotaException : Exception("Local request limit")
 class GeminiRequestException(val status: Int) : Exception("Gemini unavailable")
 fun geminiFailureMessage(error: Throwable): String = when (error) {
+    is GeminiLocalQuotaException -> "Между запросами нужна минута. Подожди немного и попробуй снова."
     is GeminiRequestException -> when (error.status) {
         400, 401, 403 -> "Google отклонил запрос. Проверь ключ, доступ к Gemini API и ограничения проекта (HTTP ${error.status})."
         404 -> "Модель не найдена (HTTP 404). В настройках укажи полный ID модели из AI Studio или верни предложенную модель."

@@ -21,6 +21,7 @@ internal fun ChantalGeminiSettings() {
     var hasKey by remember { mutableStateOf(access.hasKey()) }
     var editKey by remember { mutableStateOf(!hasKey) }
     var editModel by remember { mutableStateOf(false) }
+    var preview by remember { mutableStateOf(false) }
     var help by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
@@ -70,6 +71,8 @@ internal fun ChantalGeminiSettings() {
                     }, enabled = !checking, modifier = Modifier.fillMaxWidth()) { Text(if (checking) "Проверяем…" else "Проверить подключение") }
                     Text("Проверка отправит один короткий запрос.", style = MaterialTheme.typography.bodySmall)
                 }
+                if (hasKey) OutlinedButton(onClick = { preview = true }, enabled = !checking,
+                    modifier = Modifier.fillMaxWidth().testTag("open_story_preview")) { Text("Пробная история · без ожидания") }
                 if (connectionMessage.isNotBlank()) Text(connectionMessage)
             }
         }
@@ -103,4 +106,19 @@ internal fun ChantalGeminiSettings() {
             }, enabled = !checking, modifier = Modifier.fillMaxWidth()) { Text("Удалить ключ с телефона") }
         }
     }
+    if (preview) ChantalStoryPreview(onDismiss = { preview = false }) {
+        if (!access.claimRequest()) {
+            throw com.example.data.GeminiLocalQuotaException()
+        }
+        val saved = com.example.data.ChantalProgressRepository(context).load()
+        val memory = saved.optJSONObject("worldMemory") ?: com.example.data.ChantalWorldMemory.empty()
+        val character = com.example.domain.ChantalTraits(
+            saved.optInt("curiosity", 5), saved.optInt("tenderness", 6), saved.optInt("playfulness", 4),
+            saved.optInt("romanticism", 3), saved.optInt("courage", 4), saved.optInt("wit", 5))
+        val secretValue = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { access.read() }
+        com.example.data.ChantalStoryGeneration.generate(
+            com.example.data.GeminiStoryTransport(secretValue, access.model()),
+            com.example.data.ChantalOfflineAdventure.previewBase(), memory, character)
+    }
+
 }

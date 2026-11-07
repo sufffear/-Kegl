@@ -742,6 +742,7 @@ fun VelarisChantalScreen(
                     badNewsRu = "",
                     choices = epChoices
                 )
+                pendingEpisode = pendingEpisode?.let { com.example.data.ChantalOfflineAdventure.decorate(it) }
                 pendingEpisode?.let { base ->
                     com.example.data.ChantalLanternAdventure.next(base, journalList.toList(),
                         progressRepository.load().optJSONObject("worldMemory") ?: com.example.data.ChantalWorldMemory.empty())
