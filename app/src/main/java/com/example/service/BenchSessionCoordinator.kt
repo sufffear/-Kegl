@@ -1182,7 +1182,7 @@ object BenchSessionCoordinator {
     fun pauseSession(reason: String = "Пауза нажата вручную"): PhaseEngineSnapshot {
         val snap = phaseEngine.pause(reason)
         _engineSnapshot.value = snap
-        if (snap.status == RunStatus.STOPPED) audioVibrationEngine?.abandonSessionAudioFocus()
+        audioVibrationEngine?.abandonSessionAudioFocus()
         return snap
     }
 
@@ -1190,7 +1190,7 @@ object BenchSessionCoordinator {
     fun onExternalInterruption(reason: String): PhaseEngineSnapshot {
         val snap = phaseEngine.interrupt(reason)
         _engineSnapshot.value = snap
-        if (snap.status == RunStatus.STOPPED) audioVibrationEngine?.abandonSessionAudioFocus()
+        audioVibrationEngine?.abandonSessionAudioFocus()
         return snap
     }
 
@@ -1210,7 +1210,7 @@ object BenchSessionCoordinator {
     fun requestStopWithConfirmation(): PhaseEngineSnapshot {
         val snap = phaseEngine.requestStop()
         _engineSnapshot.value = snap
-        if (snap.status == RunStatus.STOPPED) audioVibrationEngine?.abandonSessionAudioFocus()
+        audioVibrationEngine?.abandonSessionAudioFocus()
         return snap
     }
 
@@ -1233,7 +1233,7 @@ object BenchSessionCoordinator {
     fun resetToIdle(): PhaseEngineSnapshot {
         val snap = phaseEngine.resetToIdle()
         _engineSnapshot.value = snap
-        if (snap.status == RunStatus.STOPPED) audioVibrationEngine?.abandonSessionAudioFocus()
+        audioVibrationEngine?.abandonSessionAudioFocus()
         return snap
     }
 
