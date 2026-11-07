@@ -45,15 +45,7 @@ jobs:
           "$apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk > signing-report.txt
           actual=$(sed -n 's/^.* certificate SHA-256 digest: //p' signing-report.txt | tr '[:upper:]' '[:lower:]')
           cat signing-report.txt
-          grep -q '^Number of signers: 1 "$actual" = "$expected" || { echo '::error::Unexpected APK signing certificate'; exit 1; }
-
-      - name: Upload Debug APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: velaris-debug-${{ github.sha }}
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
- signing-report.txt
+          grep -q '^Number of signers: 1$' signing-report.txt
           test "$actual" = "$expected" || { echo '::error::Unexpected APK signing certificate'; exit 1; }
           cat signing-report.txt
 
