@@ -43,6 +43,9 @@ class ChantalScreenPersistenceTest {
         compose.runOnIdle { visible.value = true }
         compose.waitForIdle()
         compose.onNodeWithTag("chantal_prologue_card").assertDoesNotExist()
+        // This cycle's pet was already claimed before leaving the screen.
+        compose.onNodeWithTag("btn_pet_chantal").performScrollTo().performClick()
+        compose.waitForIdle()
         compose.runOnIdle {
             val saved = ChantalProgressRepository(context).load()
             assertTrue(saved.getBoolean("hasCompletedPrologue"))

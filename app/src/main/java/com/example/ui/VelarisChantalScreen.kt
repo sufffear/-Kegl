@@ -889,7 +889,8 @@ fun VelarisChantalScreen(
                     ep.choices.forEachIndexed { idx, opt ->
                         val arrows = opt.delta.formatArrowIndicators().joinToString(" · ")
                         Button(
-                            onClick = {
+                            onClick = acceptReward@{
+                                if (pendingEpisode?.id != ep.id || journalList.any { it.id == ep.id }) return@acceptReward
                                 onPlaySampleTone(SignalType.SET_COMPLETED)
                                 inventoryList.add(0, ep.lootItem)
                                 newlyAddedBagItemIds.add(ep.lootItem.id)
@@ -961,7 +962,8 @@ fun VelarisChantalScreen(
                     )
                     if (fillerTextInput.isNotBlank()) {
                         Button(
-                            onClick = {
+                            onClick = acceptReward@{
+                                if (pendingEpisode?.id != ep.id || journalList.any { it.id == ep.id }) return@acceptReward
                                 onPlaySampleTone(SignalType.SET_COMPLETED)
                                 inventoryList.add(0, ep.lootItem)
                                 newlyAddedBagItemIds.add(ep.lootItem.id)
