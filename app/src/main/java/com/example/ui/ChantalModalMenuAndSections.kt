@@ -27,6 +27,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -39,6 +41,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -367,6 +371,7 @@ internal fun ChantalModalMenuDialog(
     forceTransformPreview: Boolean,
     onToggleTransformPreview: () -> Unit
 ) {
+    var showSettingsSections by remember { mutableStateOf(false) }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -396,14 +401,14 @@ internal fun ChantalModalMenuDialog(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "🦊 Книга Странствий Шанталь",
+                            text = if (subTab == "ai") "Настройки Шанталь" else "🦊 Книга Странствий Шанталь",
                             style = MaterialTheme.typography.titleLarge,
                             fontFamily = FontFamily.SansSerif,
                             fontWeight = FontWeight.Bold,
                             color = HobbitCream
                         )
                         Text(
-                            text = "Шесть игровых разделов",
+                            text = if (subTab == "ai") "Подключение и характер" else "Шесть игровых разделов",
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.SansSerif,
                             fontWeight = FontWeight.Medium,
@@ -439,7 +444,10 @@ internal fun ChantalModalMenuDialog(
                     Triple("ai", "⚙️ Настройки ИИ и Лора", selectedAiProvider)
                 )
 
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (subTab == "ai") TextButton(onClick = { showSettingsSections = !showSettingsSections }) {
+                    Text(if (showSettingsSections) "Скрыть разделы" else "Другие разделы")
+                }
+                if (subTab != "ai" || showSettingsSections) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     menuItems.chunked(2).forEach { rowItems ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1422,7 +1430,7 @@ internal fun ChantalAiLoreSectionCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(0.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             ChantalGeminiSettings()

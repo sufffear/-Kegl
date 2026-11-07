@@ -13,14 +13,33 @@ import org.junit.*
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [28], qualifiers = "w360dp-h800dp")
 class ChantalGeminiSettingsTest {
     @get:Rule val compose = createComposeRule()
     @Before fun clear() { ApplicationProvider.getApplicationContext<Context>().getSharedPreferences("chantal_gemini_access", 0).edit().clear().commit() }
     @Test fun keyAndModelAreSeparatedAndHelpStartsCollapsed() {
-        compose.setContent { Column(Modifier.verticalScroll(rememberScrollState())) { ChantalGeminiSettings() } }
+        var view: android.view.View? = null
+        compose.setContent {
+            view = androidx.compose.ui.platform.LocalView.current
+            com.example.ui.theme.VelarisTheme {
+                Column(Modifier.verticalScroll(rememberScrollState())) { ChantalGeminiSettings() }
+            }
+        }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            val root = view!!
+            val bitmap = android.graphics.Bitmap.createBitmap(root.width, root.height, android.graphics.Bitmap.Config.ARGB_8888)
+            root.draw(android.graphics.Canvas(bitmap))
+            val directory = java.io.File("build/reports/chantal-screenshots").apply { mkdirs() }
+            java.io.FileOutputStream(java.io.File(directory, "gemini-settings-compact.png")).use {
+                check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 95, it))
+            }
+            bitmap.recycle()
+        }
         compose.onNodeWithTag("gemini_key_input").assertIsDisplayed()
         compose.onNodeWithTag("gemini_save_key").assertIsNotEnabled()
         compose.onNodeWithTag("gemini_model_input").assertDoesNotExist()
