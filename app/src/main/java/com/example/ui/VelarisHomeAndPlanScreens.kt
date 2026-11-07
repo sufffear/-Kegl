@@ -2109,6 +2109,8 @@ fun VelarisPlanScreen(
             )
         }
 
+        if (selectedMode == "scheduled") ExtraWorkoutsSection(snapshot.isActiveOrPaused, onStartFreeTemplate)
+
         // Компактный нижний переключатель дополнительных режимов (Расписание / Интервалы / Конструктор)
         Surface(
             shape = RoundedCornerShape(14.dp),
@@ -2257,177 +2259,60 @@ private fun PeriodHorizontalTab(
  */
 @Composable
 private fun PeriodWorkoutCard(
-    stepNumber: Int,
-    item: DailySlotWithCompletion,
-    isSelected: Boolean,
-    isSessionLocked: Boolean,
-    onSelectSlot: () -> Unit,
-    onStartSlot: () -> Unit
+    stepNumber: Int, item: DailySlotWithCompletion, isSelected: Boolean,
+    isSessionLocked: Boolean, onSelectSlot: () -> Unit, onStartSlot: () -> Unit
 ) {
     val palette = LocalVelarisPalette.current
     val slot = item.slot
-    val isCompleted = item.isCompleted
-    val diffLabel = WorkoutDifficulty.fromCode(item.completion?.optionalDifficulty)?.labelRu
-    val totalDurationSec = (((slot.contractionMs + slot.relaxationMs) * slot.repetitions) / 1000L).toInt()
-    val subtitleRu = resolveWorkoutSubtitleRu(slot)
-    val contractionSec = slot.contractionMs / 1000L
-    val relaxationSec = slot.relaxationMs / 1000L
-
-    val cardBg = when {
-        isCompleted -> palette.successAccent.copy(alpha = 0.10f)
-        isSelected -> palette.selectedContainer
-        else -> palette.surfaceElevated.copy(alpha = 0.85f)
-    }
-    val borderColor = when {
-        isCompleted -> palette.successAccent.copy(alpha = 0.65f)
-        isSelected -> palette.selectedBorder
-        else -> palette.outline.copy(alpha = 0.26f)
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(cardBg)
-            .border(
-                width = if (isCompleted || isSelected) 1.5.dp else 1.dp,
-                color = borderColor,
-                shape = RoundedCornerShape(16.dp)
-            )
-            .clickable(enabled = !isSessionLocked) { onSelectSlot() }
-            .padding(12.dp)
-            .testTag("daily_slot_${slot.assignmentId}"),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        // Верхняя строка: номер шага + название тренировки + бейдж длительности или выполнения
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(26.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isCompleted) {
-                                palette.successAccent.copy(alpha = 0.22f)
-                            } else {
-                                palette.primaryAccent.copy(alpha = 0.18f)
-                            }
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isCompleted) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Выполнено",
-                            tint = palette.successAccent,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    } else {
-                        Text(
-                            text = stepNumber.toString(),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = palette.primaryAccent,
-                            fontWeight = FontWeight.ExtraBold,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
+    var expanded by rememberSaveable(slot.id) { mutableStateOf(false) }
+    Surface(shape = RoundedCornerShape(14.dp), color = palette.surfaceElevated,
+        modifier = Modifier.fillMaxWidth().testTag("daily_slot_${slot.assignmentId}")) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("$stepNumber. ${slot.titleRu}", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = palette.textPrimary)
+                    Text("${slot.contractionMs / 1000} с удержание · ${slot.relaxationMs / 1000} с отдых · ${slot.repetitions} раз",
+                        fontSize = 14.sp, color = palette.textSecondary)
                 }
-
-                Spacer(modifier = Modifier.width(10.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = slot.titleRu,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = palette.textPrimary,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = subtitleRu + (if (diffLabel != null) " · $diffLabel" else ""),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = palette.textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                TextButton(onClick = { expanded = !expanded; onSelectSlot() }, enabled = !isSessionLocked) {
+                    Text(if (item.isCompleted) "✓" else if (expanded) "Скрыть" else "Открыть")
                 }
             }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            if (isCompleted) {
-                StatusPillBadge(
-                    text = "Выполнено",
-                    accentColor = palette.successAccent
-                )
-            } else {
-                StatusPillBadge(
-                    text = formatSecondsMinSec(totalDurationSec),
-                    accentColor = palette.secondaryAccent
-                )
+            if (expanded) {
+                Text("${formatSecondsMinSec((((slot.contractionMs + slot.relaxationMs) * slot.repetitions) / 1000).toInt())} · ⚡ +10 за завершение",
+                    fontSize = 15.sp, color = palette.textSecondary)
+                if (!item.isCompleted) Button(onClick = onStartSlot, enabled = !isSessionLocked,
+                    modifier = Modifier.fillMaxWidth().testTag("btn_start_slot_${slot.assignmentId}")) { Text("Начать тренировку", fontSize = 16.sp) }
             }
         }
+    }
+}
 
-        // Средняя строка: 3 аккуратные плитки параметров (без вертикального растягивания)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            WorkoutMetricMiniTile(
-                label = if (contractionSec >= 20L) "Удержание" else "Сжатие",
-                value = "$contractionSec сек",
-                accent = if (isCompleted) palette.successAccent else palette.primaryAccent,
-                modifier = Modifier.weight(1f)
-            )
-            WorkoutMetricMiniTile(
-                label = "Отдых",
-                value = "$relaxationSec сек",
-                accent = if (isCompleted) palette.successAccent else palette.secondaryAccent,
-                modifier = Modifier.weight(1f)
-            )
-            WorkoutMetricMiniTile(
-                label = "Сжиманий",
-                value = "${slot.repetitions}",
-                accent = if (isCompleted) palette.successAccent else palette.textPrimary,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        // Кнопка запуска (показывается, если подход ещё не выполнен)
-        if (!isCompleted && !isSessionLocked) {
-            Button(
-                onClick = onStartSlot,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = palette.primaryAccent,
-                    contentColor = palette.onPrimaryAccent
-                ),
-                shape = RoundedCornerShape(11.dp),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 42.dp)
-                    .testTag("btn_start_slot_${slot.assignmentId}")
-            ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(15.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Начать тренировку",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    softWrap = false
-                )
+@Composable
+private fun ExtraWorkoutsSection(locked: Boolean, onStart: (FreeIntervalTemplateEntity) -> Unit) {
+    val palette = LocalVelarisPalette.current
+    var pending by remember { mutableStateOf<FreeIntervalTemplateEntity?>(null) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Дополнительно · по желанию", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = palette.textPrimary)
+        Text("Каждое завершённое занятие: ⚡ +5", fontSize = 15.sp, color = palette.textSecondary)
+        com.example.data.ExtraWorkoutPresets.all.forEach { template ->
+            Surface(shape = RoundedCornerShape(16.dp), color = palette.surfaceElevated,
+                modifier = Modifier.fillMaxWidth().clickable(enabled = !locked) { pending = template }
+                    .testTag("extra_workout_${template.slotIndex}")) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(template.name, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = palette.textPrimary)
+                    Text("${template.contractionSec} с удержание · ${template.relaxationSec} с отдых · ${template.calculatedCycles} раз",
+                        fontSize = 15.sp, color = palette.textSecondary)
+                    Text("${formatSecondsMinSec(template.actualDurationSec)} · ⚡ +5", fontSize = 15.sp, color = palette.primaryAccent)
+                }
             }
         }
+    }
+    pending?.let { template ->
+        AlertDialog(onDismissRequest = { pending = null }, title = { Text(template.name) },
+            text = { Text("${template.calculatedCycles} повторов: удержание ${template.contractionSec} с, отдых ${template.relaxationSec} с.\n${formatSecondsMinSec(template.actualDurationSec)} · ⚡ +5 после завершения") },
+            confirmButton = { TextButton(enabled = !locked, onClick = { pending = null; onStart(template) }) { Text("Начать") } },
+            dismissButton = { TextButton(onClick = { pending = null }) { Text("Отмена") } })
     }
 }
 

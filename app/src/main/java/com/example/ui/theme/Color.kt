@@ -14,8 +14,8 @@ enum class VelarisThemeId(
 ) {
     DAWN(
         id = "theme_dawn",
-        titleRu = "Apple Чистый Белый",
-        subtitleRu = "Белоснежные карточки, воздушный жемчужный фон и свежий изумруд"
+        titleRu = "Лесной дневник",
+        subtitleRu = "Тёплый пергамент, лесной мох и янтарь"
     ),
     SKY(
         id = "theme_sky",
@@ -84,41 +84,41 @@ data class VelarisPalette(
 )
 
 /**
- * 1. Apple Чистый Белый — снежно-белые карточки, светлый серебристо-жемчужный фон и изумрудный акцент.
+ * 1. Лесной дневник — снежно-белые карточки, светлый серебристо-жемчужный фон и изумрудный акцент.
  */
 val DawnPalette = VelarisPalette(
     themeId = VelarisThemeId.DAWN,
-    backgroundTop = Color(0xFFF5F8F7),
-    backgroundMid = Color(0xFFEEF4F2),
-    backgroundBottom = Color(0xFFE6EFEA),
-    surface = Color(0xFFFFFFFF),
-    surfaceElevated = Color(0xFFF2F7F5),
-    surfaceVariant = Color(0xFFE3EEE9),
-    readerSurface = Color(0xFFFAFDFB),
-    primaryAccent = Color(0xFF10B981),
-    secondaryAccent = Color(0xFF059669),
-    onPrimaryAccent = Color(0xFFFFFFFF),
-    heroGradientStart = Color(0xFFFFFFFF),
-    heroGradientEnd = Color(0xFFECFDF5),
-    buttonGradientStart = Color(0xFF10B981),
-    buttonGradientEnd = Color(0xFF059669),
-    selectedContainer = Color(0xFFD1FAE5),
-    selectedBorder = Color(0xFF10B981),
+    backgroundTop = Color(0xFFF8F1E3),
+    backgroundMid = Color(0xFFF1E5CD),
+    backgroundBottom = Color(0xFFE8D8B8),
+    surface = Color(0xFFFFF9ED),
+    surfaceElevated = Color(0xFFF3E7CF),
+    surfaceVariant = Color(0xFFE8D9B8),
+    readerSurface = Color(0xFFFFF9ED),
+    primaryAccent = Color(0xFF556B3D),
+    secondaryAccent = Color(0xFF74602F),
+    onPrimaryAccent = Color(0xFFFFF9ED),
+    heroGradientStart = Color(0xFFFFF9ED),
+    heroGradientEnd = Color(0xFFEDDFC0),
+    buttonGradientStart = Color(0xFF556B3D),
+    buttonGradientEnd = Color(0xFF74602F),
+    selectedContainer = Color(0xFFE2D4AD),
+    selectedBorder = Color(0xFF556B3D),
     disabledContainer = Color(0xFFE2E8F0),
     disabledContent = Color(0xFF94A3B8),
-    textPrimary = Color(0xFF111827),
-    textSecondary = Color(0xFF4B5563),
-    mountainFar = Color(0xFFD1FAE5),
-    mountainMid = Color(0xFFA7F3D0),
-    mountainNear = Color(0xFF6EE7B7),
+    textPrimary = Color(0xFF30271B),
+    textSecondary = Color(0xFF655641),
+    mountainFar = Color(0xFFE2D4AD),
+    mountainMid = Color(0xFFC4C49B),
+    mountainNear = Color(0xFF939D6A),
     warningAccent = Color(0xFFD97706),
-    successAccent = Color(0xFF059669),
+    successAccent = Color(0xFF74602F),
     errorAccent = Color(0xFFDC2626),
-    phaseHoldAccent = Color(0xFF10B981),
+    phaseHoldAccent = Color(0xFF556B3D),
     phaseRelaxAccent = Color(0xFF0284C7),
     phasePrepAccent = Color(0xFFD97706),
     phasePauseAccent = Color(0xFFD97706),
-    outline = Color(0xFFCBD5E1)
+    outline = Color(0xFFBCAF91)
 )
 
 /**

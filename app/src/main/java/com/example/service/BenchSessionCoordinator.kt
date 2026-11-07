@@ -54,6 +54,8 @@ import java.util.concurrent.atomic.AtomicLong
 object BenchSessionCoordinator {
 
     private val coordinatorScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val _workoutEnergy = MutableStateFlow(0)
+    val workoutEnergy: StateFlow<Int> = _workoutEnergy.asStateFlow()
     private val logIdCounter = AtomicLong(1L)
     private val timeProvider = SystemTimeProvider()
 
@@ -172,6 +174,7 @@ object BenchSessionCoordinator {
             val db = VelarisDatabase.getInstance(appCtx)
             val repo = WorkoutPersistenceRepository(db.velarisDao(), timeProvider)
             persistenceRepository = repo
+            coordinatorScope.launch { db.velarisDao().observeWorkoutEnergy().collect { _workoutEnergy.value = it } }
 
             val storyRepo = StoryRepository(appCtx, db.velarisDao(), timeProvider)
             storyRepository = storyRepo

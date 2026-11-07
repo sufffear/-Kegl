@@ -110,7 +110,8 @@ fun VelarisChantalScreen(
     currentStreakDays: Int,
     onOpenWorkoutPlan: () -> Unit,
     onPlaySampleTone: (SignalType) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    earnedWorkoutEnergy: Int = completedWorkoutsCount * 10
 ) {
     val context = LocalContext.current
     val progressRepository = remember(context.applicationContext) { ChantalProgressRepository(context) }
@@ -159,7 +160,7 @@ fun VelarisChantalScreen(
     // Энергия и Монеты (каждая тренировка Кегеля даёт +10 Энергии)
     var bonusEnergy by remember { mutableIntStateOf(saved.optInt("bonusEnergy", 0)) }
     var spentEnergy by remember { mutableIntStateOf(saved.optInt("spentEnergy", 0)) }
-    val currentEnergy = ((completedWorkoutsCount * 10) + bonusEnergy - spentEnergy).coerceAtLeast(0)
+    val currentEnergy = (earnedWorkoutEnergy + bonusEnergy - spentEnergy).coerceAtLeast(0)
     var coins by remember { mutableIntStateOf(saved.optInt("coins", 0)) }
 
     // 6 параметров характера (шкала 0..100, шаг +1/+2)

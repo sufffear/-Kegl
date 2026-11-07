@@ -293,6 +293,7 @@ fun TechCheckScreen(
     val customPrograms by viewModel.customPrograms.collectAsStateWithLifecycle()
     val isZeroSlotDemoMode by viewModel.isZeroSlotDemoMode.collectAsStateWithLifecycle()
     val demoCompletionsCount by viewModel.demoCompletionsCount.collectAsStateWithLifecycle()
+    val workoutEnergy by viewModel.workoutEnergy.collectAsStateWithLifecycle()
     val realCompletionsCount by viewModel.realCompletionsCount.collectAsStateWithLifecycle()
     val weeklyOverview by viewModel.weeklyOverview.collectAsStateWithLifecycle()
     val storyState by viewModel.storyState.collectAsStateWithLifecycle()
@@ -502,7 +503,8 @@ fun TechCheckScreen(
 
                             VelarisNavDestination.CHANTAL -> {
                                 VelarisChantalScreen(
-                                    completedWorkoutsCount = realCompletionsCount + demoCompletionsCount,
+                                    completedWorkoutsCount = realCompletionsCount,
+                                    earnedWorkoutEnergy = workoutEnergy,
                                     currentStreakDays = weeklyOverview.currentStreakDays,
                                     onOpenWorkoutPlan = { viewModel.navigateTo(VelarisNavDestination.PLAN) },
                                     onPlaySampleTone = { sig -> viewModel.playSample(sig) }

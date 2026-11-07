@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.data.*
 import com.example.domain.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import org.junit.*
 import org.junit.Assert.*
 import org.junit.runner.RunWith
@@ -25,6 +26,23 @@ class WorkoutPersistenceTest {
     @After fun close() { db.close() }
     private fun snapshot() = PhaseEngineSnapshot(runId = "run", slotId = "slot", startDate = "2026-11-07",
         status = RunStatus.RUNNING, confirmedActiveMs = 1000, isDemo = false)
+
+    @Test fun extraWorkoutsAwardHalfEnergyAndDemoAwardsNone() = runBlocking {
+        val main = snapshot().copy(status = RunStatus.COMPLETED)
+        repo.completeRunAtomically(main)
+        assertEquals(10, db.velarisDao().observeWorkoutEnergy().first())
+        val extra = main.copy(runId = "extra", slotId = "extra", isFreeMode = true)
+        repo.completeRunAtomically(extra)
+        repo.completeRunAtomically(extra)
+        assertEquals(15, db.velarisDao().observeWorkoutEnergy().first())
+        repo.completeRunAtomically(main.copy(runId = "demo", slotId = "demo", isDemo = true))
+        assertEquals(15, db.velarisDao().observeWorkoutEnergy().first())
+    }
+    @Test fun extraPresetsMatchAgreedIntervals() {
+        assertEquals(listOf(30, 20, 10), ExtraWorkoutPresets.all.map { it.calculatedCycles })
+        assertEquals(listOf(60, 300, 350), ExtraWorkoutPresets.all.map { it.actualDurationSec })
+        assertTrue(ExtraWorkoutPresets.all.all { it.isValid })
+    }
 
     @Test fun lateCheckpointCannotUndoCompletionOrDuplicateReward() = runBlocking {
         val running = snapshot()
