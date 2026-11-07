@@ -49,7 +49,11 @@ export interface StoryGenerationPayload {
   stayedInSameRegion?: boolean;
   autonomousReasonRu?: string;
   equippedItemsRu: string[];
+  backpackGearRu?: string[];
   denItemsRu: string[];
+  denTierNumber?: number;
+  denProgressTextRu?: string;
+  guaranteedDenTrophy?: boolean;
   traits: {
     curiosity: number;
     tenderness: number;
@@ -74,7 +78,7 @@ const STORY_RESPONSE_SCHEMA = {
     storyTextRu: {
       type: Type.STRING,
       description:
-        'Законченная художественная история примерно из 9-11 предложений на русском языке. Каждый раз разная структура (диалог, загадка, сценка, тайна, приключение).',
+        'Законченная художественная история примерно из 9-11 предложений на русском языке. Каждый раз разная структура (диалог, загадка, сценка, тайна, приключение). Обязательно обыграй снаряжение и гостинец, которые игрок положил Шанталь с собой в поход (или то, что она пошла налегке)!',
     },
     chantalMapNoteRu: {
       type: Type.STRING,
@@ -92,13 +96,14 @@ const STORY_RESPONSE_SCHEMA = {
         titleRu: { type: Type.STRING, description: 'Название найденного предмета.' },
         category: {
           type: Type.STRING,
-          description: 'TRINKET (диковинка), HERB (целебная находка) или ROYAL_CLUE (странная старинная улика).',
+          description:
+            'TRINKET (диковинка), HERB (целебная находка), ROYAL_CLUE (королевская улика) или DEN_TROPHY (уникальный предмет уюта и интерьера для Домика, найденный или выменянный в походе, который сразу засчитывается +1 в счётчик уровня жилья X/10!).',
         },
         descriptionRu: {
           type: Type.STRING,
           description: 'Атмосферное описание предмета в инвентаре (2-3 предложения с историей находки).',
         },
-        sellPriceCoins: { type: Type.INTEGER, description: 'Цена продажи в монетах (от 12 до 45).' },
+        sellPriceCoins: { type: Type.INTEGER, description: 'Цена продажи в монетах (от 12 до 30).' },
       },
       required: ['titleRu', 'category', 'descriptionRu', 'sellPriceCoins'],
     },
@@ -109,7 +114,8 @@ const STORY_RESPONSE_SCHEMA = {
     },
     coinsEarned: {
       type: Type.INTEGER,
-      description: 'Количество заработанных монет (от 20 до 55).',
+      description:
+        'Базовое количество заработанных монет за 1 поход (от 15 до 24 монет, чтобы за 3 сессии полного дня накапливалось ~55-65 монет на 1 предмет для домика).',
     },
     badNewsTitleRu: {
       type: Type.STRING,
@@ -117,18 +123,24 @@ const STORY_RESPONSE_SCHEMA = {
     },
     debtAmountCoins: {
       type: Type.INTEGER,
-      description: 'Если outcomeType = BAD_DEBT — сумма долга (например 25), иначе 0.',
+      description: 'Если outcomeType = BAD_DEBT — сумма долга (например 20), иначе 0.',
     },
     choices: {
       type: Type.ARRAY,
-      description: 'Ровно 3 варианта ответа пользователя на историю.',
+      description:
+        'Ровно 3 нешаблонных варианта ответа пользователя, напрямую привязанных к событиям и деталям этой конкретной истории.',
       items: {
         type: Type.OBJECT,
         properties: {
-          labelRu: { type: Type.STRING, description: 'Текст кнопки ответа (1 предложение).' },
+          labelRu: {
+            type: Type.STRING,
+            description:
+              'Естественная реплика или действие игрока в ответ на историю (1–2 предложения). Без шаблонов и без прямых подсказок, какую характеристику это повысит.',
+          },
           followUpReactionRu: {
             type: Type.STRING,
-            description: 'Живая реакция Шанталь на этот выбор (1-2 предложения).',
+            description:
+              'Развёрнутая живая реакция Шанталь на этот выбор из 2–4 полноценных предложений! Иногда смешная, иногда забавная, иногда ироничная, трогательная или неожиданная — строго без шаблонов, с описанием её живой эмоции, жестов или ответа на слова игрока.',
           },
           traitDeltas: {
             type: Type.OBJECT,
@@ -214,6 +226,15 @@ function buildSystemInstruction(payload: StoryGenerationPayload): string {
     ? `\n=== ДОПОЛНИТЕЛЬНЫЙ ФАЙЛ ЛОРА И ПЕРСОНАЛИЗАЦИИ ОТ ПОЛЬЗОВАТЕЛЯ ===\n"""\n${payload.customLoreText.slice(0, 6000)}\n"""\n`
     : '';
 
+  const backpackSection =
+    payload.backpackGearRu && payload.backpackGearRu.length > 0
+      ? `СНАРЯЖЕНИЕ И ГОСТИНЦЫ, ВЗЯТЫЕ С СОБОЙ В ЭТОТ ПОХОД: ${payload.backpackGearRu.join(', ')}. ОБЯЗАТЕЛЬНО ярко обыграй в тексте истории, как именно эти вещи помогли Шанталь в пути (например, фонарь осветил тёмный тайник, отмычки открыли старый ларец, а пирожок или мёд она обменяла у лесного жителя на диковинку или предмет для дома)!`
+      : `В этот поход Шанталь отправилась НАЛЕГКЕ (без специального снаряжения в рюкзаке). Можешь упомянуть в сюжете деталь, где ей пригодился бы фонарь, компас или гостинец для обмена.`;
+
+  const denTrophyInstruction = payload.guaranteedDenTrophy
+    ? `ВАЖНО ПО НАХОДКЕ (lootItem): В этом походе Шанталь ОБЯЗАТЕЛЬНО находит или выменивает уникальный предмет интерьера для обустройства Домика — укажи lootItem.category = "DEN_TROPHY" (например: «Фонарик со спящим духом-светлячком», «Резная сосновая шкатулка мельника», «Старинный подсвечник из речного затона», «Подушечка с вышивкой лесных трав» и т.п.). Этот предмет сразу встанет в Домик и прибавит +1 к счётчику уровня жилья (${payload.denProgressTextRu || 'X/10'})!`
+    : `По находке (lootItem): выбери категорию TRINKET, HERB, ROYAL_CLUE или (с шансом ~25%) DEN_TROPHY — редкую вещь для уюта Домика, которая засчитывается в прогресс уровня жилья (${payload.denProgressTextRu || 'X/10'}).`;
+
   return `Ты — ведущий нарративный дизайнер ролевой игры о Шанталь.
 ${actTone}
 ${difficultyMap[payload.difficulty]}
@@ -227,19 +248,23 @@ ${episodeRule}
 - Отвага: ${payload.traits.courage}
 - Остроумие: ${payload.traits.wit}
 
-Экипировка на Шанталь: ${payload.equippedItemsRu.join(', ') || 'нет'}.
-Обустройство домика: ${payload.denItemsRu.join(', ') || 'скромный уголок'}.
+${backpackSection}
+Обустройство домика (Уровень ${payload.denTierNumber || 1}, прогресс уровня: ${payload.denProgressTextRu || '1/10'}): ${payload.denItemsRu.join(', ') || 'скромный уголок'}.
+${denTrophyInstruction}
 Время суток: ${payload.timeOfDayRu}. Текущий номер похода: #${payload.totalJourneys}.
 ${layer1Passports}${layer2NpcDossier}${layer3RecentFull}${customLoreSection}
-ТРЕБОВАНИЯ К ИСТОРИИ:
+ТРЕБОВАНИЯ К ИСТОРИИ И 3 ОТВЕТАМ:
 1. Напиши полноценную, литературно завершённую историю на русском языке объёмом около 9–11 предложений (разделяй на 2–3 абзаца для удобства чтения с экрана телефона).
 2. ПРАВИЛО «ЭХО ПРОШЛОГО»: обязательно вплети в сюжет живую отсылку к одному из более ранних походов из СЛОЯ 1 или СЛОЯ 2 (например, вспомни решение игрока из Похода #1, #2, #3 или #5, данное обещание или прошлую находку) и укажи это в поле pastEchoNoteRu!
-3. Обязательно опиши интересный предмет (lootItem), который Шанталь принесла с собой в инвентарь, с атмосферным описанием.
-4. Верни ответ СТРОГО в формате JSON по заданной схеме.`;
+3. Обязательно опиши интересный предмет (lootItem), который Шанталь принесла с собой в инвентарь, с атмосферным описанием. Базовые монеты coinsEarned — в диапазоне 15–24 монет.
+4. ТРИ ВАРИАНТА ОТВЕТА (choices) И РЕАКЦИИ ШАНТАЛЬ (followUpReactionRu):
+   - Все 3 кнопки ответа игрока (labelRu) должны быть НЕШАБЛОННЫМИ, живыми репликами или реакциями на конкретные детали рассказанной истории (без банальных шаблонов и без спойлеров к характеристикам).
+   - На КАЖДЫЙ из 3 вариантов ответа обязательно напиши развёрнутую, яркую, НЕШАБЛОННУЮ реакцию самой Шанталь (followUpReactionRu) объёмом в 2–4 полноценных предложения! Реакция должна быть живой — иногда смешной, иногда забавной и лукавой, иногда неожиданной или трогательной, чтобы игрок с удовольствием читал мини-сценку того, как лисёнок (или расколдованная принцесса) отреагировала на его слова.
+5. Верни ответ СТРОГО в формате JSON по заданной схеме.`;
 }
 
 const JSON_FORMAT_REMINDER =
-  '\nОтвечай строго валидным JSON объектом с полями: titleRu, storyTextRu, chantalMapNoteRu, pastEchoNoteRu, lootItem {titleRu, category, descriptionRu, sellPriceCoins}, outcomeType (GOOD_REWARD | BAD_DEBT | BAD_EXHAUSTION), coinsEarned, badNewsTitleRu, debtAmountCoins, choices (массив из 3 объектов {labelRu, followUpReactionRu, traitDeltas: {curiosity, tenderness, playfulness, romanticism, courage, wit}}).';
+  '\nОтвечай строго валидным JSON объектом с полями: titleRu, storyTextRu, chantalMapNoteRu, pastEchoNoteRu, lootItem {titleRu, category, descriptionRu, sellPriceCoins}, outcomeType (GOOD_REWARD | BAD_DEBT | BAD_EXHAUSTION), coinsEarned, badNewsTitleRu, debtAmountCoins, choices (массив из 3 объектов {labelRu, followUpReactionRu (2-4 предложения живой, смешной или неожиданной реакции Шанталь без шаблонов!), traitDeltas: {curiosity, tenderness, playfulness, romanticism, courage, wit}}).';
 
 app.post('/api/chantal/generate-story', async (req, res) => {
   try {

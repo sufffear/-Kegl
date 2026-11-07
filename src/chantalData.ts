@@ -202,7 +202,7 @@ export function getInteractivePettingDialogue(
   };
 }
 
-export type LootCategory = 'TRINKET' | 'HERB' | 'ROYAL_CLUE';
+export type LootCategory = 'TRINKET' | 'HERB' | 'ROYAL_CLUE' | 'DEN_TROPHY';
 
 export interface InventoryLootItem {
   id: string;
@@ -214,24 +214,213 @@ export interface InventoryLootItem {
   foundDateIso: string;
   canHealExhaustion?: boolean;
   inspectedLoreBonusClaimed?: boolean;
+  placedInDenComfort?: boolean;
+}
+
+export interface LootItemPropertyDescriptor {
+  id: string;
+  shortTitleRu: string;
+  statTagRu: string;
+  popupTitleRu: string;
+  popupDescriptionRu: string;
+  accentColorHex: string;
+}
+
+export function getLootItemEmoji(item: InventoryLootItem): string {
+  const lower = item.titleRu.toLowerCase();
+  if (item.category === 'DEN_TROPHY') {
+    if (lower.includes('фонар') || lower.includes('светляч') || lower.includes('подсвеч')) return '🏮';
+    if (lower.includes('подуш') || lower.includes('ковр') || lower.includes('плед')) return '🛋️';
+    if (lower.includes('шкатул') || lower.includes('ларц')) return '🧰';
+    if (lower.includes('ваз') || lower.includes('кувшин') || lower.includes('чаш')) return '🏺';
+    if (lower.includes('картин') || lower.includes('гобелен') || lower.includes('ловец')) return '🖼️';
+    return '🏠';
+  }
+  if (lower.includes('медальон') || lower.includes('жетон')) return '🏅';
+  if (lower.includes('печать') || lower.includes('сургуч')) return '💮';
+  if (lower.includes('манускрипт') || lower.includes('карта') || lower.includes('свиток')) return '📜';
+  if (lower.includes('компас') || lower.includes('астролябия')) return '🧭';
+  if (lower.includes('шишка') || lower.includes('дубрав')) return '🌲';
+  if (lower.includes('пуговиц') || lower.includes('пряжк') || lower.includes('монет')) return '🪙';
+  if (lower.includes('вереск') || lower.includes('цветок') || lower.includes('лепест')) return '🌸';
+  if (lower.includes('чабрец') || lower.includes('мята') || lower.includes('зверобой') || lower.includes('трав')) return '🌿';
+  if (lower.includes('ключ') || lower.includes('ларц')) return '🗝️';
+  if (item.category === 'ROYAL_CLUE') return '👑';
+  if (item.category === 'HERB') return '🌿';
+  return '🔮';
+}
+
+export function getLootItemShortTitle(item: InventoryLootItem): string {
+  const lower = item.titleRu.toLowerCase();
+  if (lower.includes('фонарик')) return 'Лесной фонарик';
+  if (lower.includes('медальон')) return 'Медальон';
+  if (lower.includes('чабрец')) return 'Чабрец';
+  if (lower.includes('шишка')) return 'Лесная шишка';
+  if (lower.includes('пуговиц')) return 'Пуговица';
+  const cleaned = item.titleRu.replace(/^Сокровище Сундука Главы #\d+:\s*/i, '').trim();
+  const words = cleaned.split(/\s+/);
+  if (words.length <= 2) return cleaned;
+  return `${words[0]} ${words[1]}`;
+}
+
+export function getLootItemProperties(
+  item: InventoryLootItem,
+  witSellPrice: number
+): LootItemPropertyDescriptor[] {
+  if (item.category === 'DEN_TROPHY') {
+    return [
+      {
+        id: 'prop_den_trophy_count',
+        shortTitleRu: 'Свойство I · В зачёт жилья (+1/10)',
+        statTagRu: 'Засчитано в уровень Домика ✓',
+        popupTitleRu: 'Уникальный трофей интерьера из похода',
+        popupDescriptionRu:
+          'Эта вещь найдена Шанталь в путешествии и автоматически засчитывается как +1 предмет в счётчике обустройства Домика (например, 6 куплено + 1 принесла = 7 из 10)! Экономит целый день накопления монет.',
+        accentColorHex: '#10B981',
+      },
+      {
+        id: 'prop_den_trophy_exclusivity',
+        shortTitleRu: 'Свойство II · Не купить в лавке',
+        statTagRu: 'Лесной эксклюзив',
+        popupTitleRu: 'Диковинный предмет уюта',
+        popupDescriptionRu:
+          'Такие предметы нельзя купить за монеты в обычной лавке — их можно только отыскать в тайниках с фонарём/отмычками или выменять у жителей леса на походные гостинцы.',
+        accentColorHex: '#F59E0B',
+      },
+      {
+        id: 'prop_den_trophy_bonus',
+        shortTitleRu: `Свойство III · Из «${item.foundAtRegionRu}»`,
+        statTagRu: '+1 монета / поход',
+        popupTitleRu: 'Тёплая память о приключении',
+        popupDescriptionRu: `Украшает жилище Шанталь и напоминает о походе в «${item.foundAtRegionRu}» (${item.foundDateIso}), давая +1 бонусную монету в будущих странствиях.`,
+        accentColorHex: '#38BDF8',
+      },
+    ];
+  }
+
+  if (item.category === 'ROYAL_CLUE') {
+    return [
+      {
+        id: 'prop_lore_curiosity',
+        shortTitleRu: item.inspectedLoreBonusClaimed
+          ? 'Свойство I · Тайна изучена (✓)'
+          : 'Свойство I · Любопытство +1 ↑',
+        statTagRu: item.inspectedLoreBonusClaimed ? 'Изучено ✓' : '+1 Любопытство ↑',
+        popupTitleRu: 'Пробуждение памяти и Любопытства',
+        popupDescriptionRu: item.inspectedLoreBonusClaimed
+          ? 'Вы с Шанталь уже изучили эту реликвию у камина — бонус +1 к Любопытству получен и навсегда записан в характер.'
+          : 'При внимательном осмотре у камина Шанталь вспоминает детали своего прошлого. Даёт постоянный бонус +1 к черте «Любопытство».',
+        accentColorHex: '#F59E0B',
+      },
+      {
+        id: 'prop_royal_seal',
+        shortTitleRu: 'Свойство II · Печать шкатулки',
+        statTagRu: 'Защита от продажи',
+        popupTitleRu: 'Неприкосновенная реликвия Акта II',
+        popupDescriptionRu:
+          'Предмет отмечен королевской геральдикой. Хранится в особой шкатулке тайн и защищён от случайной продажи скупщику.',
+        accentColorHex: '#A855F7',
+      },
+      {
+        id: 'prop_region_resonance',
+        shortTitleRu: `Свойство III · След: ${item.foundAtRegionRu}`,
+        statTagRu: 'Сюжетная нить',
+        popupTitleRu: `Связь с локацией «${item.foundAtRegionRu}»`,
+        popupDescriptionRu: `Эта находка была принесена из локации «${item.foundAtRegionRu}» (${item.foundDateIso}) и учитывается нейросетью в будущих главах.`,
+        accentColorHex: '#10B981',
+      },
+    ];
+  }
+
+  if (item.category === 'HERB') {
+    return [
+      {
+        id: 'prop_herb_heal',
+        shortTitleRu: 'Свойство I · Бодрость и уют',
+        statTagRu: 'Усталость 45→30 Эн. · +15% настр.',
+        popupTitleRu: 'Тёплый отвар у камина',
+        popupDescriptionRu:
+          'Заваривание этой травы мгновенно снимает дорожную усталость (возвращает цену похода с 45 к 30 Энергии) и повышает настроение Шанталь на +15%.',
+        accentColorHex: '#10B981',
+      },
+      {
+        id: 'prop_herb_alchemy',
+        shortTitleRu: 'Свойство II · Реагент оберега',
+        statTagRu: '+50% монет · Щит',
+        popupTitleRu: 'Ингредиент для Оберега Попутного Ветра',
+        popupDescriptionRu:
+          'Соединяется с любой диковинкой или второй травой, создавая Оберег Попутного Ветра (+50% к монетам, 100% защита от неудач и +1 к Любопытству ↑).',
+        accentColorHex: '#F59E0B',
+      },
+      {
+        id: 'prop_herb_trade',
+        shortTitleRu: `Свойство III · Ценность травника`,
+        statTagRu: `+${witSellPrice} Монет`,
+        popupTitleRu: 'Продажа лесному скупщику',
+        popupDescriptionRu: `С учётом текущей черты «Остроумие» скупщик заплатит за свежий сбор ${witSellPrice} Монет (базовая цена: ${item.sellPriceCoins} М).`,
+        accentColorHex: '#38BDF8',
+      },
+    ];
+  }
+
+  return [
+    {
+      id: 'prop_trinket_gift',
+      shortTitleRu: 'Свойство I · Дар жителю леса',
+      statTagRu: 'Дружба +1 ур. · +18 М · Черта ↑',
+      popupTitleRu: 'Желанный подарок для друзей-NPC',
+      popupDescriptionRu:
+        'Если подарить эту диковинку Брамблу, Корвусу, Торвину или Хьюго, уровень дружбы вырастет на +1, а в ответ придут +18 Монет и +1 к профильной черте характера!',
+      accentColorHex: '#EA580C',
+    },
+    {
+      id: 'prop_trinket_alchemy',
+      shortTitleRu: 'Свойство II · Основа для оберега',
+      statTagRu: 'Крафт с травой',
+      popupTitleRu: 'Магический фокус талисмана',
+      popupDescriptionRu:
+        'В паре с целебной травой превращается в Оберег Попутного Ветра, защищающий следующий поход от непогоды и долгов.',
+      accentColorHex: '#10B981',
+    },
+    {
+      id: 'prop_trinket_sell',
+      shortTitleRu: `Свойство III · Оценка купца`,
+      statTagRu: `+${witSellPrice} Монет`,
+      popupTitleRu: 'Торг с бонусом Остроумия',
+      popupDescriptionRu: `Можно выгодно продать в лесной лавке за ${witSellPrice} Монет благодаря прокачанному Остроумию Шанталь (базовая цена: ${item.sellPriceCoins} М).`,
+      accentColorHex: '#F59E0B',
+    },
+  ];
 }
 
 export type ShopCategory = 'APPAREL' | 'DEN_COMFORT' | 'CONSUMABLE';
 
+export type LoadoutSlotCategory = 'OUTFIT' | 'TOOL' | 'WEAPON' | 'BUNDLE';
+
 export interface ChantalShopItem {
   id: string;
   titleRu: string;
+  shortTitleRu: string;
+  emoji: string;
   category: ShopCategory;
+  loadoutSlotType?: LoadoutSlotCategory; // Слот экипировки: Одежда (OUTFIT), Инструмент (TOOL), Оружие/Защита (WEAPON), Узелок (BUNDLE)
+  denStep?: 1 | 2 | 3; // Для предметов уюта: ступень 1 (1-10), 2 (11-20), 3 (21-30)
   priceCoins: number;
   upgradeCostCoins?: number;
   maxTier?: 1 | 2 | 3;
+  maxDurability?: number; // На сколько походов хватает заряда/прочности снаряжения
+  refillCostCoins?: number; // Цена починки / заправки на 5 походов
+  denTrophyChanceBonusPct?: number; // Бонус к шансу принести предмет интерьера в Домик (+1 к X/10)
+  expeditionCoinMultiplierPct?: number; // Бонус % к монетам при взятии в поход
+  canPackInBackpack?: boolean; // Для гостинцев: можно положить в узелок в поход
+  backpackEffectRu?: string; // Что даёт, если положить с собой в поход
   visualSlotLabelRu: string;
   descriptionRu: string;
   gameplayEffectRu: string;
   reducesExhaustionCostBy?: number;
   preventsMishapBonusPct?: number;
   bonusCoinsPerJourney?: number;
-  instantAction?: 'HEAL_EXHAUSTION' | 'CLEAR_DEBT' | 'BOOST_MOOD';
+  instantAction?: 'HEAL_EXHAUSTION' | 'CLEAR_DEBT' | 'BOOST_MOOD' | 'PACK_PROVISION';
 }
 
 export interface TravelingMerchantOffer {
@@ -240,17 +429,27 @@ export interface TravelingMerchantOffer {
   subtitleRu: string;
   originalPriceCoins: number;
   discountPriceCoins: number;
-  rewardType: 'ROYAL_CLUE_MAP' | 'HERB_BUNDLE' | 'ROAD_AMULET' | 'TRAIT_TOME';
+  rewardType: 'ROYAL_CLUE_MAP' | 'HERB_BUNDLE' | 'ROAD_AMULET' | 'DEN_TROPHY_CRATE';
   effectDescriptionRu: string;
 }
 
 export const TRAVELING_MERCHANT_OFFERS: TravelingMerchantOffer[] = [
   {
+    id: 'merch_den_relic',
+    titleRu: 'Резной фонарик со светлячком (В Домик +1/10)',
+    subtitleRu: 'Редкий предмет уюта из фургона · Сразу +1 к уровню жилья',
+    originalPriceCoins: 75,
+    discountPriceCoins: 46,
+    rewardType: 'DEN_TROPHY_CRATE',
+    effectDescriptionRu:
+      'Диковинный ночник для Домика со спящим лесным светлячком — сразу засчитывается как +1 предмет в счётчике уровня жилья (X/10)!',
+  },
+  {
     id: 'merch_secret_map',
     titleRu: 'Карта потайных звериных троп',
     subtitleRu: 'Редкость странствующего купца · Скидка 35%',
-    originalPriceCoins: 85,
-    discountPriceCoins: 55,
+    originalPriceCoins: 80,
+    discountPriceCoins: 52,
     rewardType: 'ROYAL_CLUE_MAP',
     effectDescriptionRu:
       'Мгновенно открывает наводку на Королевскую улику в шкатулку и даёт +2 к Любопытству ↑↑',
@@ -259,21 +458,11 @@ export const TRAVELING_MERCHANT_OFFERS: TravelingMerchantOffer[] = [
     id: 'merch_solar_amulet',
     titleRu: 'Янтарный оберег Попутного Ветра',
     subtitleRu: 'Заряженный талисман для следующего похода',
-    originalPriceCoins: 60,
-    discountPriceCoins: 38,
+    originalPriceCoins: 55,
+    discountPriceCoins: 34,
     rewardType: 'ROAD_AMULET',
     effectDescriptionRu:
       'Даёт 100% защиту от плохих новостей и +50% монет в следующем путешествии Шанталь',
-  },
-  {
-    id: 'merch_mountain_herbs',
-    titleRu: 'Связка редких трав со Звёздного перевала',
-    subtitleRu: 'Свежий сбор горного травника',
-    originalPriceCoins: 45,
-    discountPriceCoins: 28,
-    rewardType: 'HERB_BUNDLE',
-    effectDescriptionRu:
-      'Добавляет 2 целебные травы прямо в Сумку (для снятия усталости или домашней алхимии)',
   },
 ];
 
@@ -317,210 +506,1082 @@ export const KEY_COMPANION_NPCS: NpcFriendshipEntry[] = [
 ];
 
 export interface DenVisualTierInfo {
-  tierNumber: 1 | 2 | 3;
+  tierNumber: 1 | 2 | 3 | 4;
   titleRu: string;
   subtitleRu: string;
   imageUrl: string;
   unlockedFeaturesRu: string[];
   nextUnlockHintRu: string;
+  totalDenItems: number;
+  ownedShopDenCount: number;
+  foundTrophyDenCount: number;
+  itemsInCurrentStep: number;
+  itemsTargetPerStep: 10;
+  progressBadgeRu: string;
 }
 
 export const DEN_TIER_IMAGES = {
   tier1: '/src/assets/images/chantal_stage1_rescued_kit_1794001402267.jpg',
   tier2: '/src/assets/images/chantal_den_tier2_1794031492048.jpg',
   tier3: '/src/assets/images/chantal_den_tier3_1794031493489.jpg',
+  tier4: '/src/assets/images/chantal_den_tier4_1794041326329.jpg',
   merchantChest: '/src/assets/images/chantal_merchant_chest_1794031494723.jpg',
 };
 
+/**
+ * Система «10 предметов на каждый уровень жилья» (4 Уровня):
+ * - 0..9 предметов уюта -> Уровень I (копим 10 предметов до Уровня II)
+ * - 10..19 предметов уюта -> Уровень II (копим 10 предметов до Уровня III)
+ * - 20..29 предметов уюта -> Уровень III (копим 10 предметов до Уровня IV)
+ * - 30+ предметов уюта -> Уровень IV (максимальный Сказочный терем и Башня Звездочёта!)
+ * В зачёт идут КАК купленные в Лавке предметы уюта, ТАК И принесённые Шанталь из походов трофеи для дома (DEN_TROPHY)!
+ */
 export function getDenVisualTierInfo(
-  ownedDenItemCount: number,
-  previewTierOverride?: 1 | 2 | 3 | null
+  ownedShopDenCount: number,
+  foundTrophyDenCount: number = 0
 ): DenVisualTierInfo {
-  const effectiveTier: 1 | 2 | 3 =
-    previewTierOverride ??
-    (ownedDenItemCount >= 4 ? 3 : ownedDenItemCount >= 2 ? 2 : 1);
+  const totalDenItems = ownedShopDenCount + foundTrophyDenCount;
+  const effectiveTier: 1 | 2 | 3 | 4 =
+    totalDenItems >= 30 ? 4 : totalDenItems >= 20 ? 3 : totalDenItems >= 10 ? 2 : 1;
+
+  const itemsInCurrentStep =
+    effectiveTier === 4 ? 10 : totalDenItems - (effectiveTier - 1) * 10;
+
+  const breakdownSuffix =
+    foundTrophyDenCount > 0
+      ? ` (${ownedShopDenCount} куплено + ${foundTrophyDenCount} принесла из походов)`
+      : ` (куплено в лавке: ${ownedShopDenCount})`;
+
+  const progressBadgeRu =
+    effectiveTier === 4
+      ? `Макс. Уровень IV (${totalDenItems} предм. уюта)`
+      : `На след. уровень: ${itemsInCurrentStep} / 10${breakdownSuffix}`;
+
+  if (effectiveTier === 4) {
+    return {
+      tierNumber: 4,
+      titleRu: 'Жилище Шанталь (Уровень IV) · Сказочный терем и Башня Звездочёта',
+      subtitleRu:
+        'Витражный свод со звёздным телескопом, кристаллы-светильники под балками, полная библиотека хроник и бархатная подушка у камина',
+      imageUrl: DEN_TIER_IMAGES.tier4,
+      unlockedFeaturesRu: [
+        'Вершина домашнего уюта (30+ предметов): максимальная бодрость и уют',
+        'Звёздный телескоп и витраж: +25% шанс найти Королевскую улику',
+        'Полная защита от дорожной стужи: восстановление всегда за 30 Энергии',
+      ],
+      nextUnlockHintRu: `Достигнут максимальный IV уровень жилья! Всего предметов уюта: ${totalDenItems}${breakdownSuffix}.`,
+      totalDenItems,
+      ownedShopDenCount,
+      foundTrophyDenCount,
+      itemsInCurrentStep: 10,
+      itemsTargetPerStep: 10,
+      progressBadgeRu,
+    };
+  }
 
   if (effectiveTier === 3) {
     return {
       tierNumber: 3,
-      titleRu: 'Уровень Домика III · Королевский чертог и Алхимический кабинет',
+      titleRu: 'Жилище Шанталь (Уровень III) · Уютный домик с камином и мастерской',
       subtitleRu:
-        'Стрельчатое окно со звёздной астролябией, резной стол с эликсирами и оберегами, библиотека хроник и тёплый камин',
+        'Тёплый каменный камин, резной стол с эликсирами и оберегами, дубовые полки с диковинками и мягкое кресло',
       imageUrl: DEN_TIER_IMAGES.tier3,
       unlockedFeaturesRu: [
-        'Алхимический стол: крафт оберегов даёт +50% монет и щит от неудач',
-        'Звёздная астролябия: +15% шанс найти Королевскую улику',
-        'Максимальный уют: восстановление после грозы всего за 30 Энергии',
+        'Алхимический уголок: крафт оберегов даёт повышенные монеты и щит',
+        'Снижение штрафа усталости до минимума благодаря тёплому очагу',
       ],
-      nextUnlockHintRu: 'Достигнут максимальный III уровень обустройства Домика!',
+      nextUnlockHintRu: `До Уровня IV («Сказочный терем»): ${itemsInCurrentStep} из 10 предметов этого уровня${breakdownSuffix}`,
+      totalDenItems,
+      ownedShopDenCount,
+      foundTrophyDenCount,
+      itemsInCurrentStep,
+      itemsTargetPerStep: 10,
+      progressBadgeRu,
     };
   }
 
   if (effectiveTier === 2) {
     return {
       tierNumber: 2,
-      titleRu: 'Уровень Домика II · Тёплая лесная гостиная у камина',
+      titleRu: 'Жилище Шанталь (Уровень II) · Тёплая лесная нора с очагом',
       subtitleRu:
-        'Каменный очаг с негасимым фонарём, резная дубовая полка со светящимися шишками, пучки чабреца и кресло с пледом',
+        'Обжитая нора с каменным камельком, негасимым фонарём, резной полкой со светящимися шишками и пучками чабреца',
       imageUrl: DEN_TIER_IMAGES.tier2,
       unlockedFeaturesRu: [
-        'Резная полка трофеев: +5 монет за каждый поход',
+        'Полка трофеев: пассивный бонус к монетам в каждом походе',
         'Каменный очаг и сушёные травы: снижение цены усталости',
       ],
-      nextUnlockHintRu: `Купи ещё ${Math.max(1, 4 - ownedDenItemCount)} предм. уюта в Лавке, чтобы открыть Уровень III (Алхимический кабинет и Обсерваторию)!`,
+      nextUnlockHintRu: `До Уровня III («Уютный домик»): ${itemsInCurrentStep} из 10 предметов этого уровня${breakdownSuffix}`,
+      totalDenItems,
+      ownedShopDenCount,
+      foundTrophyDenCount,
+      itemsInCurrentStep,
+      itemsTargetPerStep: 10,
+      progressBadgeRu,
     };
   }
 
   return {
     tierNumber: 1,
-    titleRu: 'Уровень Домика I · Скромный уголок у камина',
+    titleRu: 'Жилище Шанталь (Уровень I) · Скромный уголок у камина',
     subtitleRu:
       'Первое тёплое гнёздышко с шерстяным пледом, где спасённый лисёнок согрелся после дождя',
     imageUrl: DEN_TIER_IMAGES.tier1,
-    unlockedFeaturesRu: ['Шерстяной плед: -5 Энергии к цене восстановления'],
-    nextUnlockHintRu:
-      'Купи Полку для диковинок или Каменный очаг в Лавке, чтобы преобразить Домик до Уровня II (с новой иллюстрацией интерьера)!',
+    unlockedFeaturesRu: ['Шерстяной плед: -2 Энергии к цене восстановления после ливня'],
+    nextUnlockHintRu: `До Уровня II («Тёплая лесная нора»): ${itemsInCurrentStep} из 10 предметов${breakdownSuffix}`,
+    totalDenItems,
+    ownedShopDenCount,
+    foundTrophyDenCount,
+    itemsInCurrentStep,
+    itemsTargetPerStep: 10,
+    progressBadgeRu,
   };
 }
 
 export const CHANTAL_SHOP_ITEMS: ChantalShopItem[] = [
-  // 1. Одежда и снаряжение (можно прокачивать Tier 1 -> Tier 2 -> Tier 3!)
+  // ============================================================================
+  // ОТДЕЛ 1: СНАРЯЖЕНИЕ В ПОХОД (Одежда, Инструменты, Оружие/Защита и Узелок)
+  // ============================================================================
+  // --- СЛОТ 1: ОДЕЖДА И ЭКИПИРОВКА (loadoutSlotType: 'OUTFIT') ---
   {
     id: 'gear_knitted_scarf',
     titleRu: 'Тёплый вязаный шарф',
+    shortTitleRu: 'Шарф',
+    emoji: '🧣',
     category: 'APPAREL',
-    priceCoins: 35,
-    upgradeCostCoins: 30,
+    loadoutSlotType: 'OUTFIT',
+    priceCoins: 38,
+    upgradeCostCoins: 28,
     maxTier: 3,
-    visualSlotLabelRu: 'На шее: Шерстяной шарф цвета вереска',
-    descriptionRu: 'Мягкий шарф ручной вязки, пахнущий сушёной лавандой и домашним теплом.',
-    gameplayEffectRu: 'Защищает от холодного ветра · снижает шанс простудиться в походе на 15% (+8% за каждый Тир)',
-    preventsMishapBonusPct: 15,
+    maxDurability: 5,
+    refillCostCoins: 10,
+    preventsMishapBonusPct: 35,
+    bonusCoinsPerJourney: 2,
+    visualSlotLabelRu: 'Одежда: Шерстяной шарф цвета вереска',
+    descriptionRu:
+      'Мягкий шарф ручной вязки, пахнущий сушёной лавандой. Согревает на ветреных перевалах и в сырой Туманной лощине.',
+    gameplayEffectRu:
+      'В походе: защищает от ливня и простуды (-35% шанс прийти уставшей или в плохом настроении). Запас ухода: 5 походов (10 М).',
+  },
+  {
+    id: 'gear_leather_jacket',
+    titleRu: 'Походная курточка следопыта',
+    shortTitleRu: 'Курточка',
+    emoji: '🧥',
+    category: 'APPAREL',
+    loadoutSlotType: 'OUTFIT',
+    priceCoins: 46,
+    upgradeCostCoins: 32,
+    maxTier: 3,
+    maxDurability: 5,
+    refillCostCoins: 11,
+    expeditionCoinMultiplierPct: 20,
+    preventsMishapBonusPct: 25,
+    bonusCoinsPerJourney: 4,
+    visualSlotLabelRu: 'Одежда: Лёгкая кожаная курточка с кармашками',
+    descriptionRu:
+      'Удобная замшевая курточка с медными застёжками и множеством потайных карманов для монет и карт.',
+    gameplayEffectRu:
+      'В походе: +20% монет и -25% риск неприятностей в чащах. Запас прочности: 5 походов (11 М).',
   },
   {
     id: 'gear_herb_satchel',
-    titleRu: 'Кожаная сумка следопыта',
+    titleRu: 'Кожаная жилетка-перевязь травника',
+    shortTitleRu: 'Перевязь',
+    emoji: '🎒',
     category: 'APPAREL',
-    priceCoins: 60,
-    upgradeCostCoins: 45,
+    loadoutSlotType: 'OUTFIT',
+    priceCoins: 48,
+    upgradeCostCoins: 32,
     maxTier: 3,
-    visualSlotLabelRu: 'Через плечо: Тиснёная сумка с пряжкой',
-    descriptionRu: 'Лёгкая дорожная сумочка из мягкой кожи с отделениями для трав и диковинок.',
-    gameplayEffectRu: '+6 монет из каждого похода (+4 монеты за каждый Тир улучшения)',
-    preventsMishapBonusPct: 10,
-    bonusCoinsPerJourney: 6,
-  },
-  {
-    id: 'gear_brass_lantern',
-    titleRu: 'Медный путевой фонарь',
-    category: 'APPAREL',
-    priceCoins: 85,
-    upgradeCostCoins: 55,
-    maxTier: 3,
-    visualSlotLabelRu: 'В лапе: Негасимый медный фонарь',
-    descriptionRu: 'Старинный фонарь гномьей работы, освещающий даже самые туманные овраги.',
-    gameplayEffectRu: 'Освещает ночные тропы · снижает риск передряг на 25% (+10% за Тир)',
-    preventsMishapBonusPct: 25,
+    maxDurability: 5,
+    refillCostCoins: 10,
+    expeditionCoinMultiplierPct: 20,
+    denTrophyChanceBonusPct: 15,
+    preventsMishapBonusPct: 15,
+    bonusCoinsPerJourney: 4,
+    visualSlotLabelRu: 'Одежда: Тиснёная перевязь с отделениями',
+    descriptionRu:
+      'Лёгкая дорожная перевязь из мягкой кожи с кармашками для целебных трав, монет и хрупких диковинок.',
+    gameplayEffectRu:
+      'В походе: +20% монет и +15% шанс принести вещь для Домика. Запас прочности: 5 походов (10 М).',
   },
   {
     id: 'gear_emerald_cloak',
-    titleRu: 'Изумрудный плащ с золотым шитьём',
+    titleRu: 'Изумрудный плащ от непогоды',
+    shortTitleRu: 'Плащ',
+    emoji: '🦸',
     category: 'APPAREL',
-    priceCoins: 140,
-    upgradeCostCoins: 75,
+    loadoutSlotType: 'OUTFIT',
+    priceCoins: 85,
+    upgradeCostCoins: 50,
     maxTier: 3,
-    visualSlotLabelRu: 'На плечах: Изумрудный дорожный плащ',
-    descriptionRu: 'Благородный плащ с тонкой золотой вышивкой, удивительно к лицу огненно-рыжей шерсти (и локонам).',
-    gameplayEffectRu: 'Вызывает уважение торговцев · +10 монет за поход и защита от непогоды',
-    preventsMishapBonusPct: 25,
-    bonusCoinsPerJourney: 10,
+    maxDurability: 6,
+    refillCostCoins: 15,
+    denTrophyChanceBonusPct: 15,
+    expeditionCoinMultiplierPct: 25,
+    preventsMishapBonusPct: 30,
+    bonusCoinsPerJourney: 6,
+    visualSlotLabelRu: 'Одежда: Изумрудный дорожный плащ',
+    descriptionRu:
+      'Плотный непромокаемый плащ с золотым шитьём — защищает от горных бурь и вызывает уважение у лесных купцов.',
+    gameplayEffectRu:
+      'В походе: +25% монет, -30% риск долгов и +15% шанс редкого предмета в дом. Запас прочности: 6 походов (15 М).',
   },
 
-  // 2. Обустройство домика (открывает новые иллюстрации Домика Уровня II и III!)
+  // --- СЛОТ 2: ИНСТРУМЕНТЫ И НАВИГАЦИЯ (loadoutSlotType: 'TOOL') ---
+  {
+    id: 'gear_brass_lantern',
+    titleRu: 'Масляный путевой фонарь',
+    shortTitleRu: 'Фонарь',
+    emoji: '🏮',
+    category: 'APPAREL',
+    loadoutSlotType: 'TOOL',
+    priceCoins: 55,
+    upgradeCostCoins: 35,
+    maxTier: 3,
+    maxDurability: 5,
+    refillCostCoins: 12,
+    denTrophyChanceBonusPct: 25,
+    preventsMishapBonusPct: 25,
+    bonusCoinsPerJourney: 3,
+    visualSlotLabelRu: 'Инструмент: Негасимый медный фонарь',
+    descriptionRu:
+      'Старинный фонарь гномьей работы. Позволяет Шанталь заглядывать в тёмные чердаки мельницы, пещеры и ночные чащи.',
+    gameplayEffectRu:
+      'В походе: +25% шанс найти уникальный предмет интерьера для Домика (+1 к X/10) и -25% риск передряг в темноте. Запас масла: 5 походов (12 М).',
+  },
+  {
+    id: 'gear_ancient_compass',
+    titleRu: 'Старинный латунный компас',
+    shortTitleRu: 'Компас',
+    emoji: '🧭',
+    category: 'APPAREL',
+    loadoutSlotType: 'TOOL',
+    priceCoins: 52,
+    upgradeCostCoins: 35,
+    maxTier: 3,
+    maxDurability: 5,
+    refillCostCoins: 12,
+    expeditionCoinMultiplierPct: 30,
+    preventsMishapBonusPct: 15,
+    bonusCoinsPerJourney: 4,
+    visualSlotLabelRu: 'Инструмент: Точный компас звездочёта',
+    descriptionRu:
+      'Чуткая магнитная стрелка помогает Шанталь находить короткие звериные тропы и купеческие тайники с монетами.',
+    gameplayEffectRu:
+      'В походе: +30% к монетам из путешествия. Запас калибровки: 5 походов (12 М).',
+  },
+  {
+    id: 'gear_lockpick_trowel',
+    titleRu: 'Связка отмычек и лопатка следопыта',
+    shortTitleRu: 'Отмычки',
+    emoji: '🗝️',
+    category: 'APPAREL',
+    loadoutSlotType: 'TOOL',
+    priceCoins: 64,
+    upgradeCostCoins: 40,
+    maxTier: 3,
+    maxDurability: 5,
+    refillCostCoins: 14,
+    denTrophyChanceBonusPct: 20,
+    expeditionCoinMultiplierPct: 15,
+    bonusCoinsPerJourney: 4,
+    visualSlotLabelRu: 'Инструмент: Отмычки искателя кладов',
+    descriptionRu:
+      'Тонкие серебряные отмычки и лёгкая сапёрная лопатка. Если в истории попадётся запертая шкатулка или клад под корнями, Шанталь вскроет его прямо в сюжете!',
+    gameplayEffectRu:
+      'В походе: открывает запертые ларцы (+20% шанс найти предмет для Домика +1/10 и +15% монет). Запас прочности: 5 походов (14 М).',
+  },
+
+  // --- СЛОТ 3: ОРУЖИЕ И САМОЗАЩИТА В ПУТИ (loadoutSlotType: 'WEAPON') ---
+  {
+    id: 'weapon_poison_apple',
+    titleRu: 'Ядовитое сонное яблоко в карамели',
+    shortTitleRu: 'Сон-яблоко',
+    emoji: '🍎',
+    category: 'APPAREL',
+    loadoutSlotType: 'WEAPON',
+    priceCoins: 28,
+    upgradeCostCoins: 22,
+    maxTier: 3,
+    maxDurability: 4,
+    refillCostCoins: 8,
+    preventsMishapBonusPct: 35,
+    denTrophyChanceBonusPct: 20,
+    bonusCoinsPerJourney: 3,
+    visualSlotLabelRu: 'Защита: Сонное яблоко-приманка',
+    descriptionRu:
+      'Аппетитное на вид яблочко с сонным соком мака. Если на лесной тропе попадётся жадный тролль, стражник или разбойник — он тут же уснёт, оставив сундук без присмотра!',
+    gameplayEffectRu:
+      'В походе: +35% защита от засад и долгов, +20% шанс унести трофей из чужого тайника. Запас: 4 похода (8 М).',
+  },
+  {
+    id: 'weapon_sleep_darts',
+    titleRu: 'Духовая трубка с сонными дротиками',
+    shortTitleRu: 'Дротики',
+    emoji: '🎯',
+    category: 'APPAREL',
+    loadoutSlotType: 'WEAPON',
+    priceCoins: 36,
+    upgradeCostCoins: 26,
+    maxTier: 3,
+    maxDurability: 5,
+    refillCostCoins: 9,
+    preventsMishapBonusPct: 40,
+    expeditionCoinMultiplierPct: 15,
+    bonusCoinsPerJourney: 4,
+    visualSlotLabelRu: 'Оружие: Бесшумные сонные дротики',
+    descriptionRu:
+      'Лёгкая тростниковая трубка с дротиками, пропитанными сонной пыльцой. Позволяет Шанталь бесшумно защитить себя в самой опасной чаще.',
+    gameplayEffectRu:
+      'В походе: +40% защита от любых врагов и неприятностей, +15% к добыче монет. Запас дротиков: 5 походов (9 М).',
+  },
+  {
+    id: 'weapon_thorn_sling',
+    titleRu: 'Ореховая праща с шипами шиповника',
+    shortTitleRu: 'Праща',
+    emoji: '🏹',
+    category: 'APPAREL',
+    loadoutSlotType: 'WEAPON',
+    priceCoins: 32,
+    upgradeCostCoins: 24,
+    maxTier: 3,
+    maxDurability: 5,
+    refillCostCoins: 8,
+    preventsMishapBonusPct: 30,
+    expeditionCoinMultiplierPct: 20,
+    bonusCoinsPerJourney: 4,
+    visualSlotLabelRu: 'Оружие: Меткая лесная праща',
+    descriptionRu:
+      'Упругая праща, из которой Шанталь без промаха сбивает высоко висящие кошельки, замки и отпугивает наглых ворон.',
+    gameplayEffectRu:
+      'В походе: +30% защита в пути и +20% монет из труднодоступных тайников. Запас снарядов: 5 походов (8 М).',
+  },
+  {
+    id: 'weapon_smoke_acorn',
+    titleRu: 'Дымовые жёлуди алхимика',
+    shortTitleRu: 'Дым-жёлудь',
+    emoji: '💨',
+    category: 'APPAREL',
+    loadoutSlotType: 'WEAPON',
+    priceCoins: 24,
+    upgradeCostCoins: 20,
+    maxTier: 3,
+    maxDurability: 4,
+    refillCostCoins: 7,
+    preventsMishapBonusPct: 45,
+    bonusCoinsPerJourney: 3,
+    visualSlotLabelRu: 'Защита: Алхимическая дымовая завеса',
+    descriptionRu:
+      'При броске под лапки создаёт густое облако душистого серебристого тумана, позволяя мгновенно ускользнуть от любой опасности.',
+    gameplayEffectRu:
+      'В походе: +45% защита от засад и погони, оберегает от усталости. Запас: 4 похода (7 М).',
+  },
+
+  // --- СЛОТ 4: УЗЕЛОК С ПРИПАСАМИ (loadoutSlotType: 'BUNDLE') ---
+  {
+    id: 'supply_honey_pie',
+    titleRu: 'Горячий пирожок с ежевикой',
+    shortTitleRu: 'Пирожок',
+    emoji: '🥧',
+    category: 'CONSUMABLE',
+    loadoutSlotType: 'BUNDLE',
+    priceCoins: 14,
+    canPackInBackpack: true,
+    backpackEffectRu:
+      'В узелке: 100% защита от усталости (45 Эн.) и +10% к монетам!',
+    visualSlotLabelRu: 'Узелок в поход или угощение дома',
+    descriptionRu:
+      'Душистая выпечка с медовой корочкой. Можно скормить Шанталь дома ИЛИ положить ей в узелок перед выходом в поход!',
+    gameplayEffectRu:
+      'Дома: 100% настроение и +5 Энергии. В походе: защищает от истощения и радует встречных зверьков в сюжете.',
+    instantAction: 'BOOST_MOOD',
+  },
+  {
+    id: 'supply_herbal_balm',
+    titleRu: 'Горшочек лесного мёда и бальзам',
+    shortTitleRu: 'Мёд-бальзам',
+    emoji: '🍯',
+    category: 'CONSUMABLE',
+    loadoutSlotType: 'BUNDLE',
+    priceCoins: 18,
+    canPackInBackpack: true,
+    denTrophyChanceBonusPct: 35,
+    backpackEffectRu:
+      'В узелке: обмен с лесными жителями на предмет для Домика (+35% шанс +1 к X/10)!',
+    visualSlotLabelRu: 'Снятие усталости дома или обмен в походе',
+    descriptionRu:
+      'Ароматный вересковый мёд с травами Брамбла. Дома снимает усталость, а в походе служит лучшей валютой для обмена с барсуком, ежом или гномом!',
+    gameplayEffectRu:
+      'Дома: снимает штраф «45 Энергии». В походе: +35% шанс выменять редкий предмет интерьера для Домика (+1 к уровню жилья).',
+    instantAction: 'HEAL_EXHAUSTION',
+  },
+  {
+    id: 'supply_shiny_buttons',
+    titleRu: 'Горсть блестящих пуговиц для обмена',
+    shortTitleRu: 'Пуговицы',
+    emoji: '🪙',
+    category: 'CONSUMABLE',
+    loadoutSlotType: 'BUNDLE',
+    priceCoins: 12,
+    canPackInBackpack: true,
+    expeditionCoinMultiplierPct: 35,
+    denTrophyChanceBonusPct: 20,
+    backpackEffectRu:
+      'В узелке: ворон Корвус и белка Тилли дадут за них +35% монет и редкие находки!',
+    visualSlotLabelRu: 'Походный узелок для лесного обмена',
+    descriptionRu:
+      'Мешочек переливающихся перламутровых и латунных пуговиц — любимое сокровище ворона Корвуса и белки-менялы Тилли.',
+    gameplayEffectRu:
+      'Кладётся в узелок перед походом: в сюжете Шанталь выгодно выменяет пуговицы на полную горсть монет (+35%) или вещицу в дом!',
+    instantAction: 'PACK_PROVISION',
+  },
+
+  // ============================================================================
+  // ОТДЕЛ 2: УЮТ В ДОМИК — 30 ПРЕДМЕТОВ ПО 3 СТУПЕНЯМ (10 предм. = +1 Уровень жилья!)
+  // Математика: 1 сессия ~18-20 М, 3 сессии (1 день) ~55-60 М = 1 предмет в день!
+  // ============================================================================
+
+  // --- СТУПЕНЬ I: Первые 10 предметов (Переход с Уровня I на Уровень II · 35–68 Монет) ---
   {
     id: 'den_heather_blanket',
     titleRu: 'Плед из овечьей шерсти',
+    shortTitleRu: 'Плед',
+    emoji: '🛋️',
     category: 'DEN_COMFORT',
+    denStep: 1,
+    priceCoins: 35,
+    upgradeCostCoins: 25,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень I · Уголок у огня',
+    descriptionRu: 'Тёплое гнёздышко у самого камина, где так сладко дремать после долгой дороги.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · Снижает усталость на 2 Энергии',
+    reducesExhaustionCostBy: 2,
+  },
+  {
+    id: 'den_moss_bedding',
+    titleRu: 'Подстилка из вереска и мха',
+    shortTitleRu: 'Подстилка',
+    emoji: '🌿',
+    category: 'DEN_COMFORT',
+    denStep: 1,
+    priceCoins: 38,
+    upgradeCostCoins: 25,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень I · Лесная лежанка',
+    descriptionRu: 'Пружинистая душистая перина из сухого лесного мха и цветущего вереска.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +1 монета за каждый поход',
+    bonusCoinsPerJourney: 1,
+  },
+  {
+    id: 'den_clay_mug',
+    titleRu: 'Глиняная кружка с ежевичной глазурью',
+    shortTitleRu: 'Кружка',
+    emoji: '☕',
+    category: 'DEN_COMFORT',
+    denStep: 1,
     priceCoins: 40,
+    upgradeCostCoins: 25,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень I · На низком столике',
+    descriptionRu: 'Тёплая кружка работы гнома Торвина для вечернего молока с мёдом.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +1 монета за поход',
+    bonusCoinsPerJourney: 1,
+  },
+  {
+    id: 'den_lavender_bundle',
+    titleRu: 'Пучок сушёной лаванды и чабреца',
+    shortTitleRu: 'Лаванда',
+    emoji: '🌸',
+    category: 'DEN_COMFORT',
+    denStep: 1,
+    priceCoins: 42,
+    upgradeCostCoins: 28,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень I · Под балкой потолка',
+    descriptionRu: 'Душистые травы наполняют нору умиротворяющим ароматом летнего луга.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · Снижает усталость на 1 Энергию',
+    reducesExhaustionCostBy: 1,
+  },
+  {
+    id: 'den_birch_firewood',
+    titleRu: 'Поленница сухих берёзовых дров',
+    shortTitleRu: 'Дрова',
+    emoji: '🪵',
+    category: 'DEN_COMFORT',
+    denStep: 1,
+    priceCoins: 45,
+    upgradeCostCoins: 28,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень I · У правой стены',
+    descriptionRu: 'Аккуратно сложенные поленья с белой берестой, весело трещащие в огне.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +1 монета за поход',
+    bonusCoinsPerJourney: 1,
+  },
+  {
+    id: 'den_wind_curtain',
+    titleRu: 'Плотная занавеска от сквозняков',
+    shortTitleRu: 'Занавеска',
+    emoji: '🧶',
+    category: 'DEN_COMFORT',
+    denStep: 1,
+    priceCoins: 48,
     upgradeCostCoins: 30,
     maxTier: 3,
-    visualSlotLabelRu: 'В уголке: Мягкий клетчатый плед',
-    descriptionRu: 'Тёплое гнёздышко у самого камина, где так сладко дремать после долгой дороги.',
-    gameplayEffectRu: 'Снижает затраты на восстановление после тяжёлого похода на 5 Энергии',
-    reducesExhaustionCostBy: 5,
+    visualSlotLabelRu: 'Ступень I · На входной двери',
+    descriptionRu: 'Тяжёлая суконная портьера с вышитым листом дуба не пускает ночной холод в дом.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · Снижает усталость на 2 Энергии',
+    reducesExhaustionCostBy: 2,
+  },
+  {
+    id: 'den_acorn_chimes',
+    titleRu: 'Лесной колокольчик из желудей',
+    shortTitleRu: 'Колокольчик',
+    emoji: '🔔',
+    category: 'DEN_COMFORT',
+    denStep: 1,
+    priceCoins: 50,
+    upgradeCostCoins: 30,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень I · Над крыльцом',
+    descriptionRu: 'Мелодично звенит на ветру, возвещая о возвращении Шанталь из похода.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +1 монета за поход',
+    bonusCoinsPerJourney: 1,
+  },
+  {
+    id: 'den_iron_kettle',
+    titleRu: 'Чугунный котелок на треноге',
+    shortTitleRu: 'Котелок',
+    emoji: '🫖',
+    category: 'DEN_COMFORT',
+    denStep: 1,
+    priceCoins: 55,
+    upgradeCostCoins: 35,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень I · Над углями',
+    descriptionRu: 'В нём всегда булькает согревающий взвар из лесных ягод и кореньев.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · Снижает усталость на 2 Энергии',
+    reducesExhaustionCostBy: 2,
+  },
+  {
+    id: 'den_supply_chest',
+    titleRu: 'Дубовый сундучок для припасов',
+    shortTitleRu: 'Сундучок',
+    emoji: '📦',
+    category: 'DEN_COMFORT',
+    denStep: 1,
+    priceCoins: 62,
+    upgradeCostCoins: 38,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень I · В кладовом углу',
+    descriptionRu: 'Крепкий ларец с коваными уголками, куда мыши не проберутся за сухарями.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +2 монеты за поход',
+    bonusCoinsPerJourney: 2,
+  },
+  {
+    id: 'den_porch_lantern',
+    titleRu: 'Ветровой фонарь у калитки',
+    shortTitleRu: 'Фонарь дома',
+    emoji: '🕯️',
+    category: 'DEN_COMFORT',
+    denStep: 1,
+    priceCoins: 68,
+    upgradeCostCoins: 40,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень I · У садовой дорожки',
+    descriptionRu: 'Тёплый янтарный огонёк служит маяком для Шанталь в самые туманные сумерки.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +2 монеты за поход',
+    bonusCoinsPerJourney: 2,
+  },
+
+  // --- СТУПЕНЬ II: Предметы 11–20 (Переход с Уровня II на Уровень III · 50–88 Монет) ---
+  {
+    id: 'den_woven_rug',
+    titleRu: 'Домотканый половик у очага',
+    shortTitleRu: 'Половик',
+    emoji: '🧶',
+    category: 'DEN_COMFORT',
+    denStep: 2,
+    priceCoins: 50,
+    upgradeCostCoins: 35,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень II · На деревянном полу',
+    descriptionRu: 'Пестрый узорчатый коврик, на котором Шанталь обожает катать светящиеся шишки.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +1 монета за поход',
+    bonusCoinsPerJourney: 1,
+  },
+  {
+    id: 'den_herb_rack',
+    titleRu: 'Сушилка для трав над камином',
+    shortTitleRu: 'Сушилка трав',
+    emoji: '🌿',
+    category: 'DEN_COMFORT',
+    denStep: 2,
+    priceCoins: 55,
+    upgradeCostCoins: 35,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень II · Над каминной полкой',
+    descriptionRu: 'Резная жердочка с пучками зверобоя, мяты и лунного вереска.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · Снижает усталость на 2 Энергии',
+    reducesExhaustionCostBy: 2,
   },
   {
     id: 'den_curiosity_shelf',
     titleRu: 'Дубовая полка для диковинок',
+    shortTitleRu: 'Полка',
+    emoji: '🪵',
     category: 'DEN_COMFORT',
+    denStep: 2,
+    priceCoins: 58,
+    upgradeCostCoins: 40,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень II · На центральной стене',
+    descriptionRu: 'Фигурная полка из морёного дуба для выставки лесных трофеев и редких камней.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +2 монеты за поход',
+    bonusCoinsPerJourney: 2,
+  },
+  {
+    id: 'den_rocking_chair',
+    titleRu: 'Плетёное кресло-качалка',
+    shortTitleRu: 'Кресло',
+    emoji: '🪑',
+    category: 'DEN_COMFORT',
+    denStep: 2,
     priceCoins: 65,
+    upgradeCostCoins: 42,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень II · У правого края камина',
+    descriptionRu: 'Уютное кресло из гибкой ивовой лозы, где так приятно слушать вечерние рассказы Шанталь.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +2 монеты за поход',
+    bonusCoinsPerJourney: 2,
+  },
+  {
+    id: 'den_copper_samovar',
+    titleRu: 'Пузатый медный чайник',
+    shortTitleRu: 'Чайник',
+    emoji: '⚱️',
+    category: 'DEN_COMFORT',
+    denStep: 2,
+    priceCoins: 68,
+    upgradeCostCoins: 42,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень II · На чайном столике',
+    descriptionRu: 'Начищенный до зеркального блеска медный чайник, пускающий ароматные колечки пара.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · Снижает усталость на 2 Энергии',
+    reducesExhaustionCostBy: 2,
+  },
+  {
+    id: 'den_patchwork_quilt',
+    titleRu: 'Лоскутное одеяло мельничихи',
+    shortTitleRu: 'Одеяло',
+    emoji: '🛌',
+    category: 'DEN_COMFORT',
+    denStep: 2,
+    priceCoins: 72,
     upgradeCostCoins: 45,
     maxTier: 3,
-    visualSlotLabelRu: 'На стене: Резная полка с трофеями',
-    descriptionRu: 'Фигурная полка из морёного дуба, где Шанталь раскладывает светящиеся шишки и реликвии (открывает интерьер Домика II).',
-    gameplayEffectRu: 'Повышает уют Домика · +5 бонусных монет за каждый поход (+4 за Тир)',
-    bonusCoinsPerJourney: 5,
+    visualSlotLabelRu: 'Ступень II · На спальной тахте',
+    descriptionRu: 'Тёплое стёганое одеяло из бархатных и льняных лоскутков, сшитое мельничихой Мартой.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +2 монеты за поход',
+    bonusCoinsPerJourney: 2,
+  },
+  {
+    id: 'den_oak_table',
+    titleRu: 'Круглый дубовый столик для карт',
+    shortTitleRu: 'Столик',
+    emoji: '🪑',
+    category: 'DEN_COMFORT',
+    denStep: 2,
+    priceCoins: 75,
+    upgradeCostCoins: 45,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень II · Посреди гостиной',
+    descriptionRu: 'Основательный стол, на котором вы с Шанталь раскладываете карты лесных маршрутов.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +2 монеты за поход',
+    bonusCoinsPerJourney: 2,
   },
   {
     id: 'den_stone_hearth',
-    titleRu: 'Каменный очаг с медным котелком',
+    titleRu: 'Каменный очаг с кованой решёткой',
+    shortTitleRu: 'Очаг',
+    emoji: '🔥',
     category: 'DEN_COMFORT',
-    priceCoins: 95,
+    denStep: 2,
+    priceCoins: 78,
+    upgradeCostCoins: 48,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень II · Сердце дома',
+    descriptionRu: 'Настоящий сложенный из речного камня камин с узорчатой решёткой.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · Снижает усталость на 3 Энергии',
+    reducesExhaustionCostBy: 3,
+  },
+  {
+    id: 'den_wall_clock',
+    titleRu: 'Ходики с резной совой',
+    shortTitleRu: 'Ходики',
+    emoji: '🕰️',
+    category: 'DEN_COMFORT',
+    denStep: 2,
+    priceCoins: 82,
+    upgradeCostCoins: 50,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень II · В простенке у окна',
+    descriptionRu: 'Старинные часы с латунными гирьками на цепочках мерно отсчитывают минуты до возвращения.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +2 монеты за поход',
+    bonusCoinsPerJourney: 2,
+  },
+  {
+    id: 'den_book_nook',
+    titleRu: 'Книжный шкафчик со сказками',
+    shortTitleRu: 'Книжный шкаф',
+    emoji: '📚',
+    category: 'DEN_COMFORT',
+    denStep: 2,
+    priceCoins: 88,
+    upgradeCostCoins: 52,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень II · Домашняя библиотека',
+    descriptionRu: 'Стеллаж с кожаными фолиантами, гербариями и летописью ваших приключений.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +3 монеты за поход',
+    bonusCoinsPerJourney: 3,
+  },
+
+  // --- СТУПЕНЬ III: Предметы 21–30 (Переход с Уровня III на Уровень IV «Сказочный терем» · 80–115 Монет) ---
+  {
+    id: 'den_velvet_cushion',
+    titleRu: 'Изумрудная бархатная подушка с кистями',
+    shortTitleRu: 'Подушка',
+    emoji: '💎',
+    category: 'DEN_COMFORT',
+    denStep: 3,
+    priceCoins: 80,
+    upgradeCostCoins: 50,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень III · На ковре у камина',
+    descriptionRu: 'Роскошная подушка изумрудного бархата с золотыми кистями — любимое королевское место Шанталь.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +2 монеты за поход',
+    bonusCoinsPerJourney: 2,
+  },
+  {
+    id: 'den_music_box',
+    titleRu: 'Заводная музыкальная шкатулка',
+    shortTitleRu: 'Музыкальная шкатулка',
+    emoji: '🎶',
+    category: 'DEN_COMFORT',
+    denStep: 3,
+    priceCoins: 85,
+    upgradeCostCoins: 52,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень III · На каминной полке',
+    descriptionRu: 'Серебряный валик наигрывает забытую колыбельную северного королевского дома.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +2 монеты за поход',
+    bonusCoinsPerJourney: 2,
+  },
+  {
+    id: 'den_crystal_chandeliers',
+    titleRu: 'Подвесные кристаллы-светильники',
+    shortTitleRu: 'Кристаллы',
+    emoji: '🔮',
+    category: 'DEN_COMFORT',
+    denStep: 3,
+    priceCoins: 92,
     upgradeCostCoins: 55,
     maxTier: 3,
-    visualSlotLabelRu: 'В центре дома: Живой тёплый камелёк',
-    descriptionRu: 'Потрескивающие берёзовые дрова и связки душистых трав над камином (часть интерьера Домика II).',
-    gameplayEffectRu: 'Снижает штраф усталости ещё на 5 Энергии (восстановление за 35 вместо 45)',
-    reducesExhaustionCostBy: 5,
+    visualSlotLabelRu: 'Ступень III · Под сводом крыши',
+    descriptionRu: 'Парящие на кованых цепях кристаллы и сферы, заливающие терем мягким золотисто-голубым сиянием.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +3 монеты за поход',
+    bonusCoinsPerJourney: 3,
   },
   {
     id: 'den_alchemy_table',
     titleRu: 'Дубовый алхимический стол',
+    shortTitleRu: 'Стол алхимии',
+    emoji: '⚗️',
     category: 'DEN_COMFORT',
-    priceCoins: 115,
+    denStep: 3,
+    priceCoins: 95,
+    upgradeCostCoins: 58,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень III · Мастерская оберегов',
+    descriptionRu: 'Резной стол со склянками, ступкой и пергаментами для создания мощных дорожных талисманов.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · Крафт оберега даёт +75% монет',
+    reducesExhaustionCostBy: 3,
+    bonusCoinsPerJourney: 3,
+  },
+  {
+    id: 'den_map_tapestry',
+    titleRu: 'Гобелен королевских рубежей',
+    shortTitleRu: 'Гобелен-карта',
+    emoji: '🗺️',
+    category: 'DEN_COMFORT',
+    denStep: 3,
+    priceCoins: 98,
+    upgradeCostCoins: 60,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень III · На каменной кладке',
+    descriptionRu: 'Вышитая золотой нитью старинная карта перевалов и забытых твердынь.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +3 монеты за поход',
+    bonusCoinsPerJourney: 3,
+  },
+  {
+    id: 'den_royal_casket_stand',
+    titleRu: 'Резной постамент для шкатулки улик',
+    shortTitleRu: 'Постамент',
+    emoji: '👑',
+    category: 'DEN_COMFORT',
+    denStep: 3,
+    priceCoins: 102,
+    upgradeCostCoins: 62,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень III · Почётное место реликвий',
+    descriptionRu: 'Высокая резная тумба с бархатной подушечкой для хранения королевских печатей и медальонов.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +3 монеты за поход',
+    bonusCoinsPerJourney: 3,
+  },
+  {
+    id: 'den_stained_window',
+    titleRu: 'Стрельчатый витраж «Звёздная ночь»',
+    shortTitleRu: 'Витраж',
+    emoji: '🪟',
+    category: 'DEN_COMFORT',
+    denStep: 3,
+    priceCoins: 105,
     upgradeCostCoins: 65,
     maxTier: 3,
-    visualSlotLabelRu: 'У окна: Резной стол алхимии и оберегов',
-    descriptionRu: 'Мастерская со склянками, ступкой и пергаментами для создания дорожных талисманов (открывает интерьер Домика III).',
-    gameplayEffectRu: 'Усиливает домашний крафт оберегов и снижает усталость ещё на 5 Энергии',
-    reducesExhaustionCostBy: 5,
-    bonusCoinsPerJourney: 6,
+    visualSlotLabelRu: 'Ступень III · Сводчатое окно',
+    descriptionRu: 'Цветное стекло с изображением полной луны и созвездий играет радужными бликами на полу.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +3 монеты за поход',
+    bonusCoinsPerJourney: 3,
+  },
+  {
+    id: 'den_alchemist_library',
+    titleRu: 'Сводчатый стеллаж манускриптов',
+    shortTitleRu: 'Архив свитков',
+    emoji: '📜',
+    category: 'DEN_COMFORT',
+    denStep: 3,
+    priceCoins: 108,
+    upgradeCostCoins: 65,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень III · Угловая галерея',
+    descriptionRu: 'Высокие полки до самого потолка со светящимися эликсирами и древними хрониками.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +3 монеты за поход',
+    bonusCoinsPerJourney: 3,
   },
   {
     id: 'den_star_astrolabe',
-    titleRu: 'Латунная звёздная астролябия',
+    titleRu: 'Латунный телескоп и астролябия',
+    shortTitleRu: 'Телескоп',
+    emoji: '🔭',
     category: 'DEN_COMFORT',
-    priceCoins: 135,
+    denStep: 3,
+    priceCoins: 110,
+    upgradeCostCoins: 70,
+    maxTier: 3,
+    visualSlotLabelRu: 'Ступень III · У витражного окна',
+    descriptionRu: 'Большой астрономический телескоп на треноге для наблюдения за магическими созвездиями.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +4 монеты за поход и шанс улики',
+    bonusCoinsPerJourney: 4,
+  },
+  {
+    id: 'den_guardian_gramophone',
+    titleRu: 'Старинный медный граммофон',
+    shortTitleRu: 'Граммофон',
+    emoji: '🎺',
+    category: 'DEN_COMFORT',
+    denStep: 3,
+    priceCoins: 115,
     upgradeCostCoins: 75,
     maxTier: 3,
-    visualSlotLabelRu: 'У сводчатого окна: Королевская астролябия',
-    descriptionRu: 'Тонкий астрономический прибор у стрельчатого окна с видом на звёздный лес (вершина интерьера Домика III).',
-    gameplayEffectRu: '+8 монет за поход и повышенный шанс найти Королевскую улику',
-    bonusCoinsPerJourney: 8,
-  },
-
-  // 3. Расходники и быстрые решения
-  {
-    id: 'supply_herbal_balm',
-    titleRu: 'Тёплый медово-травяной бальзам',
-    category: 'CONSUMABLE',
-    priceCoins: 20,
-    visualSlotLabelRu: 'Сразу снимает усталость',
-    descriptionRu: 'Душистый отвар старого барсука Брамбла. Мгновенно возвращает бодрость продрогшему путнику.',
-    gameplayEffectRu: 'Мгновенно снимает штраф «45 Энергии» и возвращает обычную цену похода (30 Энергии)',
-    instantAction: 'HEAL_EXHAUSTION',
-  },
-  {
-    id: 'supply_honey_pie',
-    titleRu: 'Сладкий ежевичный пирог',
-    category: 'CONSUMABLE',
-    priceCoins: 15,
-    visualSlotLabelRu: 'Угощение для настроения',
-    descriptionRu: 'Свежая выпечка с медовой корочкой с мельничной ярмарки.',
-    gameplayEffectRu: 'Мгновенно поднимает настроение Шанталь до 100% и даёт +5 Энергии бодрости',
-    instantAction: 'BOOST_MOOD',
+    visualSlotLabelRu: 'Ступень III · Вечерний салон',
+    descriptionRu: 'Редчайший механизм с раструбом в форме золотого цветка, наполняющий дом тёплым звучанием лютни.',
+    gameplayEffectRu: '+1 к уровню жилья (X/10) · +4 монеты за поход',
+    bonusCoinsPerJourney: 4,
   },
 ];
+
+export function getShopItemEmoji(item: ChantalShopItem): string {
+  return item.emoji || '🕯️';
+}
+
+export function getShopItemShortTitle(item: ChantalShopItem): string {
+  return item.shortTitleRu || item.titleRu.split(' ')[0];
+}
+
+export function getShopItemCategoryLabelRu(category: ShopCategory): string {
+  if (category === 'APPAREL') return '🎒 Снаряжение в поход';
+  if (category === 'DEN_COMFORT') return '🏠 Уют в Домик (+1 к X/10)';
+  return '🥧 Припас в узелок / Домой';
+}
+
+export function getShopItemProperties(
+  item: ChantalShopItem,
+  currentTier: number,
+  remainingDurability?: number
+): LootItemPropertyDescriptor[] {
+  const effectiveTier = Math.max(1, currentTier || 1);
+  if (item.category === 'APPAREL') {
+    const mishapPct = (item.preventsMishapBonusPct ?? 10) + (effectiveTier - 1) * 8;
+    const coinMultPct = (item.expeditionCoinMultiplierPct ?? 0) + (effectiveTier - 1) * 5;
+    const trophyChancePct = item.denTrophyChanceBonusPct ?? 0;
+    const maxDur = item.maxDurability ?? 5;
+    const remDur = remainingDurability ?? maxDur;
+    return [
+      {
+        id: 'shop_prop_slot',
+        shortTitleRu: 'Свойство I · В поход',
+        statTagRu:
+          trophyChancePct > 0
+            ? `+${trophyChancePct}% шанс вещи в Дом`
+            : coinMultPct > 0
+            ? `+${coinMultPct}% монет в пути`
+            : `Защита от непогоды`,
+        popupTitleRu: 'Полезность при сборе в поход',
+        popupDescriptionRu: `Когда вы берёте «${item.titleRu}» с собой в поход, ИИ-рассказчик вплетает этот предмет в сюжет истории! ${item.gameplayEffectRu}`,
+        accentColorHex: '#38BDF8',
+      },
+      {
+        id: 'shop_prop_protection',
+        shortTitleRu: 'Свойство II · Надёжность',
+        statTagRu: `-${mishapPct}% передряг · Заряд ${remDur}/${maxDur}`,
+        popupTitleRu: 'Защита в дороге и запас прочности',
+        popupDescriptionRu: `Снижает вероятность попасть под ливень или в долг на ${mishapPct}%. Одного заряда хватает на ${maxDur} походов, после чего предмет можно легко заправить/починить за ${item.refillCostCoins ?? 12} Монет.`,
+        accentColorHex: '#10B981',
+      },
+      {
+        id: 'shop_prop_income',
+        shortTitleRu: 'Свойство III · Мастерство',
+        statTagRu: `Тир ${effectiveTier}/${item.maxTier ?? 3}`,
+        popupTitleRu: 'Улучшение снаряжения (Тир 1 → 3)',
+        popupDescriptionRu:
+          'Прокачка Тира усиливает защиту, доход монет и восстанавливает полный запас прочности снаряжения.',
+        accentColorHex: '#F59E0B',
+      },
+    ];
+  }
+
+  if (item.category === 'DEN_COMFORT') {
+    const energySave = item.reducesExhaustionCostBy ?? 0;
+    const bonusCoins = (item.bonusCoinsPerJourney ?? 1) + (effectiveTier - 1) * 1;
+    return [
+      {
+        id: 'shop_prop_den_tier',
+        shortTitleRu: 'Свойство I · Счётчик жилья',
+        statTagRu: '+1 из 10 к Уровню Домика',
+        popupTitleRu: `${item.visualSlotLabelRu} (+1 к X/10)`,
+        popupDescriptionRu:
+          'Каждые 10 предметов уюта (купленных в лавке или принесённых Шанталь из походов) повышают Уровень жилья и открывают новую картину Домика (I → II → III → IV)!',
+        accentColorHex: '#10B981',
+      },
+      {
+        id: 'shop_prop_den_effect',
+        shortTitleRu: 'Свойство II · Бонус дома',
+        statTagRu:
+          energySave > 0
+            ? `-${energySave} Эн. усталости`
+            : `+${bonusCoins} М / поход`,
+        popupTitleRu: 'Постоянный эффект уюта',
+        popupDescriptionRu: item.gameplayEffectRu,
+        accentColorHex: '#F59E0B',
+      },
+      {
+        id: 'shop_prop_den_upgrade',
+        shortTitleRu: 'Свойство III · Тир уюта',
+        statTagRu: `Тир ${effectiveTier}/${item.maxTier ?? 3}`,
+        popupTitleRu: 'Улучшение предмета интерьера',
+        popupDescriptionRu:
+          'Повышение Тира увеличивает ежедневный пассивный бонус монет от обустроенного дома.',
+        accentColorHex: '#A855F7',
+      },
+    ];
+  }
+
+  return [
+    {
+      id: 'shop_prop_instant',
+      shortTitleRu: 'Свойство I · В узелок в поход',
+      statTagRu: item.denTrophyChanceBonusPct
+        ? `+${item.denTrophyChanceBonusPct}% шанс вещи в Дом`
+        : item.expeditionCoinMultiplierPct
+        ? `+${item.expeditionCoinMultiplierPct}% монет обмена`
+        : 'Щит от усталости в пути',
+      popupTitleRu: 'Зачем брать с собой в поход',
+      popupDescriptionRu:
+        item.backpackEffectRu ||
+        'Можно положить Шанталь в узелок перед походом — она использует гостинец в пути или обменяет его у жителей леса!',
+      accentColorHex: '#38BDF8',
+    },
+    {
+      id: 'shop_prop_reusable',
+      shortTitleRu: 'Свойство II · Дома у камина',
+      statTagRu: `${item.priceCoins} Монет`,
+      popupTitleRu: 'Применение дома или в дороге',
+      popupDescriptionRu: item.gameplayEffectRu,
+      accentColorHex: '#10B981',
+    },
+  ];
+}
+
+export function getMerchantOfferEmoji(offer: TravelingMerchantOffer): string {
+  if (offer.rewardType === 'DEN_TROPHY_CRATE') return '🏮';
+  if (offer.rewardType === 'ROYAL_CLUE_MAP') return '🗺️';
+  if (offer.rewardType === 'ROAD_AMULET') return '🧿';
+  return '🌿';
+}
+
+export function getMerchantOfferShortTitle(offer: TravelingMerchantOffer): string {
+  if (offer.rewardType === 'DEN_TROPHY_CRATE') return 'Ночник в Домик';
+  if (offer.rewardType === 'ROYAL_CLUE_MAP') return 'Карта троп';
+  if (offer.rewardType === 'ROAD_AMULET') return 'Оберег ветра';
+  return 'Связка трав';
+}
+
+export function getMerchantOfferProperties(
+  offer: TravelingMerchantOffer
+): LootItemPropertyDescriptor[] {
+  return [
+    {
+      id: 'merch_prop_discount',
+      shortTitleRu: 'Свойство I · Скидка фургона',
+      statTagRu: `${offer.discountPriceCoins} М вместо ${offer.originalPriceCoins} М`,
+      popupTitleRu: 'Выгода Лавки на колёсах',
+      popupDescriptionRu: `Особая цена странствующего торговца: экономия ${offer.originalPriceCoins - offer.discountPriceCoins} Монет по сравнению с обычной лавкой.`,
+      accentColorHex: '#F59E0B',
+    },
+    {
+      id: 'merch_prop_reward',
+      shortTitleRu: 'Свойство II · Редкий дар',
+      statTagRu:
+        offer.rewardType === 'DEN_TROPHY_CRATE'
+          ? '+1 из 10 в Уровень Домика'
+          : offer.rewardType === 'ROYAL_CLUE_MAP'
+          ? 'Улика + Любопытство ↑↑'
+          : 'Щит + 50% монет',
+      popupTitleRu: offer.titleRu,
+      popupDescriptionRu: offer.effectDescriptionRu,
+      accentColorHex: '#10B981',
+    },
+  ];
+}
+
+export function getRegionEmoji(regionId: string): string {
+  if (regionId === 'reg_old_mill') return '⚙️';
+  if (regionId === 'reg_amber_forest') return '🍂';
+  if (regionId === 'reg_misty_hollow') return '🌫️';
+  if (regionId === 'reg_stone_halls') return '🏛️';
+  if (regionId === 'reg_mountain_pass') return '🏔️';
+  return '🧭';
+}
+
+export function getRegionShortTitle(regionId: string): string {
+  if (regionId === 'reg_old_mill') return 'Мельница';
+  if (regionId === 'reg_amber_forest') return 'Дубрава';
+  if (regionId === 'reg_misty_hollow') return 'Лощина';
+  if (regionId === 'reg_stone_halls') return 'Чертоги';
+  if (regionId === 'reg_mountain_pass') return 'Перевал';
+  return 'Тропа';
+}
 
 export interface RegionNpcInfo {
   nameRu: string;
@@ -689,6 +1750,9 @@ export interface ActiveJourneyTimerState {
   customFillerPrompt?: string;
   stayedInSameRegion?: boolean;
   autonomousReasonRu?: string;
+  backpackGearIds?: string[];
+  backpackProvisionId?: string | null;
+  backpackGearTitlesRu?: string[];
 }
 
 export interface AutonomousDestinationChoice {
@@ -727,13 +1791,14 @@ export const INITIAL_SEEDED_JOURNAL_HISTORY: GeneratedStoryEpisode[] = [
       foundDateIso: '2026-11-06',
     },
     outcomeType: 'GOOD_REWARD',
-    coinsEarned: 28,
+    coinsEarned: 19,
     badNewsTitleRu: '',
     debtAmountCoins: 0,
     choices: [
       {
-        labelRu: 'Пообещать Хьюго вернуться и вместе найти ключ от второго отделения ларца',
-        followUpReactionRu: 'Шанталь серьёзно кивнула — это обещание в Походе #3 ещё обязательно напомнит о себе!',
+        labelRu: 'Пообещать Хьюго вернуться с фонарём и проверить, не прячется ли ключ от второго дна ларца в старой верше у плотины',
+        followUpReactionRu:
+          'Шанталь так энергично закивала, что её уши едва не задели край кружки с тёплым молоком. Она тут же подкатила латунную пуговицу к твоей ладони и заговорщицки прищурилась, явно представляя, как вы вдвоём устроите ночную ревизию у плотины. Кажется, старый паромщик Хьюго обзавёлся самым настойчивым пушистым напарником во всём лесу!',
         traitDeltas: { curiosity: 2, tenderness: 0, playfulness: 0, romanticism: 0, courage: 1, wit: 1 },
       },
     ],
@@ -759,18 +1824,19 @@ export const INITIAL_SEEDED_JOURNAL_HISTORY: GeneratedStoryEpisode[] = [
       titleRu: 'Светящаяся шишка из Янтарной дубравы',
       category: 'TRINKET',
       descriptionRu: 'Тёплая кедровая шишка, которая мягко светится в сумерках.',
-      sellPriceCoins: 20,
+      sellPriceCoins: 18,
       foundAtRegionRu: 'Янтарная дубрава',
       foundDateIso: '2026-11-05',
     },
     outcomeType: 'GOOD_REWARD',
-    coinsEarned: 25,
+    coinsEarned: 18,
     badNewsTitleRu: '',
     debtAmountCoins: 0,
     choices: [
       {
-        labelRu: 'Похвалить за хитрость и попросить Корвуса приносить нам лесные письма',
-        followUpReactionRu: 'Корвус запомнил уговор из Похода #2 и обещал следить за новостями в лесу!',
+        labelRu: 'Вслух восхититься тем, как ловко она обвела пернатого скрягу вокруг пальца за обычное перо сойки',
+        followUpReactionRu:
+          'Услышав похвалу, Шанталь горделиво вздёрнула нос и изобразила такой важный купеческий вид, что невозможно было не рассмеяться. Секунду спустя она не выдержала собственной серьёзности, весело фыркнула и принялась катать светящуюся шишку по ковру, словно маленький золотистый фонарик. Если Корвус думал, что перехитрит эту рыжую плутовку, ему придётся брать уроки дипломатии!',
         traitDeltas: { curiosity: 1, tenderness: 0, playfulness: 1, romanticism: 0, courage: 0, wit: 2 },
       },
     ],
@@ -785,7 +1851,7 @@ export const INITIAL_SEEDED_JOURNAL_HISTORY: GeneratedStoryEpisode[] = [
     storyTextRu:
       'Едва оправившись после дождливого вечера, в свой самый первый поход Шанталь осторожно выбежала за калитку к Старой водяной мельнице. Старый барсук-травник Брамбл сразу узнал в ней необычную гостью, осмотрел её зажившую лапку и подарил пучок душистого солнечного чабреца. Когда Шанталь случайно задела лапкой старинный серебряный медальон на столе травника, тот слабо вспыхнул тёплым янтарным светом.',
     chantalMapNoteRu:
-      'Первый выход Шанталь к Старой водяной мельнице и знакомство с травником Брамблом.',
+      'Первый выход Шанталь к Старой водяная мельнице и знакомство с травником Брамблом.',
     regionId: 'reg_old_mill',
     regionTitleRu: 'Старая водяная мельница',
     encounteredNpcRu: 'Барсук-травник Брамбл',
@@ -801,13 +1867,14 @@ export const INITIAL_SEEDED_JOURNAL_HISTORY: GeneratedStoryEpisode[] = [
       foundDateIso: '2026-11-04',
     },
     outcomeType: 'GOOD_REWARD',
-    coinsEarned: 22,
+    coinsEarned: 17,
     badNewsTitleRu: '',
     debtAmountCoins: 0,
     choices: [
       {
-        labelRu: 'Ласково согреть Шанталь дома и спрятать медальон в шкатулку тайн',
-        followUpReactionRu: 'С этого вечера в Походе #1 началась ваша большая общая история.',
+        labelRu: 'Укутать её в нагретый у камина плед и тихо спросить, почему серебряный медальон так странно согрелся в её лапах',
+        followUpReactionRu:
+          'Шанталь замерла, прислушиваясь к потрескиванию поленьев, и вдруг необычно осмысленным, глубоким взглядом посмотрела прямо тебе в глаза. Потом она мягко ткнулась тёплым носом в твою ладонь, словно благодаря за то, что ты не торопишь её с ответами, которых она и сама пока не помнит. Свернувшись калачиком рядом со шкатулкой, она ещё долго прикрывала медальон пушистым хвостом.',
         traitDeltas: { curiosity: 1, tenderness: 2, playfulness: 0, romanticism: 1, courage: 0, wit: 0 },
       },
     ],
@@ -1027,6 +2094,37 @@ export function pickAutonomousRegionForChantal(
   };
 }
 
+export const WOODLAND_DEN_TROPHY_POOL: Array<{
+  titleRu: string;
+  descriptionRu: string;
+}> = [
+  {
+    titleRu: 'Фонарик со спящим светлячком-духом',
+    descriptionRu:
+      'Маленький резной фонарик из коры ясеня, внутри которого на мшистой подушечке дремлет лесной светлячок. В сумерках он озаряет подоконник мягким изумрудно-золотым светом и засчитывается (+1 из 10) в уровень Домика!',
+  },
+  {
+    titleRu: 'Резная сосновая шкатулка мельника',
+    descriptionRu:
+      'Тёплая шкатулка с запахом смолы и муки, которую Шанталь выменяла у водяного колеса. Отлично вписалась в интерьер Домика (+1 из 10 к уровню жилья)!',
+  },
+  {
+    titleRu: 'Глиняный подсвечник «Лесная сова»',
+    descriptionRu:
+      'Уютный фигурный подсвечник ручной лепки от гнома Торвина. Сразу занял почётное место у камина и приблизил повышение уровня Домика (+1 из 10)!',
+  },
+  {
+    titleRu: 'Ловец звёздных снов из ивовой лозы',
+    descriptionRu:
+      'Переплетённый серебряной нитью и перьями сойки оберег для окна. Защищает сон Шанталь и идёт в зачёт обустройства жилья (+1 из 10)!',
+  },
+  {
+    titleRu: 'Вышитая подушечка с лунным вереском',
+    descriptionRu:
+      'Душистая думка, набитая целебными травами Брамбла. Сделала уголок у огня ещё теплее и прибавила +1 к счётчику уровня жилья (X/10)!',
+  },
+];
+
 // Rich offline/fallback generator so stories always work even without internet
 export function buildFallbackStoryEpisode(params: {
   region: MapRegionNode;
@@ -1040,6 +2138,8 @@ export function buildFallbackStoryEpisode(params: {
   totalJourneys: number;
   traits?: ChantalTraits;
   chronicleMemory?: ThreeTierChroniclePayload;
+  backpackGearRu?: string[];
+  guaranteedDenTrophy?: boolean;
 }): GeneratedStoryEpisode {
   const {
     region,
@@ -1053,6 +2153,8 @@ export function buildFallbackStoryEpisode(params: {
     totalJourneys,
     traits,
     chronicleMemory,
+    backpackGearRu = [],
+    guaranteedDenTrophy = false,
   } = params;
   const nowIso = new Date().toISOString().slice(0, 10);
   const perks = traits ? computeTraitGameplayPerks(traits) : null;
@@ -1088,28 +2190,31 @@ export function buildFallbackStoryEpisode(params: {
         titleRu: 'Забавный жетон ярмарочного фокусника',
         category: 'TRINKET',
         descriptionRu: 'Медная монетка с улыбающимся лисом на одной стороне и клевером на другой. Напоминание о весёлой внесюжетной авантюре.',
-        sellPriceCoins: 18,
+        sellPriceCoins: 16,
         foundAtRegionRu: region.titleRu,
         foundDateIso: nowIso,
       },
       outcomeType: 'GOOD_REWARD',
-      coinsEarned: 32,
+      coinsEarned: 18,
       badNewsTitleRu: '',
       debtAmountCoins: 0,
       choices: [
         {
-          labelRu: 'Похвалить за находчивость и угостить тёплым чаем',
-          followUpReactionRu: 'Шанталь довольно жмурится — эта маленькая шалость подняла настроение вам обоим, не затронув главную судьбу.',
+          labelRu: `Расспросить в деталях, какое лицо было у ${encounteredNpcRu}, когда она устроила этот переполох`,
+          followUpReactionRu:
+            'Шанталь тут же вскочила на задние лапы и с таким уморительным видом принялась изображать растерянного собеседника, что у неё самой задрожали усы от смеха. От избытка чувств она сделала кувырок через голову на пледе и гордо положила лапу поверх принесённого жетона. Похоже, твоё поручение разбудило в ней настоящий актёрский талант!',
           traitDeltas: { curiosity: 0, tenderness: 0, playfulness: 0, romanticism: 0, courage: 0, wit: 0 },
         },
         {
-          labelRu: 'Посмеяться над историей и убрать находку в сундук',
-          followUpReactionRu: 'Она весело фыркает и сворачивается калачиком на пледе, готовая к новым основным походам.',
+          labelRu: 'Покачать головой с улыбкой и проверить, не намочила ли она уши, когда ловила добычу у самого ручья',
+          followUpReactionRu:
+            'Она притворно возмущённо фыркнула, дескать, настоящие следопыты никогда не падают в воду, но тут же чихнула от попавшей на нос брызги. Виновато прижав уши, лисёнок сама подставила макушку под мягкое полотенце и заурчала от удовольствия. Зато выменянные монеты остались совершенно сухими!',
           traitDeltas: { curiosity: 0, tenderness: 0, playfulness: 0, romanticism: 0, courage: 0, wit: 0 },
         },
         {
-          labelRu: 'Попросить в следующий раз быть чуть осторожнее на мосту',
-          followUpReactionRu: 'Она притворно вздыхает, но послушно кивает, пряча нос в пушистый хвост.',
+          labelRu: 'Спрятать ярмарочный жетон в тайник и налить ей мисочку тёплого молока с вересковым мёдом',
+          followUpReactionRu:
+            'Глаза Шанталь мгновенно округлились от восторга: вся её напускная важность испарилась при первом же запахе верескового мёда. Она аккуратно вылакала угощение, облизала рыжие усы и уютно устроилась у твоих ног, изредка подрагивая кончиком хвоста во сне. Такие маленькие передышки делают ваш дом самым тёплым местом в лесу.',
           traitDeltas: { curiosity: 0, tenderness: 0, playfulness: 0, romanticism: 0, courage: 0, wit: 0 },
         },
       ],
@@ -1146,28 +2251,40 @@ export function buildFallbackStoryEpisode(params: {
     ? `Поскольку в локации «${region.titleRu}» у неё ещё оставались незаконченные дела, Шанталь целенаправленно вернулась туда снова — на этот раз её ждал ${encounteredNpcRu}. `
     : '';
 
+  const backpackSentenceRu =
+    backpackGearRu.length > 0
+      ? `Очень кстати пригодились вещи, которые ты положил ей с собой в дорогу (${backpackGearRu.join(', ')}): благодаря им она смело заглянула в укромный тайник под старой кладкой и заключила выгодный лесной обмен! `
+      : `В этот раз она отправилась в дорогу налегке: возле старого погреба ей встретился узкий тёмный лаз, куда без путевого фонаря или отмычек соваться было рискованно, но она ловко отыскала обходную тропу. `;
+
+  const pickedDenTrophy =
+    WOODLAND_DEN_TROPHY_POOL[totalJourneys % WOODLAND_DEN_TROPHY_POOL.length];
+
   if (isTransformed) {
     const witcherChoices: StoryChoiceOption[] = [
       {
-        labelRu: 'Обнять её у камина и вместе изучить тайный свиток',
-        followUpReactionRu: 'Шанталь с нежной улыбкой кладёт голову тебе на плечо, и в её глазах пляшут тёплые отблески огня.',
+        labelRu: `Придвинуть два бокала пряного взвара к огню и попросить её прочесть строчку со свитка, который передал ${encounteredNpcRu}`,
+        followUpReactionRu:
+          'Шанталь задумчиво проводит тонкими пальцами по сургучной печати, и в золотисто-карих глазах мелькает тёплая благодарность за твоё спокойствие. «Знаешь, при дворе все только и делали, что требовали отчётов, а ты просто греешь мне руки после дороги», — тихо говорит она, придвигаясь ближе к твоему плечу. Пламя камина мягко отражается в серебряной оправе перстня, пока вы вместе разбираете старинный шифр.',
         traitDeltas: { curiosity: 1, tenderness: 2, playfulness: 0, romanticism: 2, courage: 0, wit: 0 },
       },
       {
-        labelRu: 'Пошутить над её княжескими манерами и предложить партию в кости',
-        followUpReactionRu: 'Она звонко смеётся, откидывая рыжую прядь со лба: «Ну держись, сейчас посмотрим, на чьей стороне удача!»',
+        labelRu: 'Иронично поинтересоваться, не собирается ли её высочество разорить всех стражников у переправы своими княжескими повадками',
+        followUpReactionRu:
+          'Она притворно ахает, грациозно откидывая со лба огненно-рыжую прядь, и лукаво щурится: «Фи, какая клевета! Между прочим, стражник сам предложил скидку за мою обворожительную улыбку!» Не удержавшись, Шанталь звонко смеётся и шутливо щёлкает тебя по носу пергаментным свитком. С ней решительно невозможно соскучиться даже посреди королевского заговора.',
         traitDeltas: { curiosity: 0, tenderness: 0, playfulness: 2, romanticism: 1, courage: 0, wit: 2 },
       },
       {
-        labelRu: 'Предложить немедленно укрепить защиту дома и проверить следы всадников',
-        followUpReactionRu: 'Её взгляд становится сосредоточенным и решительным — она ценит твою готовность защищать её.',
+        labelRu: 'Разложить карту на дубовом столе и предложить перехватить тех ночных всадников прежде, чем они доберутся до архива',
+        followUpReactionRu:
+          'Улыбка мгновенно сходит с её лица, уступая место собранной, почти боевой сосредоточенности истинной наследницы северного престола. Одним точным движением она отмечает кинжалом узкую теснину на карте и одобрительно кивает твоей идее. «Именно там мы и устроим им сюрприз на рассвете — пусть узнают, что охотиться на лисицу себе дороже».',
         traitDeltas: { curiosity: 1, tenderness: 0, playfulness: -1, romanticism: 0, courage: 2, wit: 1 },
       },
     ];
     if (isMilestoneChest) {
       witcherChoices.push({
-        labelRu: '★ Открыть потайное дно Юбилейного Сундука Глав королевским ключом',
-        followUpReactionRu: 'Под двойным бархатным дном сундука вспыхивают древние руны: вы открыли особое сокровище юбилейной главы (+2 ко всем ключевым чертам)!',
+        labelRu: '★ Повернуть серебряный перстень в замке Юбилейного Сундука и открыть его потайное дно',
+        followUpReactionRu:
+          'Под двойным бархатным дном сундука с тихим звоном расходятся латунные пластины, и комната озаряется мягким сиянием древних рун. Шанталь затаила дыхание, бережно поднимая фамильную реликвию, которую считали утраченной со времён великой бури. Эта находка меняет расклад сил во всей вашей истории!',
         traitDeltas: { curiosity: 2, tenderness: 1, playfulness: 1, romanticism: 1, courage: 2, wit: 2 },
       });
     }
@@ -1181,12 +2298,12 @@ export function buildFallbackStoryEpisode(params: {
         : stayedInSameRegion
         ? `Возвращение в «${region.titleRu}»: незаконченное дело`
         : `Огни над «${region.titleRu}»`,
-      storyTextRu: `${returnPrefix}Поправив изумрудный ворот и коснувшись тёплого медальона из Похода #1 на груди, Шанталь — теперь уже в своём истинном девичьем облике с копной огненно-рыжих волос — бесшумно ступила на камни локации «${region.titleRu}». Ветер приносил запах озона и старого вереска, а впереди у костра её уже поджидал ${encounteredNpcRu}. «Я помню ваше давнее обещание у речного затона, ваше высочество», — тихо произнёс он, протягивая ей свиток с печатью северного двора. Шанталь прищурила золотисто-карие глаза, заметив в тени деревьев следы чужих подков — кто-то ещё искал этот архив до её прихода. Одним изящным жестом пальцев она зажгла в ладони крошечную янтарную искру, чтобы прочесть выцветшие строки. Внутри тайника оказался спрятан старинный сундук с реликвией, которая явно принадлежала её матери-принцессе. ${
+      storyTextRu: `${returnPrefix}Поправив изумрудный ворот и коснувшись тёплого медальона из Похода #1 на груди, Шанталь — теперь уже в своём истинном девичьем облике с копной огненно-рыжих волос — бесшумно ступила на камни локации «${region.titleRu}». Ветер приносил запах озона и старого вереска, а впереди у костра её уже поджидал ${encounteredNpcRu}. «Я помню ваше давнее обещание у речного затона, ваше высочество», — тихо произнёс он, протягивая ей свиток с печатью северного двора. ${backpackSentenceRu}Одним изящным жестом пальцев она зажгла в ладони крошечную янтарную искру, чтобы прочесть выцветшие строки. Внутри тайника оказалась спрятана редкая реликвия. ${
         outcomeType === 'BAD_DEBT'
-          ? 'Однако, чтобы выкупить молчание стражника у переправы, ей пришлось пообещать 25 полновесных монет до следующего рассвета.'
+          ? 'Однако, чтобы выкупить молчание стражника у переправы, ей пришлось пообещать 20 полновесных монет до следующего рассвета.'
           : outcomeType === 'BAD_EXHAUSTION'
           ? 'Обратный путь через грозовой перевал отнял немало магических сил — на восстановление перед новым походом потребуется 45 единиц Энергии.'
-          : 'Расплатившись за редкие сведения, она вернулась домой с полным кошельком золота и новой зацепкой.'
+          : 'Расплатившись за редкие сведения, она вернулась домой с кошельком монет и новой находкой.'
       }`,
       chantalMapNoteRu:
         autonomousReasonRu ||
@@ -1200,32 +2317,46 @@ export function buildFallbackStoryEpisode(params: {
       stayedInSameRegion,
       autonomousReasonRu,
       isMilestoneChest,
-      lootItem: {
-        id: `loot_${Date.now()}`,
-        titleRu: isMilestoneChest
-          ? `Королевская реликвия Главы #${totalJourneys}: Перстень Серебряной Лилии`
-          : 'Перстень с геральдической лилией',
-        category: 'ROYAL_CLUE',
-        descriptionRu: 'Тонкое серебряное кольцо, внутри которого выгравирована строчка из колыбельной королевского дома. От камня исходит едва заметное магическое тепло.',
-        sellPriceCoins: 55,
-        foundAtRegionRu: region.titleRu,
-        foundDateIso: nowIso,
-      },
+      lootItem: guaranteedDenTrophy
+        ? {
+            id: `loot_den_${Date.now()}`,
+            titleRu: pickedDenTrophy.titleRu,
+            category: 'DEN_TROPHY',
+            descriptionRu: pickedDenTrophy.descriptionRu,
+            sellPriceCoins: 25,
+            foundAtRegionRu: region.titleRu,
+            foundDateIso: nowIso,
+            placedInDenComfort: true,
+          }
+        : {
+            id: `loot_${Date.now()}`,
+            titleRu: isMilestoneChest
+              ? `Королевская реликвия Главы #${totalJourneys}: Перстень Серебряной Лилии`
+              : 'Перстень с геральдической лилией',
+            category: 'ROYAL_CLUE',
+            descriptionRu:
+              'Тонкое серебряное кольцо, внутри которого выгравирована строчка из колыбельной королевского дома. От камня исходит едва заметное магическое тепло.',
+            sellPriceCoins: 45,
+            foundAtRegionRu: region.titleRu,
+            foundDateIso: nowIso,
+          },
       outcomeType,
-      coinsEarned: isMilestoneChest ? 68 : 38,
+      coinsEarned: isMilestoneChest ? 38 : 20,
       badNewsTitleRu:
         outcomeType === 'BAD_DEBT'
-          ? 'Обещанный выкуп стражника у переправы: долг 25 Монет'
+          ? 'Обещанный выкуп стражника у переправы: долг 20 Монет'
           : outcomeType === 'BAD_EXHAUSTION'
           ? 'Магическое истощение после грозового перевала: нужно 45 Энергии (или бальзам/трава)'
           : '',
-      debtAmountCoins: outcomeType === 'BAD_DEBT' ? 25 : 0,
+      debtAmountCoins: outcomeType === 'BAD_DEBT' ? 20 : 0,
       choices: witcherChoices,
       aiSourceLabel: 'Локальный рассказчик',
     };
   }
 
-  const lootCategoryRoll: LootCategory = isMilestoneChest
+  const lootCategoryRoll: LootCategory = guaranteedDenTrophy
+    ? 'DEN_TROPHY'
+    : isMilestoneChest
     ? 'ROYAL_CLUE'
     : dailyArcStep === 3
     ? 'ROYAL_CLUE'
@@ -1235,25 +2366,29 @@ export function buildFallbackStoryEpisode(params: {
 
   const hobbitChoices: StoryChoiceOption[] = [
     {
-      labelRu: 'Ласково вытереть ей шёрстку полотенцем и погладить за ушком',
-      followUpReactionRu: 'Шанталь благодарно лижет твою ладонь тёплым носом и уютно устраивается у огня.',
+      labelRu: `Выбрать из её рыжей шёрстки прицепившийся репейник и тихо спросить, что именно привиделась ей в воде ручья у «${region.titleRu}»`,
+      followUpReactionRu:
+        'Шанталь сначала смешно морщит нос, когда ты вытаскиваешь колючку, но при словах о ручье вдруг замирает и доверчиво прижимается щекой к твоей ладони. Несколько секунд она внимательно смотрит в огонь камина, словно слышит далёкую мелодию лютни, а затем издаёт тихий, почти человеческий вздох облегчения. Ей явно спокойно от того, что рядом с тобой не нужно бояться этих странных снов.',
       traitDeltas: { curiosity: 0, tenderness: 2, playfulness: 0, romanticism: 1, courage: 0, wit: 0 },
     },
     {
-      labelRu: 'Поиграть с ней в перетягивание платка и похвалить за смелость',
-      followUpReactionRu: 'Лисёнок радостно подпрыгивает, делая забавный поклон передними лапками!',
+      labelRu: `Поддразнить её, что ${encounteredNpcRu} наверняка отдал находку только ради того, чтобы хитрая лиса не утащила у него ещё и медовую коврижку`,
+      followUpReactionRu:
+        'Лисёнок возмущённо тявкает, делает театральный прыжок вокруг своей оси и тут же пытается стащить со стола край салфетки, доказывая, что уж коврижку-то она бы добыла безо всяких уговоров! В её карих глазах пляшут такие озорные чертики, что удержаться от смеха просто невозможно. В конце концов она гордо садится на задние лапы и ждёт заслуженного угощения.',
       traitDeltas: { curiosity: 1, tenderness: 0, playfulness: 2, romanticism: 0, courage: 1, wit: 1 },
     },
     {
-      labelRu: 'Внимательно рассмотреть её находку при свете фонаря',
-      followUpReactionRu: 'Шанталь садится рядом, наклонив рыжую голову набок, и внимательно следит за твоим взглядом.',
+      labelRu: 'Поднести медный фонарь поближе к принесённой из-под корней дуба находке и поискать на ней следы старинного клейма',
+      followUpReactionRu:
+        'Шанталь мгновенно забывает про усталость, вскакивает передними лапками на край низкого столика и с видом заправского учёного наклоняет рыжую голову набок. Когда луч фонаря выхватывает тонкую царапину на находке, она взволнованно касается её когтем и вопросительно смотрит на тебя. Кажется, эта пушистая исследовательница готова хоть сейчас бежать обратно за новой зацепкой!',
       traitDeltas: { curiosity: 2, tenderness: 0, playfulness: 0, romanticism: 1, courage: 0, wit: 2 },
     },
   ];
   if (isMilestoneChest) {
     hobbitChoices.push({
-      labelRu: '★ Открыть кованый Сундук Юбилейной Главы вместе с Шанталь',
-      followUpReactionRu: 'Крышка окованного сундука со звоном откидывается: внутри сверкает двойная россыпь золотых монет и древняя улика с гербом лилии!',
+      labelRu: '★ Вместе с Шанталь поддеть латунную защёлку Юбилейного Сундука Главы',
+      followUpReactionRu:
+        'Крышка окованного сундука со звоном откидывается, и Шанталь от неожиданности подпрыгивает на всех четырёх лапах! Внутри среди россыпи полновесных монет тускло блестит королевская печать с лилией, от которой лисёнок не может отвести заворожённого взгляда. Она бережно подталкивает реликвию носом к тебе, празднуя вашу общую юбилейную главу.',
       traitDeltas: { curiosity: 2, tenderness: 1, playfulness: 1, romanticism: 1, courage: 2, wit: 1 },
     });
   }
@@ -1267,11 +2402,11 @@ export function buildFallbackStoryEpisode(params: {
       : stayedInSameRegion
       ? `Снова в «${region.titleRu}»: встреча с персонажем ${encounteredNpcRu}`
       : `Тропинка к локации «${region.titleRu}»`,
-    storyTextRu: `${returnPrefix}Едва утренний туман поднялся над травой, маленький рыжий лисёнок Шанталь сама выбрала направление по старой карте и бодро засеменила в сторону локации «${region.titleRu}». По дороге она вспомнила недавний уговор у речного затона из Похода #3 и решила проверить старые приметы у моста. Там её заметил ${encounteredNpcRu}, который как раз разбирал корзины с травами и диковинками. Увидев пушистую гостью с удивительно умными, почти человеческими глазами, он сразу припомнил её прежние проказы и угостил корочкой медового хлеба. Взамен Шанталь помогла ему отыскать закатившуюся под корень дуба старинную вещицу, напрямую связанную с их прошлым разговором. На секунду лисёнок замерла, глядя на своё отражение в чистой воде ручья, словно силясь вспомнить далёкий сон о каменном замке и музыке лютни. ${
+    storyTextRu: `${returnPrefix}Едва утренний туман поднялся над травой, маленький рыжий лисёнок Шанталь сама выбрала направление по старой карте и бодро засеменила в сторону локации «${region.titleRu}». По дороге она вспомнила недавний уговор у речного затона из Похода #3 и решила проверить старые приметы у моста. Там её заметил ${encounteredNpcRu}, который как раз разбирал корзины с травами и диковинками. ${backpackSentenceRu}Увидев пушистую гостью с удивительно умными, почти человеческими глазами, он сразу припомнил её прежние проказы и угостил корочкой медового хлеба. Взамен Шанталь помогла ему отыскать закатившуюся под корень дуба старинную вещицу, напрямую связанную с их прошлым разговором. На секунду лисёнок замерла, глядя на своё отражение в чистой воде ручья, словно силясь вспомнить далёкий сон о каменном замке и музыке лютни. ${
       isMilestoneChest
         ? 'В награду за завершение юбилейной главы пути они вместе откопали под корнями окованный латунью Сундук Главы, полный золотых монет и королевских тайн!'
         : outcomeType === 'BAD_DEBT'
-        ? 'Правда, вильнув хвостом от радости, она случайно смахнула с прилавка связку глиняных склянок — теперь на нас висит неловкий долг в 25 Монет перед мастером!'
+        ? 'Правда, вильнув хвостом от радости, она случайно смахнула с прилавка связку глиняных склянок — теперь на нас висит неловкий долг в 20 Монет перед мастером!'
         : outcomeType === 'BAD_EXHAUSTION'
         ? 'На обратном пути её застал внезапный холодный ливень: Шанталь прибежала домой промокшей и уставшей, поэтому на согревание и следующий поход понадобится 45 Энергии вместо 30.'
         : 'Вытряхнув из шерсти репейник, она гордо выложила на порог заработанные монеты и свою необычную лесную находку.'
@@ -1288,36 +2423,49 @@ export function buildFallbackStoryEpisode(params: {
     stayedInSameRegion,
     autonomousReasonRu,
     isMilestoneChest,
-    lootItem: {
-      id: `loot_${Date.now()}`,
-      titleRu: isMilestoneChest
-        ? `Сокровище Главы #${totalJourneys}: Королевская печать с лилией`
-        : lootCategoryRoll === 'ROYAL_CLUE'
-        ? 'Осколок старинного зеркала в латунной оправе'
-        : lootCategoryRoll === 'HERB'
-        ? 'Пучок душистого солнечного чабреца'
-        : 'Светящаяся шишка из Янтарной дубравы',
-      category: lootCategoryRoll,
-      descriptionRu:
-        lootCategoryRoll === 'ROYAL_CLUE'
-          ? 'На обратной стороне оправы виден крошечный королевский узор. Почему-то Шанталь долго и задумчиво смотрит в него перед сном.'
-          : lootCategoryRoll === 'HERB'
-          ? 'Редкая лесная трава, согревающая даже в самую сырую погоду. Можно заварить дома, чтобы мгновенно снять усталость (45 Энергии) и поднять настроение!'
-          : 'Тёплая кедровая шишка, которая мягко светится в темноте, как маленький лесной ночник, и пахнет смолой.',
-      sellPriceCoins: lootCategoryRoll === 'ROYAL_CLUE' ? 45 : lootCategoryRoll === 'HERB' ? 18 : 22,
-      foundAtRegionRu: region.titleRu,
-      foundDateIso: nowIso,
-      canHealExhaustion: lootCategoryRoll === 'HERB',
-    },
+    lootItem:
+      lootCategoryRoll === 'DEN_TROPHY'
+        ? {
+            id: `loot_den_${Date.now()}`,
+            titleRu: pickedDenTrophy.titleRu,
+            category: 'DEN_TROPHY',
+            descriptionRu: pickedDenTrophy.descriptionRu,
+            sellPriceCoins: 24,
+            foundAtRegionRu: region.titleRu,
+            foundDateIso: nowIso,
+            placedInDenComfort: true,
+          }
+        : {
+            id: `loot_${Date.now()}`,
+            titleRu: isMilestoneChest
+              ? `Сокровище Главы #${totalJourneys}: Королевская печать с лилией`
+              : lootCategoryRoll === 'ROYAL_CLUE'
+              ? 'Осколок старинного зеркала в латунной оправе'
+              : lootCategoryRoll === 'HERB'
+              ? 'Пучок душистого солнечного чабреца'
+              : 'Светящаяся шишка из Янтарной дубравы',
+            category: lootCategoryRoll,
+            descriptionRu:
+              lootCategoryRoll === 'ROYAL_CLUE'
+                ? 'На обратной стороне оправы виден крошечный королевский узор. Почему-то Шанталь долго и задумчиво смотрит в него перед сном.'
+                : lootCategoryRoll === 'HERB'
+                ? 'Редкая лесная трава, согревающая даже в самую сырую погоду. Можно заварить дома, чтобы мгновенно снять усталость (45 Энергии) и поднять настроение!'
+                : 'Тёплая кедровая шишка, которая мягко светится в темноте, как маленький лесной ночник, и пахнет смолой.',
+            sellPriceCoins:
+              lootCategoryRoll === 'ROYAL_CLUE' ? 40 : lootCategoryRoll === 'HERB' ? 16 : 18,
+            foundAtRegionRu: region.titleRu,
+            foundDateIso: nowIso,
+            canHealExhaustion: lootCategoryRoll === 'HERB',
+          },
     outcomeType,
-    coinsEarned: isMilestoneChest ? 60 : 28,
+    coinsEarned: isMilestoneChest ? 34 : 18,
     badNewsTitleRu:
       outcomeType === 'BAD_DEBT'
-        ? 'Разбитые склянки на прилавке: долг 25 Монет (можно оплатить или отработать)'
+        ? 'Разбитые склянки на прилавке: долг 20 Монет (можно оплатить или отработать)'
         : outcomeType === 'BAD_EXHAUSTION'
         ? 'Продрогла под лесным ливнем: на следующий поход нужно 45 Энергии (или тёплый бальзам / лесная трава)'
         : '',
-    debtAmountCoins: outcomeType === 'BAD_DEBT' ? 25 : 0,
+    debtAmountCoins: outcomeType === 'BAD_DEBT' ? 20 : 0,
     choices: hobbitChoices,
     aiSourceLabel: 'Локальный рассказчик',
   };

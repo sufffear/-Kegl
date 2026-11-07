@@ -12,3 +12,134 @@
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+@keyframes rewardModalPop {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.92);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.015);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes rewardItemDrop {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.86);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(2px) scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes gentleFloat {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(3deg);
+  }
+}
+
+.animate-reward-pop {
+  animation: rewardModalPop 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-reward-drop-1 {
+  opacity: 0;
+  animation: rewardItemDrop 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.08s forwards;
+}
+
+.animate-reward-drop-2 {
+  opacity: 0;
+  animation: rewardItemDrop 0.48s cubic-bezier(0.22, 1, 0.36, 1) 0.18s forwards;
+}
+
+.animate-gentle-float {
+  animation: gentleFloat 2.8s ease-in-out infinite;
+}
+
+@keyframes bagSlotDropIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.86);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(3px) scale(1.035);
+  }
+  85% {
+    transform: translateY(-1px) scale(0.99);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes bagNewItemDrop {
+  0% {
+    opacity: 0;
+    transform: translateY(-32px) scale(0.75);
+    filter: brightness(1.5);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(5px) scale(1.07);
+    filter: brightness(1.2);
+  }
+  80% {
+    transform: translateY(-2px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: brightness(1);
+  }
+}
+
+@keyframes bagIconBounceIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.68) rotate(-8deg);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(2px) scale(1.14) rotate(4deg);
+  }
+  85% {
+    transform: translateY(-1px) scale(0.97) rotate(-1deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+}
+
+.animate-bag-slot-drop {
+  opacity: 0;
+  animation: bagSlotDropIn 0.46s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-bag-new-item-drop {
+  opacity: 0;
+  animation: bagNewItemDrop 0.58s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-bag-icon-drop {
+  opacity: 0;
+  animation: bagIconBounceIn 0.52s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+

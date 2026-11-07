@@ -532,115 +532,111 @@ export default function App() {
         color: palette.textPrimary,
       }}
     >
-      {/* Top Bar Contract: Warm Hearthside RPG Header matching Chantal's Card */}
-      <header
-        className="sticky top-0 z-30 flex items-center justify-between gap-4 sm:gap-8 px-4 sm:px-6 py-3 backdrop-blur-md border-b shadow-md"
-        style={{
-          backgroundColor: `${palette.surface}F2`,
-          borderColor: palette.outline,
-        }}
-      >
-        <div className="flex items-center gap-2.5 shrink-0">
-          <div className="w-9 h-9 rounded-xl bg-[#281F18] border border-[#F59E0B]/60 flex items-center justify-center text-base shadow-inner">
-            🦊
-          </div>
-          <div>
-            <div className="text-base sm:text-lg font-extrabold tracking-tight text-[#FFF8EB] leading-none">
-              Velaris · Шанталь
+      {/* Top Bar Contract: Hidden on Chantal tab (which has its own Burger + Шанталь bar right above the scene) */}
+      {(activeTab !== 'chantal' || isTimerScreenOpen) && (
+        <header
+          className="sticky top-0 z-30 flex items-center justify-between gap-4 sm:gap-8 px-4 sm:px-6 py-3 backdrop-blur-md border-b shadow-md"
+          style={{
+            backgroundColor: `${palette.surface}F2`,
+            borderColor: palette.outline,
+          }}
+        >
+          <div className="flex items-center gap-2.5 shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-[#281F18] border border-[#F59E0B]/60 flex items-center justify-center text-base shadow-inner">
+              🦊
             </div>
-            <div className="text-[11px] font-semibold text-[#F59E0B] mt-0.5">
-              Серия {overviewStats.currentStreak} дн. · ⚡ {chantalEnergy} Эн. · 🪙 {chantalCoins} М
+            <div>
+              <div className="text-base sm:text-lg font-extrabold tracking-tight text-[#FFF8EB] leading-none">
+                Шанталь
+              </div>
+              <div className="text-[11px] font-semibold text-[#F59E0B] mt-0.5">
+                Серия {overviewStats.currentStreak} дн. · ⚡ {chantalEnergy} Эн. · 🪙 {chantalCoins} М
+              </div>
             </div>
           </div>
-        </div>
 
-        <nav className="hidden md:flex items-center gap-2 p-1 rounded-2xl bg-[#15100C] border border-[#4D3D2C]">
-          <button
-            onClick={() => {
-              setIsTimerScreenOpen(false);
-              setActiveTab('home');
-            }}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap shrink-0 transition-all cursor-pointer"
-            style={{
-              backgroundColor:
-                activeTab === 'home' && !isTimerScreenOpen ? '#EA580C' : 'transparent',
-              color:
-                activeTab === 'home' && !isTimerScreenOpen ? '#FFFFFF' : palette.textSecondary,
-            }}
-          >
-            Главная и летопись
-          </button>
-          <button
-            onClick={() => {
-              setIsTimerScreenOpen(false);
-              setActiveTab('plan');
-            }}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap shrink-0 transition-all cursor-pointer"
-            style={{
-              backgroundColor:
-                activeTab === 'plan' && !isTimerScreenOpen ? '#EA580C' : 'transparent',
-              color:
-                activeTab === 'plan' && !isTimerScreenOpen ? '#FFFFFF' : palette.textSecondary,
-            }}
-          >
-            Тренировки Кегеля
-          </button>
-          <button
-            onClick={() => {
-              setIsTimerScreenOpen(false);
-              setActiveTab('chantal');
-            }}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap shrink-0 transition-all cursor-pointer"
-            style={{
-              backgroundColor:
-                activeTab === 'chantal' && !isTimerScreenOpen ? '#EA580C' : 'transparent',
-              color:
-                activeTab === 'chantal' && !isTimerScreenOpen ? '#FFFFFF' : palette.textSecondary,
-            }}
-          >
-            Домик Шанталь ({chantalEnergy} Эн.)
-          </button>
-          <button
-            onClick={() => {
-              setIsTimerScreenOpen(false);
-              setActiveTab('settings');
-            }}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap shrink-0 transition-all cursor-pointer"
-            style={{
-              backgroundColor:
-                activeTab === 'settings' && !isTimerScreenOpen ? '#EA580C' : 'transparent',
-              color:
-                activeTab === 'settings' && !isTimerScreenOpen ? '#FFFFFF' : palette.textSecondary,
-            }}
-          >
-            Оформление и звук
-          </button>
-        </nav>
+          <nav className="hidden md:flex items-center gap-2 p-1 rounded-2xl bg-[#15100C] border border-[#4D3D2C]">
+            <button
+              onClick={() => {
+                setIsTimerScreenOpen(false);
+                setActiveTab('home');
+              }}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap shrink-0 transition-all cursor-pointer"
+              style={{
+                backgroundColor:
+                  activeTab === 'home' && !isTimerScreenOpen ? '#EA580C' : 'transparent',
+                color:
+                  activeTab === 'home' && !isTimerScreenOpen ? '#FFFFFF' : palette.textSecondary,
+              }}
+            >
+              Главная и летопись
+            </button>
+            <button
+              onClick={() => {
+                setIsTimerScreenOpen(false);
+                setActiveTab('plan');
+              }}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap shrink-0 transition-all cursor-pointer"
+              style={{
+                backgroundColor:
+                  activeTab === 'plan' && !isTimerScreenOpen ? '#EA580C' : 'transparent',
+                color:
+                  activeTab === 'plan' && !isTimerScreenOpen ? '#FFFFFF' : palette.textSecondary,
+              }}
+            >
+              Тренировки Кегеля
+            </button>
+            <button
+              onClick={() => {
+                setIsTimerScreenOpen(false);
+                setActiveTab('chantal');
+              }}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap shrink-0 transition-all cursor-pointer"
+              style={{
+                backgroundColor:
+                  activeTab === 'chantal' && !isTimerScreenOpen ? '#EA580C' : 'transparent',
+                color:
+                  activeTab === 'chantal' && !isTimerScreenOpen ? '#FFFFFF' : palette.textSecondary,
+              }}
+            >
+              Домик Шанталь ({chantalEnergy} Эн.)
+            </button>
+            <button
+              onClick={() => {
+                setIsTimerScreenOpen(false);
+                setActiveTab('settings');
+              }}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap shrink-0 transition-all cursor-pointer"
+              style={{
+                backgroundColor:
+                  activeTab === 'settings' && !isTimerScreenOpen ? '#EA580C' : 'transparent',
+                color:
+                  activeTab === 'settings' && !isTimerScreenOpen ? '#FFFFFF' : palette.textSecondary,
+              }}
+            >
+              Оформление и звук
+            </button>
+          </nav>
 
-        <div className="flex items-center gap-2.5 shrink-0">
-          <button
-            onClick={() => {
-              if (activeWorkout) {
-                setIsTimerScreenOpen(true);
-              } else if (nextAvailableSlot) {
-                startSlotWorkout(nextAvailableSlot);
-              } else {
-                startBlitzRescue();
-              }
-            }}
-            className="px-3.5 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap shrink-0 transition-transform active:scale-95 cursor-pointer border border-[#F59E0B]/50 shadow-sm"
-            style={{
-              backgroundColor: '#EA580C',
-              color: '#FFF8EB',
-            }}
-          >
-            {activeWorkout ? '⚡ К таймеру' : '▶ Начать (+10 Эн.)'}
-          </button>
-        </div>
-      </header>
+          {activeWorkout && !isTimerScreenOpen && (
+            <div className="flex items-center gap-2.5 shrink-0">
+              <button
+                onClick={() => setIsTimerScreenOpen(true)}
+                className="px-3.5 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap shrink-0 transition-transform active:scale-95 cursor-pointer border border-[#F59E0B]/50 shadow-sm"
+                style={{
+                  backgroundColor: '#EA580C',
+                  color: '#FFF8EB',
+                }}
+              >
+                ⚡ К таймеру
+              </button>
+            </div>
+          )}
+        </header>
+      )}
 
       {/* Main Content Container: Warm Hearthside RPG aesthetic across all tabs */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 pb-28">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-3 pb-28">
         {isTimerScreenOpen && activeWorkout ? (
           /* ACTIVE WORKOUT TIMER SCREEN (Styled like Chantal's Hearthside Card) */
           <div className="max-w-[460px] mx-auto">
