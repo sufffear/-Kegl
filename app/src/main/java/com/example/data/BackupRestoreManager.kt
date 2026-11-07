@@ -9,6 +9,8 @@ import com.example.domain.ReaderMode
 import com.example.domain.SoundPack
 import com.example.domain.TimeProvider
 import com.example.ui.theme.VelarisThemeId
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -34,8 +36,8 @@ import java.util.zip.ZipOutputStream
  * - полное исключение демонстрационных записей, временных файлов и журналов диагностики;
  * - строгая валидация манифеста, контрольных сумм SHA-256 и структуры архива;
  * - защита от Zip Slip (path traversal) и атак распаковки (zip bomb);
- * - атомарный откат (rollback) при любой ошибке: если запись базы, настроек или файла книги прерывается,
- *   исходные данные пользователя остаются нетронутыми;
+ * - транзакция Room и компенсирующий откат настроек, Шанталь и книги при ошибках записи;
+ *   аварийное завершение процесса между разными хранилищами требует отдельного журнала восстановления;
  * - запрет выполнения резервного копирования и восстановления во время активного подхода.
  */
 class BackupRestoreManager(
@@ -46,6 +48,7 @@ class BackupRestoreManager(
     private val timeProvider: TimeProvider
 ) {
 
+    private val chantalRepository = ChantalProgressRepository(context)
     private val targetBooksDir = File(context.applicationContext.filesDir, "imported_books")
     private val stagingDir = File(context.applicationContext.cacheDir, "restore_staging")
 
@@ -97,7 +100,9 @@ class BackupRestoreManager(
                 readerFontSizeId = currentSettings.readerFontSize.id,
                 readerLineSpacingId = currentSettings.readerLineSpacing.id,
                 isRealProgramEnabled = currentSettings.isRealProgramEnabled,
-                realProgramSource = currentSettings.realProgramSource
+                realProgramSource = currentSettings.realProgramSource,
+                duckOtherApps = currentSettings.duckOtherApps,
+                frozenDates = currentSettings.frozenDates
             )
 
             // 3. Формируем снимок базы данных
@@ -118,6 +123,8 @@ class BackupRestoreManager(
             val dbBytes = dbSnapshot.toJson().toByteArray(Charsets.UTF_8)
             val prefsBytes = prefsSnapshot.toJson().toByteArray(Charsets.UTF_8)
 
+            val chantalBytes = chantalRepository.export().toByteArray(Charsets.UTF_8)
+
             val filesMap = mutableMapOf<String, String>()
             filesMap[BackupManifest.DATABASE_EXPORT_FILE_NAME] = MarkdownNovelParser.computeSha256Hex(dbBytes)
             filesMap[BackupManifest.PREFERENCES_FILE_NAME] = MarkdownNovelParser.computeSha256Hex(prefsBytes)
@@ -126,12 +133,14 @@ class BackupRestoreManager(
                 filesMap[BackupManifest.BOOK_SOURCE_FILE_NAME] = MarkdownNovelParser.computeSha256Hex(novelSourceBytes)
             }
 
+            filesMap[BackupManifest.CHANTAL_FILE_NAME] = MarkdownNovelParser.computeSha256Hex(chantalBytes)
+
             // 4. Формируем манифест
             val manifest = BackupManifest(
                 formatVersion = BackupManifest.CURRENT_FORMAT_VERSION,
                 appVersion = appVersion,
                 appVersionCode = appVersionCode,
-                schemaVersion = 3,
+                schemaVersion = 5,
                 createdAtEpochMs = nowEpochMs,
                 createdAtRu = dateRu,
                 workoutCount = completions.size,
@@ -159,6 +168,10 @@ class BackupRestoreManager(
                 // preferences.json
                 zip.putNextEntry(ZipEntry(BackupManifest.PREFERENCES_FILE_NAME))
                 zip.write(prefsBytes)
+                zip.closeEntry()
+
+                zip.putNextEntry(ZipEntry(BackupManifest.CHANTAL_FILE_NAME))
+                zip.write(chantalBytes)
                 zip.closeEntry()
 
                 // book_source.md (если есть)
@@ -219,7 +232,7 @@ class BackupRestoreManager(
             val rawManifest = manifestBytes ?: throw IllegalArgumentException("Архив не содержит обязательного файла манифеста (manifest.json).")
             val manifest = BackupManifest.fromJson(String(rawManifest, Charsets.UTF_8))
 
-            if (manifest.formatVersion != BackupManifest.CURRENT_FORMAT_VERSION) {
+            if (manifest.formatVersion !in 1..BackupManifest.CURRENT_FORMAT_VERSION) {
                 throw IllegalArgumentException("Неподдерживаемая версия формата резервной копии: ${manifest.formatVersion} (ожидается ${BackupManifest.CURRENT_FORMAT_VERSION}).")
             }
 
@@ -241,13 +254,13 @@ class BackupRestoreManager(
     }
 
     /**
-     * Атомарное восстановление пользовательских данных из архива резервной копии (v1.2 п. 2).
+     * Восстановление с транзакцией Room и компенсирующим откатом внешних хранилищ.
      *
      * Гарантии:
      * 1. Полная проверка архива: контрольные суммы SHA-256 каждого распакованного файла, схема Room, целостность связей;
      * 2. Защита от Zip Slip (canonicalPath check) и zip bomb (лимит 60 МБ);
      * 3. Если любой этап (распаковка, сверка контрольных сумм, транзакция Room, обновление настроек) прерывается ошибкой:
-     *    производится откат к состоянию до начала операции — база Room, настройки DataStore и файл книги не меняются;
+     *    Room откатывается, для внешних хранилищ выполняется откат. Ошибки отката сохраняются в исключении;
      * 4. После восстановления приложение не запускает таймер самостоятельно.
      */
     suspend fun restoreBackup(
@@ -269,7 +282,11 @@ class BackupRestoreManager(
         // Сохраняем исходное состояние для отката
         var backupNovelFile: File? = null
         val originalTargetFile = File(targetBooksDir, StoryRepository.ACTIVE_SOURCE_FILE_NAME)
-        val initialSettings = preferencesRepository.signalSettingsFlow.first()
+        var initialSettings: BenchSignalSettings? = null
+        var initialChantal: String? = null
+        var externalWriteStarted = false
+        var bookWriteStarted = false
+        val originalBookExisted = originalTargetFile.exists()
 
         try {
             // 1. Распаковываем файлы в stagingDir с проверкой Zip Slip
@@ -289,6 +306,7 @@ class BackupRestoreManager(
                         throw IllegalArgumentException("Архив содержит неизвестный файл: $entryName")
                     }
 
+                    require(!extractedFiles.containsKey(entryName)) { "Повторяющийся файл в архиве: $entryName" }
                     val destFile = File(stagingDir, entryName)
                     // Каноническая проверка пути
                     if (!destFile.canonicalPath.startsWith(stagingDir.canonicalPath)) {
@@ -319,8 +337,16 @@ class BackupRestoreManager(
                 ?: throw IllegalArgumentException("Архив не содержит обязательного файла манифеста (manifest.json).")
 
             val manifest = BackupManifest.fromJson(manifestFile.readText(Charsets.UTF_8))
-            if (manifest.formatVersion != BackupManifest.CURRENT_FORMAT_VERSION) {
+            if (manifest.formatVersion !in 1..BackupManifest.CURRENT_FORMAT_VERSION) {
                 throw IllegalArgumentException("Неподдерживаемая версия формата резервной копии: ${manifest.formatVersion}.")
+            }
+
+            val requiredFiles = mutableSetOf(BackupManifest.DATABASE_EXPORT_FILE_NAME, BackupManifest.PREFERENCES_FILE_NAME)
+            if (manifest.hasBook) requiredFiles += BackupManifest.BOOK_SOURCE_FILE_NAME
+            if (manifest.formatVersion >= 2) requiredFiles += BackupManifest.CHANTAL_FILE_NAME
+            require(manifest.files.keys.containsAll(requiredFiles)) { "В манифесте отсутствуют обязательные контрольные суммы" }
+            require(extractedFiles.keys - BackupManifest.MANIFEST_FILE_NAME == manifest.files.keys) {
+                "Список файлов архива не совпадает с манифестом"
             }
 
             // 3. Проверяем контрольные суммы SHA-256 для каждого файла из манифеста
@@ -342,6 +368,10 @@ class BackupRestoreManager(
             val dbFile = extractedFiles[BackupManifest.DATABASE_EXPORT_FILE_NAME]
                 ?: throw IllegalArgumentException("Архив не содержит данных базы (database_export.json).")
             val dbSnapshot = BackupDatabaseSnapshot.fromJson(dbFile.readText(Charsets.UTF_8))
+
+            val chantalSnapshot = extractedFiles[BackupManifest.CHANTAL_FILE_NAME]?.readText(Charsets.UTF_8)
+            chantalSnapshot?.let { ChantalProgressRepository.validate(it) }
+            require(manifest.hasBook == (dbSnapshot.novel != null)) { "Метаданные книги не согласованы" }
 
             // Проверяем структуру романа и исходный файл книги (если книга есть в копии)
             var preparedNovelEntity: ImportedNovelEntity? = null
@@ -365,6 +395,9 @@ class BackupRestoreManager(
                 )
             }
 
+            initialSettings = preferencesRepository.signalSettingsFlow.first()
+            initialChantal = context.getSharedPreferences("chantal_progress", Context.MODE_PRIVATE).getString("snapshot", null)
+
             // 6. Подготавливаем откат для дискового файла книги
             if (originalTargetFile.exists()) {
                 val tempBackup = File(context.applicationContext.cacheDir, "original_book_backup_${System.currentTimeMillis()}.tmp")
@@ -384,62 +417,78 @@ class BackupRestoreManager(
                 chapters = dbSnapshot.novelChapters,
                 blocks = dbSnapshot.novelBlocks,
                 progress = dbSnapshot.novelReadingProgress,
-                freeTemplates = dbSnapshot.freeTemplates
-            )
+                freeTemplates = dbSnapshot.freeTemplates,
+                beforeCommit = {
+                    externalWriteStarted = true
 
-            if (dao.getAllFreeTemplates().isEmpty()) {
-                dao.upsertFreeTemplates(FreeIntervalTemplateEntity.createInitialDefaults())
-            }
+                    // 8. Обновляем настройки в DataStore
+                    preferencesRepository.updateSettings(
+                        BenchSignalSettings(
+                            soundEnabled = prefsSnapshot.soundEnabled,
+                            vibrationEnabled = prefsSnapshot.vibrationEnabled,
+                            metronomeEnabled = prefsSnapshot.metronomeEnabled,
+                            signalVolume = prefsSnapshot.signalVolume,
+                            metronomeVolume = prefsSnapshot.metronomeVolume,
+                            soundPack = SoundPack.fromId(prefsSnapshot.soundPackId),
+                            metronomeTickStyle = MetronomeTickStyle.fromId(prefsSnapshot.metronomeTickStyleId),
+                            themeId = VelarisThemeId.fromId(prefsSnapshot.themeId),
+                            readerMode = ReaderMode.fromId(prefsSnapshot.readerModeId),
+                            readerFontSize = ReaderFontSize.fromId(prefsSnapshot.readerFontSizeId),
+                            readerLineSpacing = ReaderLineSpacing.fromId(prefsSnapshot.readerLineSpacingId),
+                            isRealProgramEnabled = prefsSnapshot.isRealProgramEnabled,
+                            realProgramSource = prefsSnapshot.realProgramSource,
+                            duckOtherApps = prefsSnapshot.duckOtherApps,
+                            frozenDates = prefsSnapshot.frozenDates
+                        )
+                    )
 
-            // 8. Обновляем настройки в DataStore
-            preferencesRepository.updateSettings(
-                BenchSignalSettings(
-                    soundEnabled = prefsSnapshot.soundEnabled,
-                    vibrationEnabled = prefsSnapshot.vibrationEnabled,
-                    metronomeEnabled = prefsSnapshot.metronomeEnabled,
-                    signalVolume = prefsSnapshot.signalVolume,
-                    metronomeVolume = prefsSnapshot.metronomeVolume,
-                    soundPack = SoundPack.fromId(prefsSnapshot.soundPackId),
-                    metronomeTickStyle = MetronomeTickStyle.fromId(prefsSnapshot.metronomeTickStyleId),
-                    themeId = VelarisThemeId.fromId(prefsSnapshot.themeId),
-                    readerMode = ReaderMode.fromId(prefsSnapshot.readerModeId),
-                    readerFontSize = ReaderFontSize.fromId(prefsSnapshot.readerFontSizeId),
-                    readerLineSpacing = ReaderLineSpacing.fromId(prefsSnapshot.readerLineSpacingId),
-                    isRealProgramEnabled = prefsSnapshot.isRealProgramEnabled,
-                    realProgramSource = prefsSnapshot.realProgramSource
-                )
-            )
+                    // Old archives never contained Chantal: preserve existing companion progress.
+                    if (chantalSnapshot != null) chantalRepository.replace(chantalSnapshot)
 
-            // 9. Атомарно перемещаем файл книги на постоянное место
-            if (!targetBooksDir.exists()) {
-                targetBooksDir.mkdirs()
-            }
-            if (stagedBookFile != null) {
-                stagedBookFile.copyTo(originalTargetFile, overwrite = true)
-            } else {
-                if (originalTargetFile.exists()) {
-                    originalTargetFile.delete()
+                    // 9. Replace the book while the Room transaction is still open.
+                    bookWriteStarted = true
+                    if (!targetBooksDir.exists()) {
+                        targetBooksDir.mkdirs()
+                    }
+                    if (stagedBookFile != null) {
+                        stagedBookFile.copyTo(originalTargetFile, overwrite = true)
+                    } else {
+                        if (originalTargetFile.exists()) {
+                            check(originalTargetFile.delete()) { "Не удалось заменить файл книги" }
+                        }
+                    }
+
                 }
-            }
+            )
 
             // Успешно: удаляем резервную копию отката и каталог staging
-            backupNovelFile?.delete()
-            clearDirectory(stagingDir)
+            runCatching { backupNovelFile?.delete(); clearDirectory(stagingDir) }
 
             Result.success(manifest)
         } catch (e: Exception) {
-            // ОТКАТ: восстанавливаем настройки и файл книги
-            runCatching {
-                preferencesRepository.updateSettings(initialSettings)
-            }
-            if (backupNovelFile != null && backupNovelFile.exists()) {
-                runCatching {
-                    backupNovelFile.copyTo(originalTargetFile, overwrite = true)
-                    backupNovelFile.delete()
+            // Room rolls back automatically. Complete external rollback even on cancellation.
+            withContext(NonCancellable) {
+                suspend fun rollback(action: suspend () -> Unit) {
+                    try { action() } catch (failure: Exception) { e.addSuppressed(failure) }
                 }
+                if (externalWriteStarted) {
+                    rollback { preferencesRepository.updateSettings(requireNotNull(initialSettings)) }
+                    rollback { chantalRepository.replace(initialChantal) }
+                }
+                if (bookWriteStarted) rollback {
+                    if (originalBookExisted) {
+                        requireNotNull(backupNovelFile).copyTo(originalTargetFile, overwrite = true)
+                    } else if (originalTargetFile.exists()) {
+                        check(originalTargetFile.delete()) { "Не удалось удалить новый файл книги при откате" }
+                    }
+                }
+                if (e.suppressed.isEmpty()) backupNovelFile?.delete()
+                clearDirectory(stagingDir)
             }
-            clearDirectory(stagingDir)
-            Result.failure(e)
+            if (e is CancellationException) throw e
+            Result.failure(if (e.suppressed.isEmpty()) e else IllegalStateException(
+                "Восстановление не завершено, откат также встретил ошибку. Сохраните исходный архив и повторите восстановление.", e
+            ))
         }
     }
 
@@ -478,7 +527,8 @@ class BackupRestoreManager(
             BackupManifest.MANIFEST_FILE_NAME,
             BackupManifest.DATABASE_EXPORT_FILE_NAME,
             BackupManifest.PREFERENCES_FILE_NAME,
-            BackupManifest.BOOK_SOURCE_FILE_NAME
+            BackupManifest.BOOK_SOURCE_FILE_NAME,
+            BackupManifest.CHANTAL_FILE_NAME
         )
     }
 }
