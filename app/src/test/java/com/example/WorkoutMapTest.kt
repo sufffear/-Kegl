@@ -27,9 +27,10 @@ class WorkoutMapTest {
             }
         } }
         compose.onNodeWithTag("region_reg_stone_halls").performScrollTo().performClick()
-        compose.onNodeWithTag("choose_map_route").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithTag("choose_map_route").assertIsNotEnabled()
+        compose.onNodeWithTag("close_map_details").performClick()
         compose.onNodeWithTag("region_reg_old_mill").performScrollTo().performClick()
-        compose.onNodeWithTag("choose_map_route").performScrollTo().performClick()
+        compose.onNodeWithTag("choose_map_route").assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals("reg_old_mill", selected) }
     }
 }
