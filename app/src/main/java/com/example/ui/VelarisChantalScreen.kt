@@ -38,6 +38,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalContext
+import com.example.data.ChantalProgressRepository
+import com.example.data.ChantalProgressCodec
+import org.json.JSONObject
+import org.json.JSONArray
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,7 +53,6 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -107,61 +112,63 @@ fun VelarisChantalScreen(
     onPlaySampleTone: (SignalType) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var hasCompletedPrologue by rememberSaveable { mutableStateOf(false) }
-    var totalJourneys by rememberSaveable { mutableIntStateOf(3) }
-    var maturityXp by rememberSaveable { mutableIntStateOf(30) }
+    val context = LocalContext.current
+    val progressRepository = remember(context.applicationContext) { ChantalProgressRepository(context) }
+    val loadedProgress = remember(progressRepository) { runCatching { progressRepository.load() } }
+    if (loadedProgress.isFailure) {
+        Text("Не удалось прочитать сохранение Шанталь. Данные сохранены без изменений. Перезапусти приложение; если ошибка повторяется, сообщи нам.", modifier = modifier)
+        return
+    }
+    val saved = loadedProgress.getOrThrow()
+
+    var hasCompletedPrologue by remember { mutableStateOf(saved.optBoolean("hasCompletedPrologue", false)) }
+    var totalJourneys by remember { mutableIntStateOf(saved.optInt("totalJourneys", 0)) }
+    var maturityXp by remember { mutableIntStateOf(saved.optInt("maturityXp", 0)) }
     var recentXpGainText by remember { mutableStateOf<String?>(null) }
-    var forceTransformPreview by rememberSaveable { mutableStateOf(false) }
-    var hasUsedPetThisCycle by rememberSaveable { mutableStateOf(false) }
+    var forceTransformPreview by remember { mutableStateOf(saved.optBoolean("forceTransformPreview", false)) }
+    var hasUsedPetThisCycle by remember { mutableStateOf(saved.optBoolean("hasUsedPetThisCycle", false)) }
     var isBurgerMenuOpen by remember { mutableStateOf(false) }
 
     // Подразделы в Домике («Характер» / «Интерьер»)
-    var denAccordionTab by rememberSaveable { mutableStateOf("none") }
+    var denAccordionTab by remember { mutableStateOf(saved.optString("denAccordionTab", "none")) }
     var selectedTraitPopupName by remember { mutableStateOf<String?>(null) }
 
     // 4 слота снаряжения в поход (OUTFIT, TOOL, WEAPON, BUNDLE)
-    var activeLoadoutSlotPicker by rememberSaveable { mutableStateOf("NONE") }
+    var activeLoadoutSlotPicker by remember { mutableStateOf(saved.optString("activeLoadoutSlotPicker", "NONE")) }
     var activeSlotInspectItemId by remember { mutableStateOf<String?>(null) }
-    var equippedOutfitId by rememberSaveable { mutableStateOf<String?>("gear_knitted_scarf") }
-    var equippedToolId by rememberSaveable { mutableStateOf<String?>(null) }
-    var equippedWeaponId by rememberSaveable { mutableStateOf<String?>(null) }
-    var equippedBundleItemId by rememberSaveable { mutableStateOf<String?>("supply_honey_pie") }
+    var equippedOutfitId by remember { mutableStateOf<String?>(if (saved.isNull("equippedOutfitId")) null else saved.getString("equippedOutfitId")) }
+    var equippedToolId by remember { mutableStateOf<String?>(if (saved.isNull("equippedToolId")) null else saved.getString("equippedToolId")) }
+    var equippedWeaponId by remember { mutableStateOf<String?>(if (saved.isNull("equippedWeaponId")) null else saved.getString("equippedWeaponId")) }
+    var equippedBundleItemId by remember { mutableStateOf<String?>(if (saved.isNull("equippedBundleItemId")) null else saved.getString("equippedBundleItemId")) }
 
     val gearDurabilityMap = remember {
-        mutableStateMapOf(
-            "gear_knitted_scarf" to 5,
-            "gear_brass_lantern" to 5
-        )
+        mutableStateMapOf<String, Int>().apply { putAll(ChantalProgressCodec.counts(saved.optJSONObject("gearDurabilityMap"))) }
     }
     val pantryProvisionCounts = remember {
-        mutableStateMapOf(
-            "supply_honey_pie" to 1,
-            "supply_herbal_balm" to 0,
-            "supply_shiny_buttons" to 1
-        )
+        mutableStateMapOf<String, Int>().apply { putAll(ChantalProgressCodec.counts(saved.optJSONObject("pantryProvisionCounts"))) }
     }
 
-    var selectedBagItemId by rememberSaveable { mutableStateOf<String?>(null) }
-    val newlyAddedBagItemIds = remember { mutableStateListOf<String>() }
+    var selectedBagItemId by remember { mutableStateOf<String?>(if (saved.isNull("selectedBagItemId")) null else saved.getString("selectedBagItemId")) }
+    val newlyAddedBagItemIds = remember { mutableStateListOf<String>().apply { addAll(ChantalProgressCodec.strings(saved.optJSONArray("newlyAddedBagItemIds"))) } }
     var selectedShopEntryId by remember { mutableStateOf<String?>(null) }
-    var shopCategoryTab by rememberSaveable { mutableStateOf("den_comfort") }
-    var shopDenStepFilter by rememberSaveable { mutableIntStateOf(1) }
-    var hasActiveRoadAmulet by rememberSaveable { mutableStateOf(false) }
-    var rewardPopupData by remember { mutableStateOf<ChantalRewardPopupData?>(null) }
+    var shopCategoryTab by remember { mutableStateOf(saved.optString("shopCategoryTab", "den_comfort")) }
+    var shopDenStepFilter by remember { mutableIntStateOf(saved.optInt("shopDenStepFilter", 1)) }
+    var hasActiveRoadAmulet by remember { mutableStateOf(saved.optBoolean("hasActiveRoadAmulet", false)) }
+    var rewardPopupData by remember { mutableStateOf<ChantalRewardPopupData?>(saved.optJSONObject("rewardPopupData")?.let { ChantalProgressCodec.decodeChantalRewardPopupData(it) }) }
 
     // Энергия и Монеты (каждая тренировка Кегеля даёт +10 Энергии)
-    var bonusEnergy by rememberSaveable { mutableIntStateOf(60) }
-    var spentEnergy by rememberSaveable { mutableIntStateOf(0) }
+    var bonusEnergy by remember { mutableIntStateOf(saved.optInt("bonusEnergy", 0)) }
+    var spentEnergy by remember { mutableIntStateOf(saved.optInt("spentEnergy", 0)) }
     val currentEnergy = ((completedWorkoutsCount * 10) + bonusEnergy - spentEnergy).coerceAtLeast(0)
-    var coins by rememberSaveable { mutableIntStateOf(95) }
+    var coins by remember { mutableIntStateOf(saved.optInt("coins", 0)) }
 
     // 6 параметров характера (шкала 0..100, шаг +1/+2)
-    var curiosity by rememberSaveable { mutableIntStateOf(5) }
-    var tenderness by rememberSaveable { mutableIntStateOf(6) }
-    var playfulness by rememberSaveable { mutableIntStateOf(4) }
-    var romanticism by rememberSaveable { mutableIntStateOf(3) }
-    var courage by rememberSaveable { mutableIntStateOf(4) }
-    var wit by rememberSaveable { mutableIntStateOf(5) }
+    var curiosity by remember { mutableIntStateOf(saved.optInt("curiosity", 5)) }
+    var tenderness by remember { mutableIntStateOf(saved.optInt("tenderness", 6)) }
+    var playfulness by remember { mutableIntStateOf(saved.optInt("playfulness", 4)) }
+    var romanticism by remember { mutableIntStateOf(saved.optInt("romanticism", 3)) }
+    var courage by remember { mutableIntStateOf(saved.optInt("courage", 4)) }
+    var wit by remember { mutableIntStateOf(saved.optInt("wit", 5)) }
 
     val traits = ChantalTraits(
         curiosity = curiosity,
@@ -186,15 +193,15 @@ fun VelarisChantalScreen(
         }
     }
 
-    var moodPct by rememberSaveable { mutableIntStateOf(88) }
-    var isExhausted45 by rememberSaveable { mutableStateOf(false) }
-    var debtCoins by rememberSaveable { mutableIntStateOf(0) }
-    var debtReasonRu by rememberSaveable { mutableStateOf("") }
+    var moodPct by remember { mutableIntStateOf(saved.optInt("moodPct", 88)) }
+    var isExhausted45 by remember { mutableStateOf(saved.optBoolean("isExhausted45", false)) }
+    var debtCoins by remember { mutableIntStateOf(saved.optInt("debtCoins", 0)) }
+    var debtReasonRu by remember { mutableStateOf(saved.optString("debtReasonRu", "")) }
 
-    var showTraitArrows by rememberSaveable { mutableStateOf(true) }
+    var showTraitArrows by remember { mutableStateOf(saved.optBoolean("showTraitArrows", true)) }
     var activeArrowToast by remember { mutableStateOf<String?>(null) }
     var lastReactionBanner by remember { mutableStateOf<String?>(null) }
-    var petTapCount by rememberSaveable { mutableIntStateOf(0) }
+    var petTapCount by remember { mutableIntStateOf(saved.optInt("petTapCount", 0)) }
     var petDialogueBubble by remember { mutableStateOf<String?>(null) }
     var isHeartPulseActive by remember { mutableStateOf(false) }
 
@@ -213,17 +220,17 @@ fun VelarisChantalScreen(
     }
 
     // Текущий раздел в Бургер-меню
-    var subTab by rememberSaveable { mutableStateOf("den") }
+    var subTab by remember { mutableStateOf(saved.optString("subTab", "den")) }
 
     // Активный часовой поход
-    var activeJourneyStartMs by rememberSaveable { mutableLongStateOf(0L) }
-    var activeRegionId by rememberSaveable { mutableStateOf("") }
-    var activeRegionTitleRu by rememberSaveable { mutableStateOf("") }
-    var activeNpcRu by rememberSaveable { mutableStateOf("") }
-    var activeStayedInSameRegion by rememberSaveable { mutableStateOf(false) }
-    var activeAutonomousReasonRu by rememberSaveable { mutableStateOf("") }
-    var activeIsFiller by rememberSaveable { mutableStateOf(false) }
-    var activeFillerPrompt by rememberSaveable { mutableStateOf("") }
+    var activeJourneyStartMs by remember { mutableLongStateOf(saved.optLong("activeJourneyStartMs", 0L)) }
+    var activeRegionId by remember { mutableStateOf(saved.optString("activeRegionId", "")) }
+    var activeRegionTitleRu by remember { mutableStateOf(saved.optString("activeRegionTitleRu", "")) }
+    var activeNpcRu by remember { mutableStateOf(saved.optString("activeNpcRu", "")) }
+    var activeStayedInSameRegion by remember { mutableStateOf(saved.optBoolean("activeStayedInSameRegion", false)) }
+    var activeAutonomousReasonRu by remember { mutableStateOf(saved.optString("activeAutonomousReasonRu", "")) }
+    var activeIsFiller by remember { mutableStateOf(saved.optBoolean("activeIsFiller", false)) }
+    var activeFillerPrompt by remember { mutableStateOf(saved.optString("activeFillerPrompt", "")) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     LaunchedEffect(activeJourneyStartMs) {
@@ -234,71 +241,32 @@ fun VelarisChantalScreen(
     }
 
     // Непрочитанная история после возвращения
-    var pendingEpisode by remember { mutableStateOf<ChantalStoryEpisode?>(null) }
-    var fillerTextInput by rememberSaveable { mutableStateOf("") }
-    var customLoreNotes by rememberSaveable { mutableStateOf("") }
-    var selectedAiProvider by rememberSaveable { mutableStateOf(ChantalAiProvider.GEMINI.code) }
-    var selectedOpenRouterModel by rememberSaveable { mutableStateOf("google/gemini-2.5-flash") }
-    var customOpenRouterModelInput by rememberSaveable { mutableStateOf("") }
-    var selectedDifficulty by rememberSaveable { mutableStateOf(ChantalStoryDifficulty.MEDIUM.code) }
+    var pendingEpisode by remember { mutableStateOf<ChantalStoryEpisode?>(saved.optJSONObject("pendingEpisode")?.let { ChantalProgressCodec.decodeChantalStoryEpisode(it) }) }
+    var fillerTextInput by remember { mutableStateOf(saved.optString("fillerTextInput", "")) }
+    var customLoreNotes by remember { mutableStateOf(saved.optString("customLoreNotes", "")) }
+    var selectedAiProvider by remember { mutableStateOf(saved.optString("selectedAiProvider", ChantalAiProvider.GEMINI.code)) }
+    var selectedOpenRouterModel by remember { mutableStateOf(saved.optString("selectedOpenRouterModel", "google/gemini-2.5-flash")) }
+    var customOpenRouterModelInput by remember { mutableStateOf(saved.optString("customOpenRouterModelInput", "")) }
+    var selectedDifficulty by remember { mutableStateOf(saved.optString("selectedDifficulty", ChantalStoryDifficulty.MEDIUM.code)) }
 
-    val ownedShopItemIds = remember {
-        mutableStateListOf("gear_knitted_scarf")
-    }
-    val claimedMerchantOfferIds = remember {
-        mutableStateListOf<String>()
-    }
+    val ownedShopItemIds = remember { mutableStateListOf<String>().apply { addAll(ChantalProgressCodec.strings(saved.optJSONArray("ownedShopItemIds"))) } }
+    val claimedMerchantOfferIds = remember { mutableStateListOf<String>().apply { addAll(ChantalProgressCodec.strings(saved.optJSONArray("claimedMerchantOfferIds"))) } }
 
     val inventoryList = remember {
-        mutableStateListOf(
-            ChantalInventoryLootItem(
-                id = "init_den_trophy_1",
-                titleRu = "Фонарик со спящим светлячком-духом",
-                shortTitleRu = "Лесной фонарик",
-                emoji = "🏮",
-                category = ChantalLootCategory.DEN_TROPHY,
-                descriptionRu = "Резной фонарик из коры ясеня, найденный Шанталь в дупле у ручья. Автоматически стоит на окошке в Домике и засчитан (+1 из 10) в прогресс уровня интерьера!",
-                sellPriceCoins = 24,
-                foundAtRegionRu = "Янтарная дубрава",
-                foundDateIso = "2026-11-05"
-            ),
-            ChantalInventoryLootItem(
-                id = "clue_1",
-                titleRu = "Медальон с полустёртым гербом лилии",
-                shortTitleRu = "Медальон",
-                emoji = "🏅",
-                category = ChantalLootCategory.ROYAL_CLUE,
-                descriptionRu = "Старинный серебряный жетон, который был у лисёнка в первый вечер. Хранится в Шкатулке королевских улик.",
-                sellPriceCoins = 40,
-                foundAtRegionRu = "Старая водяная мельница",
-                foundDateIso = "2026-11-05"
-            ),
-            ChantalInventoryLootItem(
-                id = "herb_1",
-                titleRu = "Пучок душистого солнечного чабреца",
-                shortTitleRu = "Чабрец",
-                emoji = "🌿",
-                category = ChantalLootCategory.HERB,
-                descriptionRu = "Согревающая лесная трава от барсука Брамбла. Снимает усталость (45 Энергии) или идёт в узелок и на крафт оберега!",
-                sellPriceCoins = 18,
-                foundAtRegionRu = "Старая водяная мельница",
-                foundDateIso = "2026-11-06"
-            ),
-            ChantalInventoryLootItem(
-                id = "trinket_1",
-                titleRu = "Светящаяся шишка из Янтарной дубравы",
-                shortTitleRu = "Лесная шишка",
-                emoji = "🌲",
-                category = ChantalLootCategory.TRINKET,
-                descriptionRu = "Тёплая кедровая шишка. Можно продать, подарить другу-NPC, положить в узелок или соединить с травой в оберег!",
-                sellPriceCoins = 22,
-                foundAtRegionRu = "Янтарная дубрава",
-                foundDateIso = "2026-11-06"
-            )
-        )
+        mutableStateListOf<ChantalInventoryLootItem>().apply {
+            saved.optJSONArray("inventoryList")?.let { a ->
+                repeat(a.length()) { add(ChantalProgressCodec.decodeChantalInventoryLootItem(a.getJSONObject(it))) }
+            }
+        }
     }
 
-    val journalList = remember { mutableStateListOf<ChantalStoryEpisode>() }
+    val journalList = remember {
+        mutableStateListOf<ChantalStoryEpisode>().apply {
+            saved.optJSONArray("journalList")?.let { a ->
+                repeat(a.length()) { add(ChantalProgressCodec.decodeChantalStoryEpisode(a.getJSONObject(it))) }
+            }
+        }
+    }
 
     // Подсчёт предметов интерьера (10 предметов = новый уровень Домика!)
     val ownedDenCount = DEFAULT_CHANTAL_SHOP_ITEMS.count {
@@ -362,6 +330,65 @@ fun VelarisChantalScreen(
         (if (activeBundleLootItem?.category == ChantalLootCategory.TRINKET) 20 else 0)
     val loadoutTrophyBonusPct = (15 + activeGearList.sumOf { it.denTrophyChanceBonusPct } +
         (activeBundleShopItem?.denTrophyChanceBonusPct ?: 0)).coerceAtMost(85)
+
+    // Capture all game fields from one successful composition, before the prologue return.
+    val progressSnapshot = JSONObject().apply {
+        put("hasCompletedPrologue", hasCompletedPrologue ?: JSONObject.NULL)
+        put("totalJourneys", totalJourneys ?: JSONObject.NULL)
+        put("maturityXp", maturityXp ?: JSONObject.NULL)
+        put("forceTransformPreview", forceTransformPreview ?: JSONObject.NULL)
+        put("hasUsedPetThisCycle", hasUsedPetThisCycle ?: JSONObject.NULL)
+        put("denAccordionTab", denAccordionTab ?: JSONObject.NULL)
+        put("activeLoadoutSlotPicker", activeLoadoutSlotPicker ?: JSONObject.NULL)
+        put("equippedOutfitId", equippedOutfitId ?: JSONObject.NULL)
+        put("equippedToolId", equippedToolId ?: JSONObject.NULL)
+        put("equippedWeaponId", equippedWeaponId ?: JSONObject.NULL)
+        put("equippedBundleItemId", equippedBundleItemId ?: JSONObject.NULL)
+        put("selectedBagItemId", selectedBagItemId ?: JSONObject.NULL)
+        put("shopCategoryTab", shopCategoryTab ?: JSONObject.NULL)
+        put("shopDenStepFilter", shopDenStepFilter ?: JSONObject.NULL)
+        put("hasActiveRoadAmulet", hasActiveRoadAmulet ?: JSONObject.NULL)
+        put("bonusEnergy", bonusEnergy ?: JSONObject.NULL)
+        put("spentEnergy", spentEnergy ?: JSONObject.NULL)
+        put("coins", coins ?: JSONObject.NULL)
+        put("curiosity", curiosity ?: JSONObject.NULL)
+        put("tenderness", tenderness ?: JSONObject.NULL)
+        put("playfulness", playfulness ?: JSONObject.NULL)
+        put("romanticism", romanticism ?: JSONObject.NULL)
+        put("courage", courage ?: JSONObject.NULL)
+        put("wit", wit ?: JSONObject.NULL)
+        put("moodPct", moodPct ?: JSONObject.NULL)
+        put("isExhausted45", isExhausted45 ?: JSONObject.NULL)
+        put("debtCoins", debtCoins ?: JSONObject.NULL)
+        put("debtReasonRu", debtReasonRu ?: JSONObject.NULL)
+        put("showTraitArrows", showTraitArrows ?: JSONObject.NULL)
+        put("petTapCount", petTapCount ?: JSONObject.NULL)
+        put("subTab", subTab ?: JSONObject.NULL)
+        put("activeJourneyStartMs", activeJourneyStartMs ?: JSONObject.NULL)
+        put("activeRegionId", activeRegionId ?: JSONObject.NULL)
+        put("activeRegionTitleRu", activeRegionTitleRu ?: JSONObject.NULL)
+        put("activeNpcRu", activeNpcRu ?: JSONObject.NULL)
+        put("activeStayedInSameRegion", activeStayedInSameRegion ?: JSONObject.NULL)
+        put("activeAutonomousReasonRu", activeAutonomousReasonRu ?: JSONObject.NULL)
+        put("activeIsFiller", activeIsFiller ?: JSONObject.NULL)
+        put("activeFillerPrompt", activeFillerPrompt ?: JSONObject.NULL)
+        put("fillerTextInput", fillerTextInput ?: JSONObject.NULL)
+        put("customLoreNotes", customLoreNotes ?: JSONObject.NULL)
+        put("selectedAiProvider", selectedAiProvider ?: JSONObject.NULL)
+        put("selectedOpenRouterModel", selectedOpenRouterModel ?: JSONObject.NULL)
+        put("customOpenRouterModelInput", customOpenRouterModelInput ?: JSONObject.NULL)
+        put("selectedDifficulty", selectedDifficulty ?: JSONObject.NULL)
+        put("newlyAddedBagItemIds", JSONArray(newlyAddedBagItemIds.toList()))
+        put("ownedShopItemIds", JSONArray(ownedShopItemIds.toList()))
+        put("claimedMerchantOfferIds", JSONArray(claimedMerchantOfferIds.toList()))
+        put("gearDurabilityMap", JSONObject(gearDurabilityMap.toMap()))
+        put("pantryProvisionCounts", JSONObject(pantryProvisionCounts.toMap()))
+        put("inventoryList", JSONArray(inventoryList.map { ChantalProgressCodec.encode(it) }))
+        put("journalList", JSONArray(journalList.map { ChantalProgressCodec.encode(it) }))
+        put("pendingEpisode", pendingEpisode?.let { ChantalProgressCodec.encode(it) } ?: JSONObject.NULL)
+        put("rewardPopupData", rewardPopupData?.let { ChantalProgressCodec.encode(it) } ?: JSONObject.NULL)
+    }
+    SideEffect { progressRepository.save(progressSnapshot) }
 
     // ПРОЛОГ (Первая встреча со спасённым рыжим лисёнком)
     if (!hasCompletedPrologue) {

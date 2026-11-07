@@ -38,6 +38,9 @@ jobs:
       - name: Build Debug APK
         run: gradle :app:assembleDebug
 
+      - name: Test Chantal progress persistence
+        run: gradle :app:testDebugUnitTest --tests 'com.example.Chantal*PersistenceTest'
+
       - name: Verify APK signing certificate
         run: |
           expected='7cb0deb615308fa329eaba824b772767a93f1d2587dec50f6958a9e42794d8c7'
