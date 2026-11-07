@@ -659,6 +659,7 @@ object BenchSessionCoordinator {
                             _realCompletionsCount.value = repo.countRealCompletions()
                             _weeklyOverview.value = repo.loadWeeklyOverview(timeProvider.currentLocalDate())
                             _freeTemplates.value = repo.getAllFreeTemplates()
+                            _customPrograms.value = repo.getAllCustomPrograms()
                         }
                         val storyRepo = storyRepository
                         if (storyRepo != null) {
@@ -673,13 +674,13 @@ object BenchSessionCoordinator {
                         )
                     },
                     onFailure = { err ->
-                        _backupErrorMessage.value = "Восстановление не удалось: ${err.message ?: "ошибка данных"}. Текущие данные сохранены без изменений."
+                        _backupErrorMessage.value = "Восстановление не удалось: ${err.message ?: "ошибка данных"}."
                         _backupOperationBanner.value = null
                         appendLog("RESTORE_ERROR", "Ошибка восстановления: ${err.message}")
                     }
                 )
             } catch (e: Exception) {
-                _backupErrorMessage.value = "Восстановление прервано: ${e.message}. Текущие данные сохранены без изменений."
+                _backupErrorMessage.value = "Восстановление прервано: ${e.message}."
                 _backupOperationBanner.value = null
                 appendLog("RESTORE_ERROR", "Исключение при восстановлении: ${e.message}")
             }
@@ -718,6 +719,7 @@ object BenchSessionCoordinator {
                 _realCompletionsCount.value = repo.countRealCompletions()
                 _weeklyOverview.value = repo.loadWeeklyOverview(timeProvider.currentLocalDate())
                 _freeTemplates.value = repo.getAllFreeTemplates()
+                _customPrograms.value = repo.getAllCustomPrograms()
             }
             storyRepository?.let { storyRepo ->
                 _storyState.value = storyRepo.loadReaderState()

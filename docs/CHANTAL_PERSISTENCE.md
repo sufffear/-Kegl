@@ -35,6 +35,10 @@ gradle :app:testDebugUnitTest --tests 'com.example.Chantal*PersistenceTest'
 https://github.com/sufffear/-Kegl/actions/runs/42380223735
 
 Проверки после принудительной остановки процесса, перезагрузки телефона и
-обновления APK на физическом устройстве ещё предстоят. Существующие ZIP-бэкапы
-пока не включают новый снимок Шанталь. Интеграция архивов и исправление общего
-отката восстановления — следующая отдельная задача.
+обновления APK на физическом устройстве ещё предстоят. ZIP-архивы формата 2
+включают снимок Шанталь; старый формат 1 при восстановлении оставляет её
+текущий прогресс без изменений.
+
+## Backup integration
+
+Format-2 archives now include the Chantal snapshot. See [backup restore guarantees](BACKUP_RESTORE.md) for compatibility, rollback scope and remaining device checks.

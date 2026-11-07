@@ -23,11 +23,12 @@ data class BackupManifest(
     val files: Map<String, String> // relative path inside zip -> sha256 hex
 ) {
     companion object {
-        const val CURRENT_FORMAT_VERSION = 1
+        const val CURRENT_FORMAT_VERSION = 2
         const val MANIFEST_FILE_NAME = "manifest.json"
         const val DATABASE_EXPORT_FILE_NAME = "database_export.json"
         const val PREFERENCES_FILE_NAME = "preferences.json"
         const val BOOK_SOURCE_FILE_NAME = "book_source.md"
+        const val CHANTAL_FILE_NAME = "chantal_progress.json"
 
         fun fromJson(jsonStr: String): BackupManifest {
             val root = JSONObject(jsonStr)
@@ -111,7 +112,8 @@ data class BackupDatabaseSnapshot(
     val novelChapters: List<NovelChapterEntity> = emptyList(),
     val novelBlocks: List<NovelBlockEntity> = emptyList(),
     val novelReadingProgress: NovelReadingProgressEntity? = null,
-    val freeTemplates: List<FreeIntervalTemplateEntity> = emptyList()
+    val freeTemplates: List<FreeIntervalTemplateEntity> = emptyList(),
+    val customPrograms: List<CustomProgramEntity>? = null
 ) {
     fun toJson(): String {
         val root = JSONObject()
@@ -304,6 +306,19 @@ data class BackupDatabaseSnapshot(
             })
         }
         root.put("freeTemplates", ftArr)
+        customPrograms?.let { programs ->
+            root.put("customPrograms", JSONArray().apply {
+                programs.forEach { p -> put(JSONObject().apply {
+                    put("id", p.id)
+                    put("title", p.title)
+                    put("description", p.description)
+                    put("sortOrder", p.sortOrder)
+                    put("blocksJson", p.blocksJson)
+                    put("createdAtEpochMs", p.createdAtEpochMs)
+                    put("updatedAtEpochMs", p.updatedAtEpochMs)
+                }) }
+            })
+        }
 
         return root.toString()
     }
@@ -545,7 +560,17 @@ data class BackupDatabaseSnapshot(
                 novelChapters = chapters,
                 novelBlocks = blocks,
                 novelReadingProgress = progress,
-                freeTemplates = freeTemplates
+                freeTemplates = freeTemplates,
+                customPrograms = root.optJSONArray("customPrograms")?.let { a ->
+                    (0 until a.length()).map { index ->
+                        val p = a.getJSONObject(index)
+                        val blocksJson = p.getString("blocksJson")
+                        JSONArray(blocksJson)
+                        CustomProgramEntity(p.getString("id"), p.getString("title"),
+                            p.optString("description", ""), p.optInt("sortOrder", 0), blocksJson,
+                            p.optLong("createdAtEpochMs", 0), p.optLong("updatedAtEpochMs", 0))
+                    }
+                }
             )
         }
     }
@@ -567,7 +592,9 @@ data class BackupPreferencesSnapshot(
     val readerFontSizeId: String = "NORMAL",
     val readerLineSpacingId: String = "COMFORTABLE",
     val isRealProgramEnabled: Boolean = false,
-    val realProgramSource: String = BenchSignalSettings.DEFAULT_REAL_PROGRAM_SOURCE
+    val realProgramSource: String = BenchSignalSettings.DEFAULT_REAL_PROGRAM_SOURCE,
+    val duckOtherApps: Boolean = false,
+    val frozenDates: Set<String> = emptySet()
 ) {
     fun toJson(): String {
         val root = JSONObject().apply {
@@ -584,6 +611,8 @@ data class BackupPreferencesSnapshot(
             put("readerLineSpacingId", readerLineSpacingId)
             put("isRealProgramEnabled", isRealProgramEnabled)
             put("realProgramSource", realProgramSource)
+            put("duckOtherApps", duckOtherApps)
+            put("frozenDates", JSONArray(frozenDates.sorted()))
         }
         return root.toString(2)
     }
@@ -604,7 +633,11 @@ data class BackupPreferencesSnapshot(
                 readerFontSizeId = root.optString("readerFontSizeId", "NORMAL"),
                 readerLineSpacingId = root.optString("readerLineSpacingId", "COMFORTABLE"),
                 isRealProgramEnabled = root.optBoolean("isRealProgramEnabled", false),
-                realProgramSource = root.optString("realProgramSource", BenchSignalSettings.DEFAULT_REAL_PROGRAM_SOURCE)
+                realProgramSource = root.optString("realProgramSource", BenchSignalSettings.DEFAULT_REAL_PROGRAM_SOURCE),
+                duckOtherApps = root.optBoolean("duckOtherApps", false),
+                frozenDates = root.optJSONArray("frozenDates")?.let { a ->
+                    (0 until a.length()).map { a.getString(it) }.toSet()
+                } ?: emptySet()
             )
         }
     }
