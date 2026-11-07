@@ -17,10 +17,11 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.net.ssl.HttpsURLConnection
 
 /** Device-local credential, deliberately outside the game snapshot and backup archive. */
-class ChantalGeminiAccess(context: Context) {
+class ChantalGeminiAccess(context: Context, private val keyProvider: (() -> SecretKey)? = null) {
     private val prefs = context.getSharedPreferences("chantal_gemini_access", Context.MODE_PRIVATE)
     private val alias = "velaris.gemini.personal.v1"
     private fun key(): SecretKey {
+        keyProvider?.let { return it() }
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (store.getKey(alias, null) as? SecretKey)?.let { return it }
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply {
@@ -30,7 +31,7 @@ class ChantalGeminiAccess(context: Context) {
     }
     fun hasKey() = prefs.contains("encrypted")
     fun save(secret: String) {
-        require(secret.length in 20..256 && secret.all { it.isLetterOrDigit() || it in "_-" })
+        validateSecret(secret)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key()) }
         val encrypted = cipher.doFinal(secret.toByteArray(Charsets.UTF_8))
         check(prefs.edit().putString("encrypted", Base64.encodeToString(encrypted, Base64.NO_WRAP))
@@ -54,7 +55,14 @@ class ChantalGeminiAccess(context: Context) {
         if (last > 0 && now - last < 60_000) return false
         return prefs.edit().putLong("lastRequest", now).commit()
     }
-    companion object { const val DEFAULT_MODEL = "gemini-3.1-flash-lite" }
+    companion object {
+        const val DEFAULT_MODEL = "gemini-3.1-flash-lite"
+        fun validateSecret(secret: String) {
+            require(secret.length in 20..2048 && secret.all { it.code in 33..126 && it !in "\"'\\" }) {
+                "Invalid credential format"
+            }
+        }
+    }
 }
 
 class GeminiStoryTransport(private val secret: String, private val model: String) : ChantalStoryTransport {
@@ -74,7 +82,8 @@ class GeminiStoryTransport(private val secret: String, private val model: String
                 .put("generationConfig", JSONObject().put("responseMimeType", "application/json").put("maxOutputTokens", 4096))
             connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
             // Never surface error bodies, request headers or credentials in UI/logs.
-            check(connection.responseCode == 200) { "Gemini request unavailable" }
+            val status = connection.responseCode
+            if (status != 200) throw GeminiRequestException(status)
             val bytes = connection.inputStream.use { input ->
                 val output = java.io.ByteArrayOutputStream()
                 val buffer = ByteArray(4096)
@@ -100,4 +109,16 @@ class GeminiStoryTransport(private val secret: String, private val model: String
                 .also { require(it.isNotBlank() && it.length <= 32_000) }
         }
     }
+}
+
+class GeminiRequestException(val status: Int) : Exception("Gemini unavailable")
+fun geminiFailureMessage(error: Throwable): String = when (error) {
+    is GeminiRequestException -> when (error.status) {
+        400, 401, 403 -> "Google отклонил запрос. Проверь ключ, доступ к Gemini API и ограничения проекта (HTTP ${error.status})."
+        404 -> "Модель не найдена (HTTP 404). В настройках укажи полный ID модели из AI Studio или верни предложенную модель."
+        429 -> "Лимит запросов исчерпан (HTTP 429). Подожди и проверь квоту проекта в AI Studio."
+        else -> "Сервис Gemini временно недоступен (HTTP ${error.status}). Попробуй позже."
+    }
+    is java.io.IOException -> "Не удалось связаться с Gemini. Проверь интернет и попробуй позже."
+    else -> "Не удалось проверить подключение. Сохрани ключ заново; если повторится — сообщи код CONNECTION_CHECK."
 }

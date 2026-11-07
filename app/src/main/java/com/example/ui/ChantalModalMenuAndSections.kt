@@ -1426,112 +1426,12 @@ internal fun ChantalAiLoreSectionCard(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             ChantalGeminiSettings()
-            Text(
-                text = "Настройки других провайдеров (подключение пока недоступно)",
-                style = MaterialTheme.typography.titleMedium,
-                fontFamily = FontFamily.SansSerif,
-                fontWeight = FontWeight.Bold,
-                color = HobbitCream
-            )
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                ChantalAiProvider.entries.forEach { prov ->
-                    Button(
-                        onClick = { onSelectAiProvider(prov.code) },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selectedAiProvider == prov.code) HobbitOrange else HobbitElevatedBg
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            prov.titleRu,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontFamily = FontFamily.SansSerif,
-                            fontWeight = FontWeight.Bold,
-                            color = HobbitCream
-                        )
-                    }
-                }
+            HorizontalDivider(Modifier.padding(vertical = 12.dp))
+            Text("Отображение характера", style = MaterialTheme.typography.titleMedium, color = HobbitCream)
+            OutlinedButton(onClick = onToggleTraitArrows, modifier = Modifier.fillMaxWidth()) {
+                Text(if (showTraitArrows) "Изменения черт: показывать" else "Изменения черт: скрывать")
             }
-            if (selectedAiProvider == ChantalAiProvider.OPENROUTER.code) {
-                OPENROUTER_ANDROID_MODELS.forEach { (modelId, modelLabel) ->
-                    val isChosen = customOpenRouterModelInput.isBlank() && selectedOpenRouterModel == modelId
-                    OutlinedButton(
-                        onClick = {
-                            onSelectOpenRouterModel(modelId)
-                            onCustomOpenRouterModelChange("")
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "${if (isChosen) "✓ " else ""}$modelLabel",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontFamily = FontFamily.SansSerif,
-                            fontWeight = if (isChosen) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isChosen) HobbitGold else HobbitCream
-                        )
-                    }
-                }
-                OutlinedTextField(
-                    value = customOpenRouterModelInput,
-                    onValueChange = onCustomOpenRouterModelChange,
-                    label = { Text("Или свой ID модели с OpenRouter") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ChantalStoryDifficulty.entries.forEach { diff ->
-                    OutlinedButton(
-                        onClick = { onSelectDifficulty(diff.code) },
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(6.dp)
-                    ) {
-                        Text(
-                            text = diff.titleRu,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontFamily = FontFamily.SansSerif,
-                            fontWeight = if (selectedDifficulty == diff.code) FontWeight.Bold else FontWeight.Medium,
-                            color = if (selectedDifficulty == diff.code) HobbitGold else HobbitMuted
-                        )
-                    }
-                }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    onClick = onToggleTraitArrows,
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = if (showTraitArrows) "Стрелки черт: Вкл" else "Стрелки черт: Выкл",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontFamily = FontFamily.SansSerif,
-                        fontWeight = FontWeight.SemiBold,
-                        color = HobbitCream
-                    )
-                }
-                OutlinedButton(
-                    onClick = onToggleTransformPreview,
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = if (forceTransformPreview) "Стадия IV: Вкл" else "Осмотр Стадии IV",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontFamily = FontFamily.SansSerif,
-                        fontWeight = FontWeight.SemiBold,
-                        color = HobbitGold
-                    )
-                }
-            }
-            OutlinedTextField(
-                value = customLoreNotes,
-                onValueChange = onCustomLoreNotesChange,
-                label = { Text("Заметки лора и персонализации для ИИ") },
-                modifier = Modifier.fillMaxWidth()
-            )
+
         }
     }
 }
