@@ -413,7 +413,7 @@ fun VelarisChantalScreen(
                 )
                 Button(
                     onClick = {
-                        onPlaySampleTone(SignalType.SESSION_COMPLETE)
+                        onPlaySampleTone(SignalType.SET_COMPLETED)
                         hasCompletedPrologue = true
                     },
                     colors = ButtonDefaults.buttonColors(
@@ -863,7 +863,7 @@ fun VelarisChantalScreen(
                         val arrows = opt.delta.formatArrowIndicators().joinToString(" · ")
                         Button(
                             onClick = {
-                                onPlaySampleTone(SignalType.SESSION_COMPLETE)
+                                onPlaySampleTone(SignalType.SET_COMPLETED)
                                 inventoryList.add(0, ep.lootItem)
                                 newlyAddedBagItemIds.add(ep.lootItem.id)
                                 selectedBagItemId = ep.lootItem.id
@@ -935,7 +935,7 @@ fun VelarisChantalScreen(
                     if (fillerTextInput.isNotBlank()) {
                         Button(
                             onClick = {
-                                onPlaySampleTone(SignalType.SESSION_COMPLETE)
+                                onPlaySampleTone(SignalType.SET_COMPLETED)
                                 inventoryList.add(0, ep.lootItem)
                                 newlyAddedBagItemIds.add(ep.lootItem.id)
                                 selectedBagItemId = ep.lootItem.id
