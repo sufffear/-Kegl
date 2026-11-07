@@ -659,7 +659,7 @@ object BenchSessionCoordinator {
                             _realCompletionsCount.value = repo.countRealCompletions()
                             _weeklyOverview.value = repo.loadWeeklyOverview(timeProvider.currentLocalDate())
                             _freeTemplates.value = repo.getAllFreeTemplates()
-                _customPrograms.value = repo.getAllCustomPrograms()
+                            _customPrograms.value = repo.getAllCustomPrograms()
                         }
                         val storyRepo = storyRepository
                         if (storyRepo != null) {
