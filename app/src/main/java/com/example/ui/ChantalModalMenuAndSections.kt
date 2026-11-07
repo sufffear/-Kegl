@@ -326,6 +326,9 @@ internal fun ChantalModalMenuDialog(
     ownedDenCount: Int,
     foundDenTrophyCount: Int,
     totalJourneys: Int,
+    preferredRegionId: String,
+    routeLocked: Boolean,
+    onChooseRoute: (String) -> Unit,
     coins: Int,
     selectedAiProvider: String,
     traits: ChantalTraits,
@@ -539,7 +542,15 @@ internal fun ChantalModalMenuDialog(
                     }
 
                     "map" -> {
-                        ChantalMapSectionCard(totalJourneys = totalJourneys)
+                        Column {
+                            ChantalWorldMap(totalJourneys, preferredRegionId, routeLocked, onChooseRoute)
+                            journalList.filter { it.regionTitleRu.isNotBlank() }.groupBy { it.regionTitleRu }.forEach { (place, visits) ->
+                                Text("$place · посещений: ${visits.size}", color = HobbitCream)
+                                visits.take(3).forEach { entry ->
+                                    Text("${entry.titleRu} — ${entry.chosenActionSummaryRu.orEmpty()}", color = HobbitMuted)
+                                }
+                            }
+                        }
                     }
 
                     "bag" -> {

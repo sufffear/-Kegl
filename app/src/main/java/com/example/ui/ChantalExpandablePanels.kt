@@ -1,5 +1,8 @@
 package com.example.ui
 
+import com.example.domain.TimeProvider
+import com.example.domain.ChantalJourneyClock
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
@@ -72,6 +75,7 @@ internal fun ChantalExpeditionAndSubPanelsSection(
     activeStayedInSameRegion: Boolean,
     activeAutonomousReasonRu: String,
     onCompleteActiveJourney: () -> Unit,
+    timeProvider: TimeProvider,
     hasActiveRoadAmulet: Boolean,
     loadoutProtectPct: Int,
     loadoutCoinsBonusPct: Int,
@@ -95,6 +99,8 @@ internal fun ChantalExpeditionAndSubPanelsSection(
     currentEnergy: Int,
     requiredJourneyEnergy: Int,
     onStartJourney: () -> Unit,
+    hasPendingStory: Boolean,
+    preferredRegionTitle: String?,
     onOpenWorkoutPlan: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -102,6 +108,8 @@ internal fun ChantalExpeditionAndSubPanelsSection(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        Text("Маршрут: ${preferredRegionTitle ?: "выбирает Шанталь"}", color = HobbitCream)
+        if (hasPendingStory) Text("Сначала прочитай историю предыдущего похода", color = HobbitMuted)
         // 1. ОТДЕЛЬНАЯ ИГРОВАЯ ПАНЕЛЬ ПОХОДА И 4 СЛОТОВ ЭКИПИРОВКИ (открывается кнопкой «Поход» или при активном походе)
         AnimatedVisibility(
             visible = denAccordionTab == "loadout" || isJourneyActive,
@@ -115,7 +123,8 @@ internal fun ChantalExpeditionAndSubPanelsSection(
                     activeNpcRu = activeNpcRu,
                     activeStayedInSameRegion = activeStayedInSameRegion,
                     activeAutonomousReasonRu = activeAutonomousReasonRu,
-                    onCompleteActiveJourney = onCompleteActiveJourney
+                    onCompleteActiveJourney = onCompleteActiveJourney,
+                    timeProvider = timeProvider
                 )
             } else {
                 ChantalExpeditionPrepContent(
@@ -140,7 +149,7 @@ internal fun ChantalExpeditionAndSubPanelsSection(
                     onBuyAndEquipGear = onBuyAndEquipGear,
                     fillerTextInput = fillerTextInput,
                     onFillerTextChange = onFillerTextChange,
-                    currentEnergy = currentEnergy,
+                    currentEnergy = if (hasPendingStory) 0 else currentEnergy,
                     requiredJourneyEnergy = requiredJourneyEnergy,
                     onStartJourney = onStartJourney,
                     onOpenWorkoutPlan = onOpenWorkoutPlan
@@ -349,17 +358,18 @@ internal fun ChantalActiveExpeditionCard(
     activeStayedInSameRegion: Boolean,
     activeAutonomousReasonRu: String,
     onCompleteActiveJourney: () -> Unit,
+    timeProvider: TimeProvider,
     modifier: Modifier = Modifier
 ) {
-    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var nowMs by remember { mutableLongStateOf(timeProvider.currentWallTimeMs()) }
     LaunchedEffect(activeJourneyStartMs) {
         while (activeJourneyStartMs > 0L) {
-            nowMs = System.currentTimeMillis()
+            nowMs = timeProvider.currentWallTimeMs()
             delay(1000L)
         }
     }
     val elapsedSec = ((nowMs - activeJourneyStartMs) / 1000L).coerceAtLeast(0L)
-    val remainSec = (3600L - elapsedSec).coerceAtLeast(0L)
+    val remainSec = (ChantalJourneyClock.remainingMs(activeJourneyStartMs, nowMs) + 999L) / 1000L
     val mm = remainSec / 60L
     val ss = remainSec % 60L
 
@@ -405,6 +415,7 @@ internal fun ChantalActiveExpeditionCard(
             )
             Button(
                 onClick = onCompleteActiveJourney,
+                enabled = ChantalJourneyClock.ready(activeJourneyStartMs, nowMs),
                 colors = ButtonDefaults.buttonColors(containerColor = HobbitCardBg),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier

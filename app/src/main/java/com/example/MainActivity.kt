@@ -7,6 +7,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.AppBuildInfoRepository
@@ -15,8 +16,20 @@ import com.example.ui.TechCheckViewModel
 import com.example.ui.theme.VelarisTheme
 
 class MainActivity : ComponentActivity() {
+    private var returnRequest by androidx.compose.runtime.mutableStateOf(0)
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.action == com.example.service.ChantalReturnScheduler.OPEN_CHANTAL) returnRequest++
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (intent?.action == com.example.service.ChantalReturnScheduler.OPEN_CHANTAL) returnRequest++
+        runCatching {
+            val saved = com.example.data.ChantalProgressRepository(this).load()
+            com.example.service.ChantalReturnScheduler.sync(this, saved.optLong("activeJourneyStartMs", 0))
+        }
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(
                 scrim = Color.TRANSPARENT,
@@ -34,6 +47,9 @@ class MainActivity : ComponentActivity() {
             val viewModel: TechCheckViewModel = viewModel(
                 factory = TechCheckViewModel.Factory(applicationContext, repository)
             )
+            androidx.compose.runtime.LaunchedEffect(returnRequest) {
+                if (returnRequest > 0) viewModel.navigateTo(com.example.ui.VelarisNavDestination.CHANTAL)
+            }
             val settings by viewModel.settings.collectAsStateWithLifecycle()
 
             VelarisTheme(themeId = settings.themeId) {

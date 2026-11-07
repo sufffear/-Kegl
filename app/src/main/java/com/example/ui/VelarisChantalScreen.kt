@@ -25,6 +25,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.domain.TimeProvider
+import com.example.domain.SystemTimeProvider
+import com.example.domain.ChantalJourneyClock
 import com.example.R
 import com.example.data.ChantalProgressCodec
 import com.example.data.ChantalProgressRepository
@@ -56,9 +59,13 @@ fun VelarisChantalScreen(
     onOpenWorkoutPlan: () -> Unit,
     onPlaySampleTone: (SignalType) -> Unit,
     modifier: Modifier = Modifier,
-    earnedWorkoutEnergy: Int = completedWorkoutsCount * 10
+    earnedWorkoutEnergy: Int = completedWorkoutsCount * 10,
+    timeProvider: TimeProvider = SystemTimeProvider()
 ) {
     val context = LocalContext.current
+    val notificationPermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+
     val progressRepository = remember(context.applicationContext) { ChantalProgressRepository(context) }
     val loadedProgress = remember(progressRepository) { runCatching { progressRepository.load() } }
     if (loadedProgress.isFailure) {
@@ -173,6 +180,7 @@ fun VelarisChantalScreen(
 
     // Активный часовой поход
     var activeJourneyStartMs by remember { mutableLongStateOf(saved.optLong("activeJourneyStartMs", 0L)) }
+    var preferredRegionId by remember { mutableStateOf(saved.optString("preferredRegionId", "")) }
     var activeRegionId by remember { mutableStateOf(saved.optString("activeRegionId", "")) }
     var activeRegionTitleRu by remember { mutableStateOf(saved.optString("activeRegionTitleRu", "")) }
     var activeNpcRu by remember { mutableStateOf(saved.optString("activeNpcRu", "")) }
@@ -306,6 +314,7 @@ fun VelarisChantalScreen(
         put("petTapCount", petTapCount)
         put("subTab", subTab)
         put("activeJourneyStartMs", activeJourneyStartMs)
+        put("preferredRegionId", preferredRegionId)
         put("activeRegionId", activeRegionId)
         put("activeRegionTitleRu", activeRegionTitleRu)
         put("activeNpcRu", activeNpcRu)
@@ -370,6 +379,9 @@ fun VelarisChantalScreen(
             ownedDenCount = ownedDenCount,
             foundDenTrophyCount = foundDenTrophyCount,
             totalJourneys = totalJourneys,
+            preferredRegionId = preferredRegionId,
+            routeLocked = activeJourneyStartMs > 0L || pendingEpisode != null,
+            onChooseRoute = { preferredRegionId = it; isBurgerMenuOpen = false; denAccordionTab = "loadout" },
             coins = coins,
             selectedAiProvider = selectedAiProvider,
             traits = traits,
@@ -624,7 +636,11 @@ fun VelarisChantalScreen(
             activeNpcRu = activeNpcRu,
             activeStayedInSameRegion = activeStayedInSameRegion,
             activeAutonomousReasonRu = activeAutonomousReasonRu,
-            onCompleteActiveJourney = {
+            timeProvider = timeProvider,
+            hasPendingStory = pendingEpisode != null,
+            preferredRegionTitle = DEFAULT_CHANTAL_MAP_REGIONS.firstOrNull { it.id == preferredRegionId }?.titleRu,
+            onCompleteActiveJourney = complete@{
+                if (!ChantalJourneyClock.ready(activeJourneyStartMs, timeProvider.currentWallTimeMs()) || pendingEpisode != null) return@complete
                 val nextNum = totalJourneys + 1
                 val isMilestone = !activeIsFiller && nextNum % 5 == 0
                 val baseReward = if (isMilestone) 38 else 19
@@ -775,7 +791,7 @@ fun VelarisChantalScreen(
             currentEnergy = currentEnergy,
             requiredJourneyEnergy = requiredJourneyEnergy,
             onStartJourney = {
-                if (currentEnergy >= requiredJourneyEnergy) {
+                if (activeJourneyStartMs == 0L && pendingEpisode == null && currentEnergy >= requiredJourneyEnergy) {
                     onPlaySampleTone(SignalType.CONTRACTION)
                     spentEnergy += requiredJourneyEnergy
                     isExhausted45 = false
@@ -785,15 +801,15 @@ fun VelarisChantalScreen(
                     val lastRegTitle = journalList.firstOrNull()?.regionTitleRu
                     val lastReg = unlocked.find { it.titleRu == lastRegTitle }
                     val staySame = lastReg != null && Random.nextFloat() < 0.45f
-                    val chosenReg = if (staySame && lastReg != null) lastReg else unlocked.random()
+                    val chosenReg = unlocked.firstOrNull { it.id == preferredRegionId } ?: if (staySame && lastReg != null) lastReg else unlocked.random()
                     val chosenNpc = chosenReg.npcsRu.random()
                     val chosenThread = chosenReg.unfinishedThreadsRu.random()
 
                     activeRegionId = chosenReg.id
                     activeRegionTitleRu = chosenReg.titleRu
                     activeNpcRu = chosenNpc
-                    activeStayedInSameRegion = staySame
-                    activeAutonomousReasonRu = if (staySame) {
+                    activeStayedInSameRegion = chosenReg.id == lastReg?.id
+                    activeAutonomousReasonRu = if (activeStayedInSameRegion) {
                         "Шанталь решила снова вернуться в «${chosenReg.titleRu}», так как у неё там остались незаконченные дела ($chosenThread) и встреча с персонажем $chosenNpc."
                     } else {
                         "Шанталь выбрала на карте «${chosenReg.titleRu}», чтобы $chosenThread и встретиться с персонажем $chosenNpc."
@@ -801,7 +817,14 @@ fun VelarisChantalScreen(
                     activeIsFiller = fillerTextInput.isNotBlank()
                     activeFillerPrompt = fillerTextInput
                     fillerTextInput = ""
-                    activeJourneyStartMs = System.currentTimeMillis()
+                    activeJourneyStartMs = timeProvider.currentWallTimeMs()
+                    if (android.os.Build.VERSION.SDK_INT >= 33) {
+                        val prefs = context.getSharedPreferences("chantal_notifications", android.content.Context.MODE_PRIVATE)
+                        if (!prefs.getBoolean("permissionAsked", false) && androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                            prefs.edit().putBoolean("permissionAsked", true).apply()
+                            notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
                 }
             },
             onOpenWorkoutPlan = onOpenWorkoutPlan

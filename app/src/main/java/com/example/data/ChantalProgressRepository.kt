@@ -8,7 +8,7 @@ import org.json.JSONObject
  * persisted independently. apply updates in-process memory immediately and lets
  * Android finish pending disk writes when activities stop.
  */
-class ChantalProgressRepository(context: Context) {
+class ChantalProgressRepository(private val context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences("chantal_progress", Context.MODE_PRIVATE)
     private var lastSaved: String? = null
 
@@ -26,6 +26,7 @@ class ChantalProgressRepository(context: Context) {
         if (raw == null) edit.remove("snapshot") else edit.putString("snapshot", raw)
         check(edit.commit()) { "Не удалось сохранить прогресс Шанталь" }
         lastSaved = raw
+        com.example.service.ChantalReturnScheduler.sync(context, raw?.let { JSONObject(it).optLong("activeJourneyStartMs", 0) } ?: 0)
     }
 
     fun export(): String = load().put("schemaVersion", 1).toString()
@@ -52,6 +53,7 @@ class ChantalProgressRepository(context: Context) {
         val raw = snapshot.toString()
         if (raw == lastSaved) return
         preferences.edit().putString("snapshot", raw).apply()
+        com.example.service.ChantalReturnScheduler.sync(context, snapshot.optLong("activeJourneyStartMs", 0))
         lastSaved = raw
     }
 }

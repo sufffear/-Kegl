@@ -609,12 +609,13 @@ internal fun ChantalQuickActionsRow(
     onStoryClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .testTag("chantal_quick_actions_row"),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         // 1. Погладить
         QuickActionButton(
             emoji = "♥",
@@ -643,6 +644,8 @@ internal fun ChantalQuickActionsRow(
             modifier = Modifier.weight(1f)
         )
 
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         // 3. Сумка
         QuickActionButton(
             emoji = "🎒",
@@ -666,6 +669,7 @@ internal fun ChantalQuickActionsRow(
             testTag = "btn_quick_story",
             modifier = Modifier.weight(1f)
         )
+        }
     }
 }
 
@@ -713,7 +717,7 @@ private fun QuickActionButton(
                 fontFamily = FontFamily.SansSerif,
                 fontWeight = FontWeight.Bold,
                 color = HobbitCream,
-                maxLines = 1
+                maxLines = 2
             )
             Text(
                 text = badge,
@@ -721,7 +725,7 @@ private fun QuickActionButton(
                 fontFamily = FontFamily.SansSerif,
                 fontWeight = if (isHighlighted) FontWeight.Bold else FontWeight.Medium,
                 color = if (isHighlighted) accentColor else HobbitMuted,
-                maxLines = 1
+                maxLines = 2
             )
         }
     }
