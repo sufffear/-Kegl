@@ -812,13 +812,13 @@ class WorkoutPersistenceRepository(
         dao.deleteCustomProgram(id)
     }
 
-    suspend fun saveRunCheckpoint(snapshot: PhaseEngineSnapshot) {
-        val runId = snapshot.runId ?: return
-        val slotId = snapshot.slotId ?: return
+    private suspend fun checkpointEntity(snapshot: PhaseEngineSnapshot): WorkoutRunEntity? {
+        val runId = snapshot.runId ?: return null
+        val slotId = snapshot.slotId ?: return null
         val existing = dao.getRunById(runId)
         val nowWall = timeProvider.currentWallTimeMs()
 
-        val entity = WorkoutRunEntity(
+        return WorkoutRunEntity(
             id = runId,
             slotId = slotId,
             status = snapshot.status.name,
@@ -844,24 +844,19 @@ class WorkoutPersistenceRepository(
             isDemo = snapshot.isDemo,
             isFreeMode = snapshot.isFreeMode
         )
-        if (existing == null) {
-            dao.insertRun(entity)
-        } else {
-            dao.updateRun(entity)
-        }
+    }
+
+    suspend fun saveRunCheckpoint(snapshot: PhaseEngineSnapshot) {
+        val entity = checkpointEntity(snapshot) ?: return
+        dao.persistRunCheckpoint(entity)
     }
 
     suspend fun completeRunAtomically(
         snapshot: PhaseEngineSnapshot,
         optionalDifficulty: String? = null
     ): Boolean {
-        saveRunCheckpoint(snapshot)
-        val runId = snapshot.runId ?: return false
-        return dao.completeRunAtomically(
-            runId = runId,
-            completedAtEpochMs = timeProvider.currentWallTimeMs(),
-            optionalDifficulty = optionalDifficulty
-        )
+        val entity = checkpointEntity(snapshot) ?: return false
+        return dao.persistRunCheckpoint(entity, timeProvider.currentWallTimeMs(), optionalDifficulty)
     }
 
     suspend fun recoverInterruptedRunAfterProcessDeath(): WorkoutRunEntity? {
@@ -876,6 +871,12 @@ class WorkoutPersistenceRepository(
                     interruptionReason = "Закрыто при проверке целостности единственной активной попытки"
                 )
             )
+        }
+
+        if (primary.slotId.startsWith("prog_")) {
+            dao.updateRun(primary.copy(status = RunStatus.STOPPED.name,
+                interruptionReason = "Программа конструктора прервана. Запустите её заново: последовательность шагов не сохранена."))
+            return null
         }
 
         if (dao.getCompletionForSlot(primary.slotId) != null) {

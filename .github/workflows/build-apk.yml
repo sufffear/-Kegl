@@ -39,7 +39,7 @@ jobs:
         run: gradle :app:assembleDebug
 
       - name: Test progress persistence and backup restore
-        run: gradle :app:testDebugUnitTest --tests 'com.example.Chantal*PersistenceTest' --tests 'com.example.BackupRestoreTest'
+        run: gradle :app:testDebugUnitTest --tests 'com.example.Chantal*PersistenceTest' --tests 'com.example.BackupRestoreTest' --tests 'com.example.Workout*Test'
 
       - name: Verify APK signing certificate
         run: |
