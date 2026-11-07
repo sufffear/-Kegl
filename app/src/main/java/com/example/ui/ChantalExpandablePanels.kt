@@ -369,7 +369,7 @@ internal fun ChantalActiveExpeditionCard(
         }
     }
     val elapsedSec = ((nowMs - activeJourneyStartMs) / 1000L).coerceAtLeast(0L)
-    val remainSec = (ChantalJourneyClock.remainingMs(activeJourneyStartMs, nowMs) + 999L) / 1000L
+    val remainSec = (ChantalJourneyClock.remainingMs(activeJourneyStartMs, maxOf(nowMs, timeProvider.currentWallTimeMs())) + 999L) / 1000L
     val mm = remainSec / 60L
     val ss = remainSec % 60L
 
@@ -415,7 +415,7 @@ internal fun ChantalActiveExpeditionCard(
             )
             Button(
                 onClick = onCompleteActiveJourney,
-                enabled = ChantalJourneyClock.ready(activeJourneyStartMs, nowMs),
+                enabled = ChantalJourneyClock.ready(activeJourneyStartMs, maxOf(nowMs, timeProvider.currentWallTimeMs())),
                 colors = ButtonDefaults.buttonColors(containerColor = HobbitCardBg),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier

@@ -8,8 +8,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -39,39 +44,14 @@ class ChantalScreenPersistenceTest {
     @get:Rule val compose = createComposeRule()
 
     private fun saveCurrentWindowsScreenshot(rootView: View, fileName: String) {
-        runCatching {
-            val width = rootView.width.coerceAtLeast(411)
-            val height = rootView.height.coerceAtLeast(891)
-            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
-            rootView.draw(canvas)
-
-            runCatching {
-                val wmGlobalClass = Class.forName("android.view.WindowManagerGlobal")
-                val instance = wmGlobalClass.getMethod("getInstance").invoke(null)
-                val viewsField = wmGlobalClass.getDeclaredField("mViews").apply { isAccessible = true }
-                @Suppress("UNCHECKED_CAST")
-                val views = viewsField.get(instance) as? List<View> ?: emptyList()
-                views.forEach { decor ->
-                    if (decor !== rootView.rootView && decor.visibility == View.VISIBLE && decor.width > 0 && decor.height > 0) {
-                        canvas.drawARGB(120, 0, 0, 0)
-                        val dx = ((width - decor.width) / 2f).coerceAtLeast(0f)
-                        val dy = ((height - decor.height) / 2f).coerceAtLeast(0f)
-                        canvas.save()
-                        canvas.translate(dx, dy)
-                        decor.draw(canvas)
-                        canvas.restore()
-                    }
-                }
-            }
-
-            val outDir = File("/.aistudio/artifacts/brain/966c255f-81a5-45cf-b325-e14f2420e652")
-            outDir.mkdirs()
-            val outFile = File(outDir, fileName)
-            FileOutputStream(outFile).use { fos ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, 95, fos)
-            }
-        }
+        val width = rootView.width.coerceAtLeast(411)
+        val height = rootView.height.coerceAtLeast(891)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        rootView.draw(Canvas(bitmap))
+        val outDir = File("build/reports/chantal-screenshots")
+        check(outDir.isDirectory || outDir.mkdirs())
+        FileOutputStream(File(outDir, fileName)).use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 95, it)) }
+        bitmap.recycle()
     }
 
     @Test fun prologueAndPettingSurviveLeavingTheScreen() {
@@ -111,11 +91,16 @@ class ChantalScreenPersistenceTest {
         context.getSharedPreferences("chantal_progress", Context.MODE_PRIVATE).edit().clear().commit()
 
         var capturedRootView: View? = null
+        var wallNow by androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis())
+        val clock = object : com.example.domain.TimeProvider by com.example.domain.SystemTimeProvider() {
+            override fun currentWallTimeMs() = wallNow
+        }
         compose.setContent {
             capturedRootView = LocalView.current
             VelarisTheme {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     VelarisChantalScreen(
+                        timeProvider = clock,
                         completedWorkoutsCount = 3,
                         currentStreakDays = 3,
                         onOpenWorkoutPlan = {},
@@ -134,17 +119,18 @@ class ChantalScreenPersistenceTest {
         compose.onNodeWithTag("chantal_interactive_portrait").assertIsDisplayed()
         compose.onNodeWithTag("chantal_status_bar").assertIsDisplayed()
         compose.onNodeWithTag("chantal_quick_actions_row").assertIsDisplayed()
-        compose.onNodeWithTag("chantal_compact_story_card").assertIsDisplayed()
+        compose.onNodeWithTag("chantal_compact_story_card").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("chantal_expedition_prep_panel").assertDoesNotExist()
         compose.runOnIdle {
             capturedRootView?.let { saveCurrentWindowsScreenshot(it, "1_chantal_den_closed_menu.png") }
         }
 
+        compose.onNodeWithTag("chantal_interactive_portrait").performScrollTo()
         val portraitTopBeforeMenu = compose.onNodeWithTag("chantal_interactive_portrait")
             .fetchSemanticsNode().boundsInRoot.top
 
         // State 2: Open main modal menu — verify all 6 sections exist and portrait Y did not shift down
-        compose.onNodeWithTag("btn_chantal_menu").performClick()
+        compose.onNodeWithTag("btn_chantal_menu").performScrollTo().performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("chantal_modal_menu").assertIsDisplayed()
         compose.onNodeWithTag("modal_nav_den").assertIsDisplayed()
@@ -184,7 +170,10 @@ class ChantalScreenPersistenceTest {
 
         // State 4: Active expedition & return with reward popup
         compose.onNodeWithTag("chantal_active_journey_card").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("btn_complete_active_journey").performScrollTo().performClick()
+        compose.onNodeWithTag("btn_complete_active_journey").performScrollTo().assertIsNotEnabled()
+        compose.runOnIdle { wallNow += com.example.domain.ChantalJourneyClock.DURATION_MS }
+        compose.waitForIdle()
+        compose.onNodeWithTag("btn_complete_active_journey").performScrollTo().assertIsEnabled().performClick()
         compose.waitForIdle()
 
         // Pending story episode choice -> opens reward popup and saves progress

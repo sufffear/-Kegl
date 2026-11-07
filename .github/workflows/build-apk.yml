@@ -58,3 +58,14 @@ jobs:
           name: velaris-debug-${{ github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      - name: Upload companion screenshots and test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chantal-tests-${{ github.sha }}
+          path: |
+            app/build/reports/chantal-screenshots/
+            app/build/reports/tests/
+            app/build/test-results/
+          if-no-files-found: warn
