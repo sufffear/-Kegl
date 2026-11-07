@@ -77,6 +77,7 @@ class TechCheckViewModel(
     val customPrograms: StateFlow<List<com.example.domain.CustomWorkoutProgram>> = BenchSessionCoordinator.customPrograms
     val isZeroSlotDemoMode: StateFlow<Boolean> = BenchSessionCoordinator.isZeroSlotDemoMode
     val demoCompletionsCount: StateFlow<Int> = BenchSessionCoordinator.demoCompletionsCount
+    val workoutEnergy: StateFlow<Int> = BenchSessionCoordinator.workoutEnergy
     val realCompletionsCount: StateFlow<Int> = BenchSessionCoordinator.realCompletionsCount
     val weeklyOverview: StateFlow<WeeklyOverviewState> = BenchSessionCoordinator.weeklyOverview
     val storyState: StateFlow<StoryReaderUiState> = BenchSessionCoordinator.storyState

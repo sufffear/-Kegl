@@ -293,6 +293,7 @@ fun TechCheckScreen(
     val customPrograms by viewModel.customPrograms.collectAsStateWithLifecycle()
     val isZeroSlotDemoMode by viewModel.isZeroSlotDemoMode.collectAsStateWithLifecycle()
     val demoCompletionsCount by viewModel.demoCompletionsCount.collectAsStateWithLifecycle()
+    val workoutEnergy by viewModel.workoutEnergy.collectAsStateWithLifecycle()
     val realCompletionsCount by viewModel.realCompletionsCount.collectAsStateWithLifecycle()
     val weeklyOverview by viewModel.weeklyOverview.collectAsStateWithLifecycle()
     val storyState by viewModel.storyState.collectAsStateWithLifecycle()
@@ -357,7 +358,7 @@ fun TechCheckScreen(
                     containerColor = palette.surface,
                     contentColor = palette.textPrimary,
                     tonalElevation = 0.dp,
-                    modifier = Modifier.testTag("velaris_bottom_nav")
+                    modifier = Modifier.fantasyFrame(palette.outline).testTag("velaris_bottom_nav")
                 ) {
                     MAIN_NAV_DESTINATIONS.forEach { dest ->
                         val selected = currentDestination == dest ||
@@ -388,9 +389,9 @@ fun TechCheckScreen(
                                 )
                             },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = palette.primaryAccent,
+                                selectedIconColor = palette.onPrimaryAccent,
                                 selectedTextColor = palette.primaryAccent,
-                                indicatorColor = palette.selectedContainer,
+                                indicatorColor = palette.primaryAccent,
                                 unselectedIconColor = palette.textSecondary,
                                 unselectedTextColor = palette.textSecondary
                             ),
@@ -449,7 +450,7 @@ fun TechCheckScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
+                            .padding(horizontal = 0.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         if (databaseErrorMessage != null) {
@@ -502,7 +503,8 @@ fun TechCheckScreen(
 
                             VelarisNavDestination.CHANTAL -> {
                                 VelarisChantalScreen(
-                                    completedWorkoutsCount = realCompletionsCount + demoCompletionsCount,
+                                    completedWorkoutsCount = realCompletionsCount,
+                                    earnedWorkoutEnergy = workoutEnergy,
                                     currentStreakDays = weeklyOverview.currentStreakDays,
                                     onOpenWorkoutPlan = { viewModel.navigateTo(VelarisNavDestination.PLAN) },
                                     onPlaySampleTone = { sig -> viewModel.playSample(sig) }

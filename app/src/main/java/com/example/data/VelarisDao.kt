@@ -11,6 +11,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface VelarisDao {
+    @Query("SELECT COALESCE(SUM(CASE WHEN isFreeMode = 1 THEN 5 ELSE 10 END), 0) FROM workout_completions WHERE isDemo = 0")
+    fun observeWorkoutEnergy(): Flow<Int>
+
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertTrainingPlan(plan: TrainingPlanEntity)

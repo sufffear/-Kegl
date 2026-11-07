@@ -68,57 +68,57 @@ val Typography = Typography(
     titleMedium = TextStyle(
         fontFamily = ManropeFontFamily,
         fontWeight = FontWeight.Bold,
-        fontSize = 13.5.sp,
-        lineHeight = 18.sp,
+        fontSize = 14.sp,
+        lineHeight = 19.sp,
         letterSpacing = 0.sp
     ),
     titleSmall = TextStyle(
         fontFamily = ManropeFontFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 12.5.sp,
-        lineHeight = 16.sp,
+        fontSize = 14.sp,
+        lineHeight = 19.sp,
         letterSpacing = 0.05.sp
     ),
     bodyLarge = TextStyle(
         fontFamily = ManropeFontFamily,
         fontWeight = FontWeight.Normal,
-        fontSize = 12.5.sp,
-        lineHeight = 17.sp,
+        fontSize = 14.sp,
+        lineHeight = 19.sp,
         letterSpacing = 0.1.sp
     ),
     bodyMedium = TextStyle(
         fontFamily = ManropeFontFamily,
         fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
+        fontSize = 14.sp,
+        lineHeight = 19.sp,
         letterSpacing = 0.1.sp
     ),
     bodySmall = TextStyle(
         fontFamily = ManropeFontFamily,
         fontWeight = FontWeight.Normal,
-        fontSize = 11.sp,
-        lineHeight = 15.sp,
+        fontSize = 14.sp,
+        lineHeight = 19.sp,
         letterSpacing = 0.15.sp
     ),
     labelLarge = TextStyle(
         fontFamily = ManropeFontFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 11.5.sp,
-        lineHeight = 15.sp,
+        fontSize = 14.sp,
+        lineHeight = 19.sp,
         letterSpacing = 0.15.sp
     ),
     labelMedium = TextStyle(
         fontFamily = ManropeFontFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 10.5.sp,
-        lineHeight = 14.sp,
+        fontSize = 14.sp,
+        lineHeight = 19.sp,
         letterSpacing = 0.2.sp
     ),
     labelSmall = TextStyle(
         fontFamily = ManropeFontFamily,
         fontWeight = FontWeight.Medium,
-        fontSize = 9.5.sp,
-        lineHeight = 12.5.sp,
+        fontSize = 14.sp,
+        lineHeight = 19.sp,
         letterSpacing = 0.2.sp
     )
 )
