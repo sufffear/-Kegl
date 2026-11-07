@@ -6,6 +6,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.SnapSpec
 import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -94,8 +95,8 @@ fun VelarisTheme(
         )
     }
 
-    val colorScheme = remember(palette) {
-        lightColorScheme(
+    val colorScheme = remember(palette, themeId) {
+        (if (themeId == VelarisThemeId.DAWN) darkColorScheme() else lightColorScheme()).copy(
             primary = palette.primaryAccent,
             onPrimary = palette.onPrimaryAccent,
             primaryContainer = palette.selectedContainer,
@@ -124,8 +125,8 @@ fun VelarisTheme(
             val activity = view.context as? Activity ?: return@SideEffect
             val window = activity.window ?: return@SideEffect
             WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = true
-                isAppearanceLightNavigationBars = true
+                isAppearanceLightStatusBars = themeId != VelarisThemeId.DAWN
+                isAppearanceLightNavigationBars = themeId != VelarisThemeId.DAWN
             }
         }
     }

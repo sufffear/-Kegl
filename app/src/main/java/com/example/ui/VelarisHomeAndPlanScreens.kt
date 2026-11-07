@@ -1937,7 +1937,7 @@ fun VelarisPlanScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Ежедневная программа",
+                                text = "Расписание",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = palette.textPrimary,
                                 fontWeight = FontWeight.Bold,
@@ -2269,7 +2269,7 @@ private fun PeriodWorkoutCard(
     val slot = item.slot
     var expanded by rememberSaveable(slot.id) { mutableStateOf(false) }
     Surface(shape = RoundedCornerShape(14.dp), color = palette.surfaceElevated,
-        modifier = Modifier.fillMaxWidth().testTag("daily_slot_${slot.assignmentId}")) {
+        modifier = Modifier.fillMaxWidth().fantasyFrame(palette.outline).testTag("daily_slot_${slot.assignmentId}")) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -2278,7 +2278,7 @@ private fun PeriodWorkoutCard(
                         fontSize = 14.sp, color = palette.textSecondary)
                 }
                 TextButton(onClick = { expanded = !expanded; onSelectSlot() }, enabled = !isSessionLocked) {
-                    Text(if (item.isCompleted) "✓" else if (expanded) "Скрыть" else "Открыть")
+                    Text(if (item.isCompleted) "✓" else if (expanded) "Скрыть" else "Открыть", modifier = Modifier.background(palette.surfaceVariant, RoundedCornerShape(16.dp)).padding(horizontal = 10.dp, vertical = 6.dp), color = palette.primaryAccent)
                 }
             }
             if (expanded) {
@@ -2300,7 +2300,7 @@ internal fun ExtraWorkoutsSection(locked: Boolean, onStart: (FreeIntervalTemplat
         Text("Каждое завершённое занятие: ⚡ +5", fontSize = 15.sp, color = palette.textSecondary)
         com.example.data.ExtraWorkoutPresets.all.forEach { template ->
             Surface(shape = RoundedCornerShape(16.dp), color = palette.surfaceElevated,
-                modifier = Modifier.fillMaxWidth().clickable(enabled = !locked) { pending = template }
+                modifier = Modifier.fillMaxWidth().fantasyFrame(palette.outline).clickable(enabled = !locked) { pending = template }
                     .testTag("extra_workout_${template.slotIndex}")) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(template.name, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = palette.textPrimary)
