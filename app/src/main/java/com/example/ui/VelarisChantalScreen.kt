@@ -598,7 +598,7 @@ fun VelarisChantalScreen(
                     // Описание находки + живая реакция Шанталь
                     Surface(
                         shape = RoundedCornerShape(14.dp),
-                        color = HobbitCream,
+                        color = HobbitBg,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
@@ -1182,9 +1182,9 @@ fun VelarisChantalScreen(
                                     .clip(RoundedCornerShape(5.dp))
                             )
 
-                            Row(
+                            Column(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
                                     text = "🧭 Поход: +10 XP · ❤️ Ласка: +3 XP",
@@ -1374,7 +1374,7 @@ fun VelarisChantalScreen(
                     if (denAccordionTab == "housing") {
                         Surface(
                             shape = RoundedCornerShape(14.dp),
-                            color = HobbitCream,
+                            color = HobbitBg,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .border(1.dp, HobbitEmerald.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
@@ -1572,7 +1572,7 @@ fun VelarisChantalScreen(
                     } else {
                         Surface(
                             shape = RoundedCornerShape(16.dp),
-                            color = HobbitCream,
+                            color = HobbitBg,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .border(1.dp, HobbitBorder, RoundedCornerShape(16.dp))
@@ -1596,12 +1596,12 @@ fun VelarisChantalScreen(
                                             subTab = "bag"
                                         }
                                 ) {
-                                    Row(
+                                    Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(horizontal = 10.dp, vertical = 8.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        horizontalAlignment = Alignment.Start
                                     ) {
                                         Text(
                                             text = if (hasActiveRoadAmulet) "🧿 Оберег активен: 🛡️ +100% защита · 🪙 +50% монет" else "🧿 Оберег: Пусто (смастерить в Сумке)",
@@ -1836,9 +1836,9 @@ fun VelarisChantalScreen(
                                     modifier = Modifier.fillMaxWidth()
                                 )
 
-                                Row(
+                                Column(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Button(
                                         onClick = {
@@ -1875,7 +1875,7 @@ fun VelarisChantalScreen(
                                         colors = ButtonDefaults.buttonColors(containerColor = HobbitElevatedBg),
                                         shape = RoundedCornerShape(14.dp),
                                         modifier = Modifier
-                                            .weight(1.3f)
+                                            .fillMaxWidth()
                                             .heightIn(min = 48.dp)
                                             .testTag("btn_start_chantal_journey")
                                     ) {
@@ -1890,7 +1890,7 @@ fun VelarisChantalScreen(
                                         onClick = onOpenWorkoutPlan,
                                         shape = RoundedCornerShape(14.dp),
                                         modifier = Modifier
-                                            .weight(1f)
+                                            .fillMaxWidth()
                                             .heightIn(min = 48.dp)
                                     ) {
                                         Text(
