@@ -57,12 +57,12 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify v1_4 versionCode 7, applicationId and offline manifest`() {
+    fun `verify story3 versionCode 8, applicationId and optional network manifest`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         assertEquals("Velaris", context.getString(R.string.app_name))
         assertEquals("com.velaris.app", BuildConfig.APPLICATION_ID)
-        assertEquals("0.7.0-v1.4", BuildConfig.VERSION_NAME)
-        assertEquals(7, BuildConfig.VERSION_CODE)
+        assertEquals("0.8.0-story3", BuildConfig.VERSION_NAME)
+        assertEquals(8, BuildConfig.VERSION_CODE)
 
         @Suppress("DEPRECATION")
         val packageInfo = context.packageManager.getPackageInfo(
@@ -94,7 +94,7 @@ class ExampleRobolectricTest {
 
         // На Главной нет технического номера сборки, демо-режима и книги; отображаются только Активная сессия и Недельный обзор
         composeTestRule.onNodeWithTag("demo_safety_banner").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Версия: 0.7.0-v1.4 (versionCode 7)").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Версия: ${BuildConfig.VERSION_NAME} (versionCode ${BuildConfig.VERSION_CODE})").assertDoesNotExist()
         composeTestRule.onNodeWithTag("home_story_card").assertDoesNotExist()
         composeTestRule.onNodeWithTag("btn_open_reader").assertDoesNotExist()
         composeTestRule.onNodeWithTag("home_workout_card").assertExists()

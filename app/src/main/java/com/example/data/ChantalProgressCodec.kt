@@ -80,6 +80,7 @@ object ChantalProgressCodec {
         put("badNewsRu", value.badNewsRu)
         put("choices", JSONArray(value.choices.map { encode(it) }))
         put("chosenActionSummaryRu", value.chosenActionSummaryRu ?: JSONObject.NULL)
+        put("memorySummaryRu", value.memorySummaryRu ?: JSONObject.NULL)
     }
 
     fun decodeChantalStoryEpisode(value: JSONObject): ChantalStoryEpisode = ChantalStoryEpisode(
@@ -99,7 +100,8 @@ object ChantalProgressCodec {
         debtAmountCoins = value.getInt("debtAmountCoins"),
         badNewsRu = value.getString("badNewsRu"),
         choices = value.getJSONArray("choices").let { a -> List(a.length()) { decodeChantalChoiceOption(a.getJSONObject(it)) } },
-        chosenActionSummaryRu = if (value.isNull("chosenActionSummaryRu")) null else value.getString("chosenActionSummaryRu")
+        chosenActionSummaryRu = if (value.isNull("chosenActionSummaryRu")) null else value.getString("chosenActionSummaryRu"),
+        memorySummaryRu = if (value.isNull("memorySummaryRu")) null else value.getString("memorySummaryRu")
     )
 
     fun encode(value: ChantalRewardPopupData): JSONObject = JSONObject().apply {

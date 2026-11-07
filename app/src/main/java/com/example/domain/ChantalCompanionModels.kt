@@ -539,7 +539,8 @@ data class ChantalStoryEpisode(
     val debtAmountCoins: Int,
     val badNewsRu: String,
     val choices: List<ChantalChoiceOption>,
-    val chosenActionSummaryRu: String? = null
+    val chosenActionSummaryRu: String? = null,
+    val memorySummaryRu: String? = null
 )
 
 data class ChantalRewardPopupData(

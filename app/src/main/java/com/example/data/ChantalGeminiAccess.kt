@@ -79,7 +79,7 @@ class GeminiStoryTransport(private val secret: String, private val model: String
             connection.doOutput = true
             val body = JSONObject().put("contents", JSONArray().put(JSONObject().put("role", "user")
                 .put("parts", JSONArray().put(JSONObject().put("text", prompt)))))
-                .put("generationConfig", JSONObject().put("responseMimeType", "application/json").put("maxOutputTokens", 4096))
+                .put("generationConfig", JSONObject().put("responseMimeType", "application/json").put("maxOutputTokens", 8192))
             connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
             // Never surface error bodies, request headers or credentials in UI/logs.
             val status = connection.responseCode

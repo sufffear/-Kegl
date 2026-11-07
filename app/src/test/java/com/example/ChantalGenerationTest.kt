@@ -27,6 +27,43 @@ class ChantalGenerationTest {
             .put("reactionRu", "Шанталь отвечает $it").put("trait", listOf("wit", "courage", "tenderness")[it]) }))
         .put("references", JSONArray()).put("proposals", JSONArray())
 
+    @Test fun narrativeV3AcceptsLongerParagraphStoryAndPreservesFullEndingSummary() {
+        val sample = ChantalNarrativeSample.episode()
+        assertTrue(sample.storyTextRu.count { it == '.' || it == '?' || it == '!' } > 12)
+        val summary = "Шанталь ошибочно обвинила барсука, затем помогла укрыть зайца и бельчат и извинилась."
+        val reply = response().apply {
+            remove("sentencesRu")
+            put("paragraphsRu", JSONArray(sample.storyTextRu.split("\n\n")))
+            put("summaryRu", summary)
+        }
+        val generated = ChantalStoryGeneration.parse(reply.toString(), episode(), ChantalWorldMemory.empty()).episode
+        assertEquals(sample.storyTextRu, generated.storyTextRu)
+        assertEquals(summary, generated.memorySummaryRu)
+        val accepted = generated.copy(chosenActionSummaryRu = "Ответ игрока")
+        val restored = ChantalProgressCodec.decodeChantalStoryEpisode(ChantalProgressCodec.encode(accepted))
+        assertEquals(accepted, restored)
+        val memory = ChantalWorldMemory.reconcile(null, JSONArray().put(ChantalProgressCodec.encode(restored)))
+        assertEquals(summary, memory.getJSONArray("events").getJSONObject(0).getString("summaryRu"))
+    }
+    @Test fun mixedFormatsAndOversizedParagraphsAreRejected() {
+        val mixed = response().put("paragraphsRu", JSONArray().put("Я вернулась домой." )).put("summaryRu", "Факт")
+        assertTrue(runCatching { ChantalStoryGeneration.parse(mixed.toString(), episode(), ChantalWorldMemory.empty()) }.isFailure)
+        val oversized = response().apply {
+            remove("sentencesRu")
+            put("paragraphsRu", JSONArray().put("а".repeat(2401)))
+            put("summaryRu", "Факт")
+        }
+        assertTrue(runCatching { ChantalStoryGeneration.parse(oversized.toString(), episode(), ChantalWorldMemory.empty()) }.isFailure)
+    }
+    @Test fun generationPromptCarriesApprovedVoiceAndConversationalChoices() {
+        val prompt = ChantalStoryGeneration.prompt(episode(), ChantalWorldMemory.empty(), ChantalTraits())
+        assertTrue(prompt.contains("ЛИТЕРАТУРНАЯ ИНСТРУКЦИЯ 3.0"))
+        assertTrue(prompt.contains("от первого лица"))
+        assertTrue(prompt.contains("Нет квоты в 12 предложений"))
+        assertTrue(prompt.contains("реплики игрока"))
+        assertFalse(prompt.contains("из 10–12 полных предложений"))
+    }
+
     @Test fun geminiEnvelopeRejectsTruncatedAndBlockedResponses() {
         val candidate = JSONObject().put("finishReason", "STOP").put("content", JSONObject()
             .put("parts", JSONArray().put(JSONObject().put("thought", true).put("text", "internal"))

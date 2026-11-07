@@ -19,7 +19,8 @@ import kotlinx.coroutines.launch
 internal fun ChantalStoryPreview(onDismiss: () -> Unit, generate: suspend () -> ChantalGenerationResult) {
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
-    var episode by remember { mutableStateOf<ChantalStoryEpisode?>(null) }
+    var episode by remember { mutableStateOf<ChantalStoryEpisode?>(ChantalNarrativeSample.episode()) }
+    var isAuthoredSample by remember { mutableStateOf(true) }
     var selected by remember { mutableStateOf<Int?>(null) }
     var message by remember { mutableStateOf("") }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -28,6 +29,7 @@ internal fun ChantalStoryPreview(onDismiss: () -> Unit, generate: suspend () -> 
                 Text("Пробная история Gemini", style = MaterialTheme.typography.titleLarge)
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Без ожидания похода. Энергия, награды, журнал и характер не меняются. Запрос использует игровую память и квоту Gemini.")
+                    Text(if (isAuthoredSample) "Авторский образец стиля 3.0 · вне игрового журнала" else "Новый рассказ Gemini · вне игрового журнала")
                     episode?.let { ep ->
                         Text(ep.titleRu, style = MaterialTheme.typography.titleMedium)
                         Text(ep.storyTextRu, modifier = Modifier.testTag("preview_story_text"))
@@ -48,7 +50,7 @@ internal fun ChantalStoryPreview(onDismiss: () -> Unit, generate: suspend () -> 
                     scope.launch {
                         try {
                             when (val result = generate()) {
-                                is ChantalGenerationResult.Ready -> { episode = result.story.episode; selected = null; message = "Пробный рассказ. В летопись не записан." }
+                                is ChantalGenerationResult.Ready -> { episode = result.story.episode; isAuthoredSample = false; selected = null; message = "Пробный рассказ. В летопись не записан." }
                                 else -> message = "Рассказ не прошёл проверку или Gemini недоступен. Прогресс не менялся."
                             }
                         } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
@@ -56,7 +58,7 @@ internal fun ChantalStoryPreview(onDismiss: () -> Unit, generate: suspend () -> 
                         finally { busy = false }
                     }
                 }, enabled = !busy, modifier = Modifier.fillMaxWidth().testTag("preview_generate")) {
-                    Text(if (busy) "Создаём рассказ…" else if (episode == null) "Получить историю · один запрос" else "Другой рассказ · один запрос")
+                    Text(if (busy) "Создаём рассказ…" else if (isAuthoredSample) "Получить историю Gemini · один запрос" else "Другой рассказ · один запрос")
                 }
                 TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().testTag("preview_close")) { Text(if (busy) "Отменить и закрыть" else "Закрыть") }
             }

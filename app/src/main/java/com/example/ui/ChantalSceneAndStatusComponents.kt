@@ -811,7 +811,7 @@ internal fun ChantalCompactStoryEventCard(
                     color = HobbitGold
                 )
                 Text(
-                    text = "Как ты отреагируешь на рассказ Шанталь?",
+                    text = "Что ты скажешь Шанталь?",
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.SansSerif,
                     fontWeight = FontWeight.Medium,
