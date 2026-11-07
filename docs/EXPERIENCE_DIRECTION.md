@@ -13,3 +13,7 @@ Optional workouts: quick preset is 3 minutes (90 repeats of 1s hold / 1s rest), 
 ## Latest approved visual reference
 
 The owner superseded the light parchment direction with a dark forest reference (142327.jpg): near-black green backgrounds, bronze card frames, warm cream text, amber navigation selection and full-width content without an outer light gutter. Keep internal padding and readable type. Apply to Training first as the reference screen, with shared theme across tabs. No new flame illustration is needed.
+
+The current approved implementation order and the accepted/rejected interview decisions
+are recorded in [WORLD_ROADMAP.md](WORLD_ROADMAP.md); consult that document before
+adding gameplay, changing the main screen, or integrating AI generation.
