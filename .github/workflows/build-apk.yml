@@ -38,8 +38,8 @@ jobs:
       - name: Build Debug APK
         run: gradle :app:assembleDebug
 
-      - name: Test progress persistence and backup restore
-        run: gradle :app:testDebugUnitTest --tests 'com.example.Chantal*PersistenceTest' --tests 'com.example.BackupRestoreTest' --tests 'com.example.Workout*Test'
+      - name: Run Android unit and Robolectric tests
+        run: gradle :app:testDebugUnitTest
 
       - name: Verify APK signing certificate
         run: |

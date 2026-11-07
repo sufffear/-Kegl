@@ -42,7 +42,10 @@ class ChantalReturnWorker(context: Context, params: WorkerParameters) : Worker(c
     override fun doWork(): Result {
         val start = inputData.getLong("start", 0)
         val snapshot = runCatching { ChantalProgressRepository(applicationContext).load() }.getOrElse { return Result.failure() }
-        if (snapshot.optLong("activeJourneyStartMs") != start || !ChantalJourneyClock.ready(start, System.currentTimeMillis())) return Result.success()
+        if (start <= 0 || snapshot.optLong("activeJourneyStartMs") != start) return Result.success()
+        // Wall-clock changes can make a scheduled worker run before the journey is ready.
+        // Keep this work pending instead of permanently losing the return reminder.
+        if (!ChantalJourneyClock.ready(start, System.currentTimeMillis())) return Result.retry()
         val prefs = applicationContext.getSharedPreferences("chantal_notifications", Context.MODE_PRIVATE)
         if (prefs.getLong("notifiedStart", 0) == start) return Result.success()
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return Result.success()

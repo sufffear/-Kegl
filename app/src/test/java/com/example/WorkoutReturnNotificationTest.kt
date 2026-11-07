@@ -29,15 +29,14 @@ class WorkoutReturnNotificationTest {
         ChantalProgressRepository(context).replace(null)
     }
     @After fun close() { executor.shutdownNow() }
-    private fun deliver(start: Long) {
+    private fun deliver(start: Long) =
         TestWorkerBuilder.from(context, ChantalReturnWorker::class.java, executor)
             .setInputData(workDataOf("start" to start)).build().doWork()
-    }
     @Test fun staleOrUnfinishedJourneyDoesNotNotify() {
         val start = System.currentTimeMillis()
         ChantalProgressRepository(context).save(JSONObject().put("activeJourneyStartMs", start))
-        deliver(start)
-        deliver(start - 100)
+        assertEquals(androidx.work.ListenableWorker.Result.retry(), deliver(start))
+        assertEquals(androidx.work.ListenableWorker.Result.success(), deliver(start - 100))
         assertEquals(0, shadowOf(context.getSystemService(NotificationManager::class.java)).size())
     }
     @Test fun returnedJourneyNotifiesOnceWithoutIssuingRewards() {
