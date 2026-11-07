@@ -237,6 +237,7 @@ fun VelarisChantalScreen(
 
     // Активный часовой поход
     var activeJourneyStartMs by remember { mutableLongStateOf(saved.optLong("activeJourneyStartMs", 0L)) }
+    var preferredRegionId by remember { mutableStateOf(saved.optString("preferredRegionId", "")) }
     var activeRegionId by remember { mutableStateOf(saved.optString("activeRegionId", "")) }
     var activeRegionTitleRu by remember { mutableStateOf(saved.optString("activeRegionTitleRu", "")) }
     var activeNpcRu by remember { mutableStateOf(saved.optString("activeNpcRu", "")) }
@@ -378,6 +379,7 @@ fun VelarisChantalScreen(
         put("petTapCount", petTapCount ?: JSONObject.NULL)
         put("subTab", subTab ?: JSONObject.NULL)
         put("activeJourneyStartMs", activeJourneyStartMs ?: JSONObject.NULL)
+        put("preferredRegionId", preferredRegionId)
         put("activeRegionId", activeRegionId ?: JSONObject.NULL)
         put("activeRegionTitleRu", activeRegionTitleRu ?: JSONObject.NULL)
         put("activeNpcRu", activeNpcRu ?: JSONObject.NULL)
@@ -1828,6 +1830,7 @@ fun VelarisChantalScreen(
                                     }
                                 }
 
+                                Text("Маршрут: ${DEFAULT_CHANTAL_MAP_REGIONS.firstOrNull { it.id == preferredRegionId }?.titleRu ?: "выбирает Шанталь"}", color = HobbitCream)
                                 // Поле пожелания / поручения + Единая кнопка отправки в поход
                                 OutlinedTextField(
                                     value = fillerTextInput,
@@ -1852,15 +1855,16 @@ fun VelarisChantalScreen(
                                                 val lastRegTitle = journalList.firstOrNull()?.regionTitleRu
                                                 val lastReg = unlocked.find { it.titleRu == lastRegTitle }
                                                 val staySame = lastReg != null && Random.nextFloat() < 0.45f
-                                                val chosenReg = if (staySame && lastReg != null) lastReg else unlocked.random()
+                                                val chosenReg = unlocked.firstOrNull { it.id == preferredRegionId }
+                                                    ?: if (staySame && lastReg != null) lastReg else unlocked.random()
                                                 val chosenNpc = chosenReg.npcsRu.random()
                                                 val chosenThread = chosenReg.unfinishedThreadsRu.random()
 
                                                 activeRegionId = chosenReg.id
                                                 activeRegionTitleRu = chosenReg.titleRu
                                                 activeNpcRu = chosenNpc
-                                                activeStayedInSameRegion = staySame
-                                                activeAutonomousReasonRu = if (staySame) {
+                                                activeStayedInSameRegion = chosenReg.id == lastReg?.id
+                                                activeAutonomousReasonRu = if (activeStayedInSameRegion) {
                                                     "Шанталь решила снова вернуться в «${chosenReg.titleRu}», так как у неё там остались незаконченные дела ($chosenThread) и встреча с персонажем $chosenNpc."
                                                 } else {
                                                     "Шанталь выбрала на карте «${chosenReg.titleRu}», чтобы $chosenThread и встретиться с персонажем $chosenNpc."
@@ -1922,38 +1926,11 @@ fun VelarisChantalScreen(
                         .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text(
-                        text = "Пергаментная карта странствий Шанталь",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = HobbitCream,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Image(
-                        painter = painterResource(id = R.drawable.chantal_map),
-                        contentDescription = "Пергаментная карта мира Шанталь",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                    )
-                    DEFAULT_CHANTAL_MAP_REGIONS.forEach { reg ->
-                        val unlocked = totalJourneys >= reg.minJourneysRequired
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = HobbitElevatedBg,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text(
-                                    text = if (unlocked) "${reg.emoji} ${reg.titleRu}" else "🔒 ${reg.titleRu} (с ${reg.minJourneysRequired} пох.)",
-                                    color = if (unlocked) HobbitGold else HobbitMuted,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                                Text(text = reg.loreRu, style = MaterialTheme.typography.bodySmall, color = HobbitCream)
-                            }
-                        }
+                    ChantalWorldMap(totalJourneys, preferredRegionId, activeJourneyStartMs > 0L || pendingEpisode != null) { regionId ->
+                        preferredRegionId = regionId
+                        subTab = "den"
                     }
+
                 }
             }
         }
