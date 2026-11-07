@@ -304,6 +304,7 @@ interface VelarisDao {
         blocks: List<NovelBlockEntity>,
         progress: NovelReadingProgressEntity?,
         freeTemplates: List<FreeIntervalTemplateEntity> = emptyList(),
+        customPrograms: List<CustomProgramEntity>? = null,
         beforeCommit: suspend () -> Unit = {}
     ) {
         deleteRealWorkoutCompletions()
@@ -330,6 +331,10 @@ interface VelarisDao {
 
         deleteAllFreeTemplates()
         if (freeTemplates.isNotEmpty()) upsertFreeTemplates(freeTemplates)
+        if (customPrograms != null) {
+            deleteAllCustomPrograms()
+            if (customPrograms.isNotEmpty()) upsertCustomPrograms(customPrograms)
+        }
         // Any exception in external stores also rolls back the Room transaction.
         beforeCommit()
     }

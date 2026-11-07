@@ -112,7 +112,8 @@ data class BackupDatabaseSnapshot(
     val novelChapters: List<NovelChapterEntity> = emptyList(),
     val novelBlocks: List<NovelBlockEntity> = emptyList(),
     val novelReadingProgress: NovelReadingProgressEntity? = null,
-    val freeTemplates: List<FreeIntervalTemplateEntity> = emptyList()
+    val freeTemplates: List<FreeIntervalTemplateEntity> = emptyList(),
+    val customPrograms: List<CustomProgramEntity>? = null
 ) {
     fun toJson(): String {
         val root = JSONObject()
@@ -305,6 +306,19 @@ data class BackupDatabaseSnapshot(
             })
         }
         root.put("freeTemplates", ftArr)
+        customPrograms?.let { programs ->
+            root.put("customPrograms", JSONArray().apply {
+                programs.forEach { p -> put(JSONObject().apply {
+                    put("id", p.id)
+                    put("title", p.title)
+                    put("description", p.description)
+                    put("sortOrder", p.sortOrder)
+                    put("blocksJson", p.blocksJson)
+                    put("createdAtEpochMs", p.createdAtEpochMs)
+                    put("updatedAtEpochMs", p.updatedAtEpochMs)
+                }) }
+            })
+        }
 
         return root.toString()
     }
@@ -546,7 +560,17 @@ data class BackupDatabaseSnapshot(
                 novelChapters = chapters,
                 novelBlocks = blocks,
                 novelReadingProgress = progress,
-                freeTemplates = freeTemplates
+                freeTemplates = freeTemplates,
+                customPrograms = root.optJSONArray("customPrograms")?.let { a ->
+                    (0 until a.length()).map { index ->
+                        val p = a.getJSONObject(index)
+                        val blocksJson = p.getString("blocksJson")
+                        JSONArray(blocksJson)
+                        CustomProgramEntity(p.getString("id"), p.getString("title"),
+                            p.optString("description", ""), p.optInt("sortOrder", 0), blocksJson,
+                            p.optLong("createdAtEpochMs", 0), p.optLong("updatedAtEpochMs", 0))
+                    }
+                }
             )
         }
     }

@@ -119,7 +119,8 @@ class BackupRestoreManager(
                 novelChapters = chapters,
                 novelBlocks = blocks,
                 novelReadingProgress = progress,
-                freeTemplates = freeTemplates
+                freeTemplates = freeTemplates,
+                customPrograms = dao.getAllCustomPrograms()
             )
 
             val dbBytes = dbSnapshot.toJson().toByteArray(Charsets.UTF_8)
@@ -420,6 +421,7 @@ class BackupRestoreManager(
                 blocks = dbSnapshot.novelBlocks,
                 progress = dbSnapshot.novelReadingProgress,
                 freeTemplates = dbSnapshot.freeTemplates,
+                customPrograms = dbSnapshot.customPrograms,
                 beforeCommit = {
                     externalWriteStarted = true
 

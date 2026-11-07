@@ -81,7 +81,10 @@ class BackupRestoreTest {
         chantal.save(JSONObject().put("coins", 42).put("maturityXp", 13).put("activeJourneyStartMs", 1234L))
         val settings = BenchSignalSettings(soundEnabled = false, duckOtherApps = true, frozenDates = setOf("2026-11-06"))
         prefs.updateSettings(settings)
+        val custom = CustomProgramEntity("custom", "Личная программа")
+        db.velarisDao().upsertCustomProgram(custom)
         val bytes = archive()
+        db.velarisDao().deleteAllCustomPrograms()
         chantal.save(JSONObject().put("coins", 999))
         prefs.updateSettings(BenchSignalSettings())
         db.velarisDao().deleteRealTrainingPlans()
@@ -90,6 +93,7 @@ class BackupRestoreTest {
         assertEquals(42, chantal.load().getInt("coins"))
         assertEquals(1234L, chantal.load().getLong("activeJourneyStartMs"))
         assertEquals(settings, prefs.signalSettingsFlow.first())
+        assertEquals(listOf(custom), db.velarisDao().getAllCustomPrograms())
     }
 
     @Test fun writeFailureRollsBackRoomAndSettings() = runBlocking {
