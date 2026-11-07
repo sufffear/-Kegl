@@ -23,9 +23,15 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Generate consistent debug keystore if not present
+      - name: Restore signing key or create temporary test key
+        env:
+          SIGNING_KEY_BASE64: ${{ secrets.VELARIS_DEBUG_KEYSTORE_BASE64 }}
         run: |
-          if [ ! -f debug.keystore ]; then
+          umask 077
+          if [ -n "$SIGNING_KEY_BASE64" ]; then
+            printf '%s' "$SIGNING_KEY_BASE64" | base64 --decode > debug.keystore
+          else
+            echo '::warning::Temporary signing key: this APK is for build verification only. Configure VELARIS_DEBUG_KEYSTORE_BASE64 before distributing updates.'
             keytool -genkeypair -v \
               -keystore debug.keystore \
               -storepass android \
@@ -43,6 +49,6 @@ jobs:
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: velaris-v0.4.0-v1.1-debug-apk
+          name: velaris-debug-${{ github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
