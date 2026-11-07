@@ -41,6 +41,9 @@ import java.io.FileOutputStream
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [28], qualifiers = "w411dp-h891dp")
 class ChantalScreenPersistenceTest {
+    @org.junit.Before fun initializeBackgroundWork() {
+        androidx.work.testing.WorkManagerTestInitHelper.initializeTestWorkManager(ApplicationProvider.getApplicationContext<Context>())
+    }
     @get:Rule val compose = createComposeRule()
 
     private fun saveCurrentWindowsScreenshot(rootView: View, fileName: String) {

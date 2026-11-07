@@ -20,6 +20,7 @@ class ChantalPersistenceTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
 
     @Before fun clear() {
+        androidx.work.testing.WorkManagerTestInitHelper.initializeTestWorkManager(context)
         context.getSharedPreferences("chantal_progress", Context.MODE_PRIVATE).edit().clear().commit()
     }
 

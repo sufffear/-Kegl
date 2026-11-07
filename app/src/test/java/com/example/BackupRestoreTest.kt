@@ -34,6 +34,7 @@ class BackupRestoreTest {
     private val chantal get() = ChantalProgressRepository(context)
 
     @Before fun setup() {
+        androidx.work.testing.WorkManagerTestInitHelper.initializeTestWorkManager(context)
         db = Room.inMemoryDatabaseBuilder(context, VelarisDatabase::class.java).allowMainThreadQueries().build()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         prefsFile = File(context.cacheDir, "test-${System.nanoTime()}.preferences_pb")
