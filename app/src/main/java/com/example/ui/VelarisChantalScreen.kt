@@ -1863,8 +1863,8 @@ fun VelarisChantalScreen(
                                                 activeRegionId = chosenReg.id
                                                 activeRegionTitleRu = chosenReg.titleRu
                                                 activeNpcRu = chosenNpc
-                                                activeStayedInSameRegion = staySame
-                                                activeAutonomousReasonRu = if (staySame) {
+                                                activeStayedInSameRegion = chosenReg.id == lastReg?.id
+                                                activeAutonomousReasonRu = if (activeStayedInSameRegion) {
                                                     "Шанталь решила снова вернуться в «${chosenReg.titleRu}», так как у неё там остались незаконченные дела ($chosenThread) и встреча с персонажем $chosenNpc."
                                                 } else {
                                                     "Шанталь выбрала на карте «${chosenReg.titleRu}», чтобы $chosenThread и встретиться с персонажем $chosenNpc."
