@@ -23,7 +23,7 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Restore signing key or create temporary test key
+      - name: Restore persistent signing key
         env:
           SIGNING_KEY_BASE64: ${{ secrets.VELARIS_DEBUG_KEYSTORE_BASE64 }}
         run: |
@@ -31,20 +31,21 @@ jobs:
           if [ -n "$SIGNING_KEY_BASE64" ]; then
             printf '%s' "$SIGNING_KEY_BASE64" | base64 --decode > debug.keystore
           else
-            echo '::warning::Temporary signing key: this APK is for build verification only. Configure VELARIS_DEBUG_KEYSTORE_BASE64 before distributing updates.'
-            keytool -genkeypair -v \
-              -keystore debug.keystore \
-              -storepass android \
-              -alias androiddebugkey \
-              -keypass android \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
+            echo '::error::Configure VELARIS_DEBUG_KEYSTORE_BASE64. Refusing to create an incompatible temporary signing key.'
+            exit 1
           fi
 
       - name: Build Debug APK
         run: gradle :app:assembleDebug
+
+      - name: Verify APK signing certificate
+        run: |
+          expected='7cb0deb615308fa329eaba824b772767a93f1d2587dec50f6958a9e42794d8c7'
+          apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
+          "$apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk > signing-report.txt
+          actual=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' signing-report.txt | tr '[:upper:]' '[:lower:]')
+          test "$actual" = "$expected" || { echo '::error::Unexpected APK signing certificate'; exit 1; }
+          cat signing-report.txt
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
