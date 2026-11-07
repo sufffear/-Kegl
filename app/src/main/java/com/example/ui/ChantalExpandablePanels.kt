@@ -772,9 +772,9 @@ internal fun ChantalExpeditionPrepContent(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(
                     onClick = onStartJourney,
@@ -782,7 +782,7 @@ internal fun ChantalExpeditionPrepContent(
                     colors = ButtonDefaults.buttonColors(containerColor = HobbitElevatedBg),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
-                        .weight(1.4f)
+                        .fillMaxWidth()
                         .heightIn(min = 50.dp)
                         .testTag("btn_start_chantal_journey")
                 ) {
@@ -799,7 +799,7 @@ internal fun ChantalExpeditionPrepContent(
                     onClick = onOpenWorkoutPlan,
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxWidth()
                         .heightIn(min = 50.dp)
                 ) {
                     Text(

@@ -540,10 +540,10 @@ internal fun ChantalLevelXpMoodPanel(
                     .clip(RoundedCornerShape(4.dp))
             )
 
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.Start
             ) {
                 Text(
                     text = recentXpGainText ?: "До след. стадии: ${maturityProgress.xpToNextStage} XP · Походов: $totalJourneys",
@@ -551,8 +551,8 @@ internal fun ChantalLevelXpMoodPanel(
                     fontFamily = FontFamily.SansSerif,
                     fontWeight = if (recentXpGainText != null) FontWeight.Bold else FontWeight.Medium,
                     color = if (recentXpGainText != null) HobbitPink else HobbitMuted,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
 
