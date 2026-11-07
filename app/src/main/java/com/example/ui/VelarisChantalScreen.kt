@@ -736,6 +736,11 @@ fun VelarisChantalScreen(
                     badNewsRu = "",
                     choices = epChoices
                 )
+                pendingEpisode?.let { base ->
+                    com.example.data.ChantalLanternAdventure.next(base, journalList.toList(),
+                        progressRepository.load().optJSONObject("worldMemory") ?: com.example.data.ChantalWorldMemory.empty())
+                        ?.let { pendingEpisode = it }
+                }
                 activeJourneyStartMs = 0L
                 denAccordionTab = "none"
             },
