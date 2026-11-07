@@ -39,8 +39,8 @@ class WorkoutPersistenceTest {
         assertEquals(15, db.velarisDao().observeWorkoutEnergy().first())
     }
     @Test fun extraPresetsMatchAgreedIntervals() {
-        assertEquals(listOf(30, 20, 10), ExtraWorkoutPresets.all.map { it.calculatedCycles })
-        assertEquals(listOf(60, 300, 350), ExtraWorkoutPresets.all.map { it.actualDurationSec })
+        assertEquals(listOf(90, 20, 10), ExtraWorkoutPresets.all.map { it.calculatedCycles })
+        assertEquals(listOf(180, 300, 350), ExtraWorkoutPresets.all.map { it.actualDurationSec })
         assertTrue(ExtraWorkoutPresets.all.all { it.isValid })
     }
 
