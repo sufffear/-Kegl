@@ -47,7 +47,19 @@ class ChantalScreenPersistenceTest {
         val width = rootView.width.coerceAtLeast(411)
         val height = rootView.height.coerceAtLeast(891)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        rootView.draw(Canvas(bitmap))
+        val canvas = Canvas(bitmap)
+        rootView.draw(canvas)
+        val global = Class.forName("android.view.WindowManagerGlobal")
+        val instance = global.getMethod("getInstance").invoke(null)
+        @Suppress("UNCHECKED_CAST")
+        val windows = global.getDeclaredField("mViews").apply { isAccessible = true }.get(instance) as List<View>
+        windows.filter { it !== rootView.rootView && it.visibility == View.VISIBLE && it.width > 0 && it.height > 0 }.forEach { window ->
+            canvas.drawARGB(120, 0, 0, 0)
+            canvas.save()
+            canvas.translate(((width - window.width) / 2f).coerceAtLeast(0f), ((height - window.height) / 2f).coerceAtLeast(0f))
+            window.draw(canvas)
+            canvas.restore()
+        }
         val outDir = File("build/reports/chantal-screenshots")
         check(outDir.isDirectory || outDir.mkdirs())
         FileOutputStream(File(outDir, fileName)).use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 95, it)) }
