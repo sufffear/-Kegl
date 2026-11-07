@@ -137,7 +137,7 @@ class ChantalScreenPersistenceTest {
             capturedRootView?.let { saveCurrentWindowsScreenshot(it, "1_chantal_den_closed_menu.png") }
         }
 
-        compose.onNodeWithTag("chantal_interactive_portrait").performScrollTo()
+        compose.onNodeWithTag("btn_chantal_menu").performScrollTo()
         val portraitTopBeforeMenu = compose.onNodeWithTag("chantal_interactive_portrait")
             .fetchSemanticsNode().boundsInRoot.top
 
