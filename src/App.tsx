@@ -5,8 +5,11 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Compass,
+  Coins,
   Dumbbell,
   Flame,
+  Heart,
   Home,
   Pause,
   Play,
@@ -14,11 +17,11 @@ import {
   RotateCcw,
   Settings,
   Shield,
-  Sliders,
   Sparkles,
   Volume2,
   Zap,
 } from 'lucide-react';
+import ChantalCompanionView from './ChantalCompanionView';
 import {
   CompletedSessionRecord,
   createInitialHistory,
@@ -106,7 +109,24 @@ export default function App() {
   const [themeId, setThemeId] = useState<VelarisThemeId>('theme_dawn');
   const palette = VELARIS_THEMES[themeId];
 
-  const [activeTab, setActiveTab] = useState<'home' | 'plan' | 'settings'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'plan' | 'chantal' | 'settings'>('chantal');
+  const [chantalEnergy, setChantalEnergy] = useState<number>(() => {
+    const saved = Number(localStorage.getItem('chantal_energy'));
+    return Number.isFinite(saved) && saved >= 0 ? saved : 30;
+  });
+  const [chantalCoins, setChantalCoins] = useState<number>(() => {
+    const saved = Number(localStorage.getItem('chantal_coins'));
+    return Number.isFinite(saved) && saved >= 0 ? saved : 65;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('chantal_energy', String(chantalEnergy));
+  }, [chantalEnergy]);
+
+  useEffect(() => {
+    localStorage.setItem('chantal_coins', String(chantalCoins));
+  }, [chantalCoins]);
+
   const [historyRecords, setHistoryRecords] = useState<CompletedSessionRecord[]>(() =>
     createInitialHistory(TODAY_ISO)
   );
@@ -170,6 +190,8 @@ export default function App() {
               holdSeconds: holdSec,
             };
             setHistoryRecords((old) => [newRec, ...old]);
+            setChantalEnergy((e) => e + 10);
+            setChantalCoins((c) => c + 5);
             setSelectedDate(TODAY_ISO);
             setMonthOffset(0);
             setIsTimerScreenOpen(false);
@@ -488,6 +510,8 @@ export default function App() {
         };
 
     setHistoryRecords((prev) => [newRec, ...prev]);
+    setChantalEnergy((e) => e + 10);
+    setChantalCoins((c) => c + 5);
   };
 
   const toggleFreezeForDate = (dateIso: string) => {
@@ -544,6 +568,18 @@ export default function App() {
             }}
           >
             Тренировки
+          </button>
+          <button
+            onClick={() => {
+              setIsTimerScreenOpen(false);
+              setActiveTab('chantal');
+            }}
+            className="whitespace-nowrap shrink-0 transition-opacity hover:opacity-80 cursor-pointer"
+            style={{
+              color: activeTab === 'chantal' && !isTimerScreenOpen ? '#EA580C' : palette.textSecondary,
+            }}
+          >
+            Шанталь ({chantalEnergy} Эн.)
           </button>
           <button
             onClick={() => {
@@ -1601,6 +1637,37 @@ export default function App() {
                 </div>
               </section>
 
+              {/* Companion Quick Card on Home Screen */}
+              <section
+                aria-label="Домик лисёнка Шанталь"
+                className="rounded-[26px] p-5 sm:p-6 shadow-xs border bg-[#1E1712] text-[#F6EEDF] border-[#4D3D2C]"
+              >
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div>
+                    <div className="text-xs font-semibold text-[#F59E0B]">
+                      Компаньон · Мир лесных троп
+                    </div>
+                    <h3 className="text-lg font-extrabold text-[#FFF8EB]">
+                      Шанталь ждёт приключений
+                    </h3>
+                  </div>
+                  <div className="text-right text-xs font-extrabold tabular-nums">
+                    <div className="text-[#10B981]">⚡ {chantalEnergy} Энергии</div>
+                    <div className="text-[#F59E0B] mt-0.5">🪙 {chantalCoins} Монет</div>
+                  </div>
+                </div>
+                <p className="text-xs text-[#D5C3AA] leading-relaxed mb-4">
+                  Каждая выполненная сессия даёт +10 Энергии. За 30 Энергии (блок Утро, Обед или Вечер) Шанталь уходит в часовой поход и приносит историю от ИИ и находку в инвентарь.
+                </p>
+                <button
+                  onClick={() => setActiveTab('chantal')}
+                  className="w-full min-h-[46px] rounded-2xl bg-[#EA580C] text-white text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Compass className="w-4 h-4" />
+                  <span>Открыть домик Шанталь и карту</span>
+                </button>
+              </section>
+
               {/* Quick Theme Switcher Card */}
               <section
                 aria-label="Быстрый выбор темы Velaris"
@@ -1942,6 +2009,17 @@ export default function App() {
               </div>
             )}
           </div>
+        ) : activeTab === 'chantal' ? (
+          <ChantalCompanionView
+            energy={chantalEnergy}
+            setEnergy={setChantalEnergy}
+            coins={chantalCoins}
+            setCoins={setChantalCoins}
+            currentStreakDays={overviewStats.currentStreak}
+            onGoToWorkout={() => setActiveTab('plan')}
+            soundEnabled={soundEnabled}
+            onPlayTone={playVelarisTone}
+          />
         ) : (
           /* SETTINGS SCREEN */
           <div className="max-w-[540px] mx-auto space-y-5">
@@ -2072,7 +2150,7 @@ export default function App() {
           borderColor: `${palette.outline}55`,
         }}
       >
-        <div className="max-w-[460px] mx-auto grid grid-cols-3 h-16 items-center px-2">
+        <div className="max-w-[460px] mx-auto grid grid-cols-4 h-16 items-center px-2">
           <button
             onClick={() => {
               setIsTimerScreenOpen(false);
@@ -2087,7 +2165,7 @@ export default function App() {
             }}
           >
             <Home className="w-5 h-5" />
-            <span className="text-[11px] font-bold mt-1">Главная</span>
+            <span className="text-[11px] font-bold mt-1 whitespace-nowrap">Главная</span>
           </button>
 
           <button
@@ -2104,7 +2182,24 @@ export default function App() {
             }}
           >
             <Flame className="w-5 h-5" />
-            <span className="text-[11px] font-bold mt-1">Тренировки</span>
+            <span className="text-[11px] font-bold mt-1 whitespace-nowrap">Тренировки</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setIsTimerScreenOpen(false);
+              setActiveTab('chantal');
+            }}
+            className="h-full flex flex-col items-center justify-center cursor-pointer"
+            style={{
+              color:
+                activeTab === 'chantal' && !isTimerScreenOpen
+                  ? '#EA580C'
+                  : palette.textSecondary,
+            }}
+          >
+            <Heart className="w-5 h-5" />
+            <span className="text-[11px] font-bold mt-1 whitespace-nowrap">Шанталь</span>
           </button>
 
           <button
@@ -2121,7 +2216,7 @@ export default function App() {
             }}
           >
             <Settings className="w-5 h-5" />
-            <span className="text-[11px] font-bold mt-1">Настройки</span>
+            <span className="text-[11px] font-bold mt-1 whitespace-nowrap">Настройки</span>
           </button>
         </div>
       </nav>
