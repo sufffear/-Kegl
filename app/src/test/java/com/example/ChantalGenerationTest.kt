@@ -27,6 +27,17 @@ class ChantalGenerationTest {
             .put("reactionRu", "Шанталь отвечает $it").put("trait", listOf("wit", "courage", "tenderness")[it]) }))
         .put("references", JSONArray()).put("proposals", JSONArray())
 
+    @Test fun geminiEnvelopeRejectsTruncatedAndBlockedResponses() {
+        val candidate = JSONObject().put("finishReason", "STOP").put("content", JSONObject()
+            .put("parts", JSONArray().put(JSONObject().put("thought", true).put("text", "internal"))
+                .put(JSONObject().put("text", response().toString()))))
+        val envelope = JSONObject().put("candidates", JSONArray().put(candidate))
+        assertEquals(response().toString(), GeminiStoryTransport.decodeResponse(envelope.toString()))
+        candidate.put("finishReason", "MAX_TOKENS")
+        assertTrue(runCatching { GeminiStoryTransport.decodeResponse(envelope.toString()) }.isFailure)
+        assertTrue(runCatching { GeminiStoryTransport.decodeResponse("{\"promptFeedback\":{\"blockReason\":\"SAFETY\"}}") }.isFailure)
+    }
+
     @Test fun validResponseKeepsAppOwnedRewardsAndIds() {
         val base = episode()
         val generated = ChantalStoryGeneration.parse(response().toString(), base, ChantalWorldMemory.empty()).episode
