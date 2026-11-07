@@ -3,6 +3,7 @@ package com.example
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.ChantalProgressCodec
+import com.example.data.ChantalWorldMemory
 import com.example.data.ChantalProgressRepository
 import com.example.domain.*
 import org.json.JSONArray
@@ -68,6 +69,39 @@ class ChantalPersistenceTest {
         assertEquals(ep, ChantalProgressCodec.decodeChantalStoryEpisode(restored.getJSONArray("journalList").getJSONObject(0)))
         assertEquals(ep.lootItem, ChantalProgressCodec.decodeChantalInventoryLootItem(restored.getJSONArray("inventoryList").getJSONObject(0)))
         assertEquals(mapOf("scarf" to 3), ChantalProgressCodec.counts(restored.getJSONObject("gearDurabilityMap")))
+    }
+
+    @Test fun worldMemoryMigratesOnceAndSurvivesScreenSnapshotsAndBackupReplacement() {
+        val repo = ChantalProgressRepository(context)
+        val accepted = episode().copy(chosenActionSummaryRu = "Помочь")
+        repo.save(JSONObject().put("journalList", JSONArray().put(ChantalProgressCodec.encode(accepted))))
+        val migrated = repo.load().getJSONObject("worldMemory")
+        assertEquals(1, migrated.getJSONArray("events").length())
+        val fact = JSONObject().put("id", "bridge").put("sourceEpisodeId", accepted.id)
+            .put("descriptionRu", "Вернуться к мосту").put("status", "open")
+        val memory = ChantalWorldMemory.withFact(migrated, "promises", fact)
+        repo.save(repo.load().put("worldMemory", memory))
+        // The current screen rebuilds its snapshot without a memory field.
+        repo.save(JSONObject().put("journalList", JSONArray().put(ChantalProgressCodec.encode(accepted))))
+        val archive = repo.export()
+        repo.replace(null)
+        repo.replace(archive)
+        val restored = repo.load().getJSONObject("worldMemory")
+        assertEquals(1, restored.getJSONArray("events").length())
+        assertEquals("bridge", restored.getJSONArray("promises").getJSONObject(0).getString("id"))
+    }
+
+    @Test fun unacceptedStoriesAndInvalidConsequencesCannotBecomeFacts() {
+        val pending = JSONArray().put(ChantalProgressCodec.encode(episode()))
+        assertEquals(0, ChantalWorldMemory.reconcile(null, pending).getJSONArray("events").length())
+        var memory = ChantalWorldMemory.reconcile(null, JSONArray().put(ChantalProgressCodec.encode(episode().copy(chosenActionSummaryRu = "Помочь"))))
+        repeat(3) { i -> memory = ChantalWorldMemory.withFact(memory, "promises", JSONObject()
+            .put("id", "p$i").put("sourceEpisodeId", "episode-1").put("descriptionRu", "Обещание $i").put("status", "open")) }
+        assertTrue(runCatching { ChantalWorldMemory.withFact(memory, "promises", JSONObject()
+            .put("id", "fourth").put("sourceEpisodeId", "episode-1").put("descriptionRu", "Ещё").put("status", "open")) }.isFailure)
+        assertEquals(3, memory.getJSONArray("promises").length())
+        assertTrue(runCatching { ChantalWorldMemory.withFact(memory, "keepsakes", JSONObject()
+            .put("id", "fake").put("sourceEpisodeId", "unknown").put("descriptionRu", "Чужое воспоминание")) }.isFailure)
     }
 
     @Test fun invalidSaveIsRejectedAndNotReplacedWithDefaults() {

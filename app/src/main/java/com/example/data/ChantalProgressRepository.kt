@@ -15,6 +15,7 @@ class ChantalProgressRepository(private val context: Context) {
     fun load(): JSONObject {
         val raw = preferences.getString("snapshot", null) ?: return JSONObject()
         val snapshot = validate(raw)
+        snapshot.put("worldMemory", ChantalWorldMemory.reconcile(snapshot.optJSONObject("worldMemory"), snapshot.optJSONArray("journalList")))
         lastSaved = raw
         return snapshot
     }
@@ -44,12 +45,16 @@ class ChantalProgressRepository(private val context: Context) {
             }
             snapshot.optJSONObject("pendingEpisode")?.let { ChantalProgressCodec.decodeChantalStoryEpisode(it) }
             snapshot.optJSONObject("rewardPopupData")?.let { ChantalProgressCodec.decodeChantalRewardPopupData(it) }
+            if (snapshot.has("worldMemory")) ChantalWorldMemory.validate(snapshot.getJSONObject("worldMemory"))
             return snapshot
         }
     }
 
     fun save(snapshot: JSONObject) {
         snapshot.put("schemaVersion", 1)
+        val existing = snapshot.optJSONObject("worldMemory")
+            ?: preferences.getString("snapshot", null)?.let { validate(it).optJSONObject("worldMemory") }
+        snapshot.put("worldMemory", ChantalWorldMemory.reconcile(existing, snapshot.optJSONArray("journalList")))
         val raw = snapshot.toString()
         if (raw == lastSaved) return
         preferences.edit().putString("snapshot", raw).apply()
