@@ -532,70 +532,92 @@ export default function App() {
         color: palette.textPrimary,
       }}
     >
-      {/* Top Bar Contract: 3 zones */}
+      {/* Top Bar Contract: Warm Hearthside RPG Header matching Chantal's Card */}
       <header
-        className="sticky top-0 z-30 flex items-center justify-between gap-8 px-6 py-3.5 backdrop-blur-md border-b"
+        className="sticky top-0 z-30 flex items-center justify-between gap-4 sm:gap-8 px-4 sm:px-6 py-3 backdrop-blur-md border-b shadow-md"
         style={{
-          backgroundColor: `${palette.surface}E6`,
-          borderColor: `${palette.outline}55`,
+          backgroundColor: `${palette.surface}F2`,
+          borderColor: palette.outline,
         }}
       >
-        <div className="text-lg font-extrabold tracking-tight whitespace-nowrap shrink-0">
-          Velaris
+        <div className="flex items-center gap-2.5 shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-[#281F18] border border-[#F59E0B]/60 flex items-center justify-center text-base shadow-inner">
+            🦊
+          </div>
+          <div>
+            <div className="text-base sm:text-lg font-extrabold tracking-tight text-[#FFF8EB] leading-none">
+              Velaris · Шанталь
+            </div>
+            <div className="text-[11px] font-semibold text-[#F59E0B] mt-0.5">
+              Серия {overviewStats.currentStreak} дн. · ⚡ {chantalEnergy} Эн. · 🪙 {chantalCoins} М
+            </div>
+          </div>
         </div>
 
-        <nav className="hidden md:flex items-center gap-6 text-sm font-semibold">
+        <nav className="hidden md:flex items-center gap-2 p-1 rounded-2xl bg-[#15100C] border border-[#4D3D2C]">
           <button
             onClick={() => {
               setIsTimerScreenOpen(false);
               setActiveTab('home');
             }}
-            className="whitespace-nowrap shrink-0 transition-opacity hover:opacity-80 cursor-pointer"
+            className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap shrink-0 transition-all cursor-pointer"
             style={{
-              color: activeTab === 'home' && !isTimerScreenOpen ? palette.primaryAccent : palette.textSecondary,
+              backgroundColor:
+                activeTab === 'home' && !isTimerScreenOpen ? '#EA580C' : 'transparent',
+              color:
+                activeTab === 'home' && !isTimerScreenOpen ? '#FFFFFF' : palette.textSecondary,
             }}
           >
-            Главная и статистика
+            Главная и летопись
           </button>
           <button
             onClick={() => {
               setIsTimerScreenOpen(false);
               setActiveTab('plan');
             }}
-            className="whitespace-nowrap shrink-0 transition-opacity hover:opacity-80 cursor-pointer"
+            className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap shrink-0 transition-all cursor-pointer"
             style={{
-              color: activeTab === 'plan' && !isTimerScreenOpen ? palette.primaryAccent : palette.textSecondary,
+              backgroundColor:
+                activeTab === 'plan' && !isTimerScreenOpen ? '#EA580C' : 'transparent',
+              color:
+                activeTab === 'plan' && !isTimerScreenOpen ? '#FFFFFF' : palette.textSecondary,
             }}
           >
-            Тренировки
+            Тренировки Кегеля
           </button>
           <button
             onClick={() => {
               setIsTimerScreenOpen(false);
               setActiveTab('chantal');
             }}
-            className="whitespace-nowrap shrink-0 transition-opacity hover:opacity-80 cursor-pointer"
+            className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap shrink-0 transition-all cursor-pointer"
             style={{
-              color: activeTab === 'chantal' && !isTimerScreenOpen ? '#EA580C' : palette.textSecondary,
+              backgroundColor:
+                activeTab === 'chantal' && !isTimerScreenOpen ? '#EA580C' : 'transparent',
+              color:
+                activeTab === 'chantal' && !isTimerScreenOpen ? '#FFFFFF' : palette.textSecondary,
             }}
           >
-            Шанталь ({chantalEnergy} Эн.)
+            Домик Шанталь ({chantalEnergy} Эн.)
           </button>
           <button
             onClick={() => {
               setIsTimerScreenOpen(false);
               setActiveTab('settings');
             }}
-            className="whitespace-nowrap shrink-0 transition-opacity hover:opacity-80 cursor-pointer"
+            className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap shrink-0 transition-all cursor-pointer"
             style={{
-              color: activeTab === 'settings' && !isTimerScreenOpen ? palette.primaryAccent : palette.textSecondary,
+              backgroundColor:
+                activeTab === 'settings' && !isTimerScreenOpen ? '#EA580C' : 'transparent',
+              color:
+                activeTab === 'settings' && !isTimerScreenOpen ? '#FFFFFF' : palette.textSecondary,
             }}
           >
             Оформление и звук
           </button>
         </nav>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0">
           <button
             onClick={() => {
               if (activeWorkout) {
@@ -606,65 +628,76 @@ export default function App() {
                 startBlitzRescue();
               }
             }}
-            className="px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-transform active:scale-95 cursor-pointer"
+            className="px-3.5 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap shrink-0 transition-transform active:scale-95 cursor-pointer border border-[#F59E0B]/50 shadow-sm"
             style={{
-              backgroundColor: palette.primaryAccent,
-              color: '#FFFFFF',
+              backgroundColor: '#EA580C',
+              color: '#FFF8EB',
             }}
           >
-            {activeWorkout ? 'К активному таймеру' : 'Начать сессию'}
+            {activeWorkout ? '⚡ К таймеру' : '▶ Начать (+10 Эн.)'}
           </button>
         </div>
       </header>
 
-      {/* Main Content Container: Samsung S25 Ultra focused layout with responsive multi-column expansion on wide screens */}
+      {/* Main Content Container: Warm Hearthside RPG aesthetic across all tabs */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 pb-28">
         {isTimerScreenOpen && activeWorkout ? (
-          /* ACTIVE WORKOUT TIMER SCREEN */
-          <div className="max-w-[440px] mx-auto">
+          /* ACTIVE WORKOUT TIMER SCREEN (Styled like Chantal's Hearthside Card) */
+          <div className="max-w-[460px] mx-auto">
             <div
-              className="rounded-3xl p-6 shadow-sm border"
+              className="rounded-[28px] p-6 shadow-xl border-2 space-y-5"
               style={{
                 backgroundColor: palette.surface,
-                borderColor: `${palette.outline}45`,
+                borderColor: palette.outline,
               }}
             >
-              <div className="flex items-center justify-between gap-4 mb-6">
+              <div className="flex items-center justify-between gap-4">
                 <button
                   onClick={() => setIsTimerScreenOpen(false)}
-                  className="min-h-[44px] px-3 rounded-xl flex items-center gap-1.5 text-sm font-semibold cursor-pointer"
+                  className="min-h-[42px] px-3.5 rounded-xl border flex items-center gap-1.5 text-xs font-extrabold cursor-pointer"
                   style={{
                     backgroundColor: palette.surfaceElevated,
+                    borderColor: palette.outline,
                     color: palette.textPrimary,
                   }}
                 >
-                  <ChevronLeft className="w-4 h-4" />
-                  <span>Свернуть</span>
+                  <ChevronLeft className="w-4 h-4 text-[#F59E0B]" />
+                  <span>Свернуть в фон</span>
                 </button>
-                <span
-                  className="text-xs font-bold"
-                  style={{ color: palette.textSecondary }}
-                >
+                <span className="px-3 py-1 rounded-xl bg-[#15100C] border border-[#4D3D2C] text-xs font-extrabold text-[#F59E0B] tabular-nums">
                   Цикл {activeWorkout.currentRepetition} из {activeWorkout.totalRepetitions}
                 </span>
               </div>
 
-              <div className="text-center mb-6">
-                <h2 className="text-xl font-extrabold tracking-tight mb-1">
+              {/* Chantal Energy Reward Banner inside Timer */}
+              <div className="rounded-2xl p-3 bg-[#281F18] border border-[#10B981]/50 flex items-center justify-between gap-2 text-xs">
+                <span className="font-bold text-[#FAF0E1]">
+                  🦊 Награда для похода Шанталь:
+                </span>
+                <span className="font-extrabold text-[#10B981]">
+                  +10 ⚡ Энергии · +5 🪙 Монет
+                </span>
+              </div>
+
+              <div className="text-center">
+                <div className="text-xs font-bold text-[#F59E0B] mb-1">
+                  Ритуал дисциплины и тонуса
+                </div>
+                <h2 className="text-xl font-extrabold tracking-tight text-[#FFF8EB] mb-1">
                   {activeWorkout.titleRu}
                 </h2>
-                <p className="text-sm font-medium" style={{ color: palette.textSecondary }}>
+                <p className="text-xs font-semibold" style={{ color: palette.textSecondary }}>
                   {activeWorkout.isPaused
-                    ? 'Пауза — расслабьтесь'
+                    ? 'Пауза у камина — переведите дыхание'
                     : activeWorkout.phase === 'CONTRACTION'
-                    ? 'Удержание · сожмите мышцы'
-                    : 'Отдых · полное расслабление'}
+                    ? 'Фаза удержания · сожмите мышцы и держите ритм'
+                    : 'Фаза отдыха · мягкое и полное расслабление'}
                 </p>
               </div>
 
-              {/* Large Constant-Size Timer Ring */}
-              <div className="relative w-64 h-64 mx-auto my-6 flex items-center justify-center">
-                <svg className="w-full h-full -rotate-90" viewBox="0 0 220 220">
+              {/* Large Constant-Size Hearthside Timer Ring */}
+              <div className="relative w-64 h-64 mx-auto my-4 flex items-center justify-center rounded-full bg-[#15100C] border border-[#382B20] shadow-inner">
+                <svg className="w-full h-full -rotate-90 p-2" viewBox="0 0 220 220">
                   <circle
                     cx="110"
                     cy="110"
@@ -680,10 +713,10 @@ export default function App() {
                     fill="none"
                     stroke={
                       activeWorkout.isPaused
-                        ? palette.warningAccent
+                        ? '#F59E0B'
                         : activeWorkout.phase === 'CONTRACTION'
-                        ? palette.primaryAccent
-                        : palette.secondaryAccent
+                        ? '#EA580C'
+                        : '#10B981'
                     }
                     strokeWidth="14"
                     strokeLinecap="round"
@@ -706,37 +739,33 @@ export default function App() {
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                   <span
-                    className="text-sm font-bold mb-1"
+                    className="px-2.5 py-0.5 rounded-lg text-xs font-extrabold mb-1"
                     style={{
+                      backgroundColor:
+                        activeWorkout.phase === 'CONTRACTION' ? '#EA580C25' : '#10B98125',
                       color:
-                        activeWorkout.phase === 'CONTRACTION'
-                          ? palette.primaryAccent
-                          : palette.secondaryAccent,
+                        activeWorkout.phase === 'CONTRACTION' ? '#F59E0B' : '#10B981',
                     }}
                   >
                     {activeWorkout.phase === 'CONTRACTION' ? 'Удержание' : 'Отдых'}
                   </span>
-                  <span className="text-6xl font-extrabold tabular-nums tracking-tight">
+                  <span className="text-6xl font-extrabold tabular-nums tracking-tight text-[#FFF8EB]">
                     {activeWorkout.phaseRemainingSec}
                   </span>
-                  <span className="text-xs font-medium mt-1" style={{ color: palette.textSecondary }}>
-                    секунд
+                  <span className="text-xs font-semibold mt-1" style={{ color: palette.textSecondary }}>
+                    секунд до смены фазы
                   </span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 mt-8">
+              <div className="grid grid-cols-2 gap-3 pt-2">
                 <button
                   onClick={() =>
                     setActiveWorkout((prev) =>
                       prev ? { ...prev, isPaused: !prev.isPaused } : null
                     )
                   }
-                  className="min-h-[52px] rounded-2xl font-bold text-base flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-98"
-                  style={{
-                    backgroundColor: palette.primaryAccent,
-                    color: '#FFFFFF',
-                  }}
+                  className="min-h-[52px] rounded-2xl font-extrabold text-sm flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-98 bg-[#EA580C] text-white shadow-md"
                 >
                   {activeWorkout.isPaused ? (
                     <>
@@ -756,76 +785,72 @@ export default function App() {
                     setActiveWorkout(null);
                     setIsTimerScreenOpen(false);
                   }}
-                  className="min-h-[52px] rounded-2xl font-bold text-base flex items-center justify-center gap-2 cursor-pointer"
+                  className="min-h-[52px] rounded-2xl font-extrabold text-sm flex items-center justify-center gap-2 cursor-pointer border"
                   style={{
                     backgroundColor: palette.surfaceElevated,
+                    borderColor: palette.outline,
                     color: palette.textPrimary,
                   }}
                 >
-                  <RotateCcw className="w-4 h-4" />
+                  <RotateCcw className="w-4 h-4 text-[#F59E0B]" />
                   <span>Завершить</span>
                 </button>
               </div>
             </div>
           </div>
         ) : activeTab === 'home' ? (
-          /* HOME & REDESIGNED SAMSUNG S25 ULTRA STATISTICS SCREEN */
+          /* HOME & STATISTICS SCREEN IN CHANTAL HEARTHSIDE STYLE */
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Left / Primary S25 Ultra Column (Statistics & Unified Calendar) */}
             <div className="lg:col-span-7 xl:col-span-7 flex flex-col gap-5 max-w-[460px] lg:max-w-none mx-auto w-full">
-              {/* REDESIGNED STATISTICS BLOCK FOR SAMSUNG S25 ULTRA */}
               <section
                 aria-label="Статистика и единый календарь Velaris"
-                className="rounded-[26px] p-5 sm:p-6 shadow-xs border transition-colors"
+                className="rounded-[26px] p-5 sm:p-6 shadow-md border transition-colors"
                 style={{
                   backgroundColor: palette.surface,
-                  borderColor: `${palette.outline}38`,
+                  borderColor: palette.outline,
                 }}
               >
-                {/* 1. Calm, Large Header + Streak & Freeze Shields */}
+                {/* 1. Hearthside Header + Streak & Freeze Shields */}
                 <div
-                  className="rounded-[22px] p-4 sm:p-5 mb-5"
-                  style={{ backgroundColor: palette.surfaceElevated }}
+                  className="rounded-[22px] p-4 sm:p-5 mb-5 border"
+                  style={{
+                    backgroundColor: palette.surfaceElevated,
+                    borderColor: palette.outline,
+                  }}
                 >
                   <div className="flex items-start justify-between gap-4 mb-4">
                     <div>
-                      <p
-                        className="text-sm font-semibold mb-1"
-                        style={{ color: palette.textSecondary }}
-                      >
-                        Статистика и ритм
+                      <p className="text-xs font-extrabold text-[#F59E0B] mb-1">
+                        Летопись дисциплины · Попутный ветер Шанталь
                       </p>
-                      <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight tabular-nums">
+                      <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight tabular-nums text-[#FFF8EB]">
                         Серия {overviewStats.currentStreak} дн.
                       </h1>
                       <p
-                        className="text-sm font-medium mt-1"
+                        className="text-xs sm:text-sm font-semibold mt-1"
                         style={{ color: palette.textSecondary }}
                       >
-                        {overviewStats.rankTitleRu}
-                        <span className="mx-1.5" aria-hidden="true">
-                          ·
-                        </span>
-                        Рекорд {overviewStats.bestStreak} дн.
+                        Титул: {overviewStats.rankTitleRu} · Рекорд {overviewStats.bestStreak} дн.
                       </p>
                     </div>
 
                     {/* Freeze Shields Badge */}
                     <div
-                      className="rounded-2xl px-3.5 py-2.5 text-center shrink-0"
-                      style={{ backgroundColor: palette.surface }}
+                      className="rounded-2xl px-3.5 py-2.5 text-center shrink-0 border"
+                      style={{
+                        backgroundColor: palette.surface,
+                        borderColor: palette.outline,
+                      }}
                     >
-                      <div
-                        className="text-base font-extrabold tabular-nums"
-                        style={{ color: palette.secondaryAccent }}
-                      >
+                      <div className="text-base font-extrabold tabular-nums text-[#F59E0B]">
                         ❄️ {overviewStats.availableFreezeShields}/{overviewStats.maxFreezeShields}
                       </div>
                       <div
-                        className="text-xs font-medium mt-0.5"
+                        className="text-[11px] font-semibold mt-0.5"
                         style={{ color: palette.textSecondary }}
                       >
-                        Защита серии
+                        Оберег серии
                       </div>
                     </div>
                   </div>
@@ -1613,21 +1638,18 @@ export default function App() {
                         setActiveTab('plan');
                       }
                     }}
-                    className="min-h-[48px] rounded-2xl font-bold text-sm flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-98"
-                    style={{
-                      backgroundColor: palette.primaryAccent,
-                      color: '#FFFFFF',
-                    }}
+                    className="min-h-[48px] rounded-2xl font-extrabold text-sm flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-98 bg-[#EA580C] text-white shadow-md"
                   >
                     <Play className="w-4 h-4 fill-current" />
-                    <span>{nextAvailableSlot ? 'Запустить' : 'К расписанию'}</span>
+                    <span>{nextAvailableSlot ? 'Запустить (+10 Эн.)' : 'К расписанию'}</span>
                   </button>
 
                   <button
                     onClick={startBlitzRescue}
-                    className="min-h-[48px] rounded-2xl font-bold text-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="min-h-[48px] rounded-2xl font-extrabold text-sm flex items-center justify-center gap-1.5 cursor-pointer border"
                     style={{
                       backgroundColor: palette.surfaceElevated,
+                      borderColor: palette.outline,
                       color: palette.primaryAccent,
                     }}
                   >
@@ -1637,54 +1659,66 @@ export default function App() {
                 </div>
               </section>
 
-              {/* Companion Quick Card on Home Screen */}
+              {/* Companion Quick Card on Home Screen with Illustrated Banner */}
               <section
                 aria-label="Домик лисёнка Шанталь"
-                className="rounded-[26px] p-5 sm:p-6 shadow-xs border bg-[#1E1712] text-[#F6EEDF] border-[#4D3D2C]"
+                className="rounded-[26px] overflow-hidden shadow-md border bg-[#1E1712] text-[#F6EEDF] border-[#4D3D2C]"
               >
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <div>
-                    <div className="text-xs font-semibold text-[#F59E0B]">
-                      Компаньон · Мир лесных троп
-                    </div>
+                <div className="relative h-40 w-full bg-[#120D0A]">
+                  <img
+                    src="/src/assets/images/chantal_stage1_rescued_kit_1794001402267.jpg"
+                    alt="Домик Шанталь у камина"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#1E1712] via-black/30 to-transparent" />
+                  <div className="absolute top-3 left-3.5 right-3.5 flex items-center justify-between gap-2">
+                    <span className="px-2.5 py-1 rounded-xl bg-black/70 text-xs font-extrabold text-[#F59E0B]">
+                      🦊 Компаньон · Лесные тропы
+                    </span>
+                    <span className="px-2.5 py-1 rounded-xl bg-black/70 text-xs font-extrabold text-[#10B981] tabular-nums">
+                      ⚡ {chantalEnergy} Эн. · 🪙 {chantalCoins} М
+                    </span>
+                  </div>
+                  <div className="absolute bottom-3 left-4 right-4">
                     <h3 className="text-lg font-extrabold text-[#FFF8EB]">
-                      Шанталь ждёт приключений
+                      Шанталь ждёт у камина
                     </h3>
                   </div>
-                  <div className="text-right text-xs font-extrabold tabular-nums">
-                    <div className="text-[#10B981]">⚡ {chantalEnergy} Энергии</div>
-                    <div className="text-[#F59E0B] mt-0.5">🪙 {chantalCoins} Монет</div>
-                  </div>
                 </div>
-                <p className="text-xs text-[#D5C3AA] leading-relaxed mb-4">
-                  Каждая выполненная сессия даёт +10 Энергии. За 30 Энергии (блок Утро, Обед или Вечер) Шанталь уходит в часовой поход и приносит историю от ИИ и находку в инвентарь.
-                </p>
-                <button
-                  onClick={() => setActiveTab('chantal')}
-                  className="w-full min-h-[46px] rounded-2xl bg-[#EA580C] text-white text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Compass className="w-4 h-4" />
-                  <span>Открыть домик Шанталь и карту</span>
-                </button>
+                <div className="p-5 space-y-3.5">
+                  <p className="text-xs text-[#D5C3AA] leading-relaxed">
+                    Каждая выполненная сессия Кегеля даёт <span className="text-[#10B981] font-bold">+10 Энергии</span> и <span className="text-[#F59E0B] font-bold">+5 Монет</span>. За 30 Энергии (блок Утро, Обед или Вечер) Шанталь уходит в часовой поход и приносит живую историю и находку в Сумку.
+                  </p>
+                  <button
+                    onClick={() => setActiveTab('chantal')}
+                    className="w-full min-h-[46px] rounded-2xl bg-[#EA580C] text-white text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                  >
+                    <Compass className="w-4 h-4" />
+                    <span>Открыть Домик Шанталь и карту</span>
+                  </button>
+                </div>
               </section>
 
               {/* Quick Theme Switcher Card */}
               <section
                 aria-label="Быстрый выбор темы Velaris"
-                className="rounded-[26px] p-5 sm:p-6 shadow-xs border"
+                className="rounded-[26px] p-5 sm:p-6 shadow-md border"
                 style={{
                   backgroundColor: palette.surface,
-                  borderColor: `${palette.outline}38`,
+                  borderColor: palette.outline,
                 }}
               >
                 <div className="flex items-center justify-between mb-3">
                   <div>
-                    <h3 className="text-base font-extrabold">Палитра оформления</h3>
+                    <h3 className="text-base font-extrabold text-[#FFF8EB]">
+                      Атмосфера мира Шанталь
+                    </h3>
                     <p
                       className="text-xs font-medium"
                       style={{ color: palette.textSecondary }}
                     >
-                      5 светлых тем One UI / Velaris
+                      5 тёплых каминных и фэнтези-палитр в стиле карточки Шанталь
                     </p>
                   </div>
                   <Sparkles
@@ -1701,23 +1735,23 @@ export default function App() {
                       <button
                         key={id}
                         onClick={() => setThemeId(id)}
-                        className="min-h-[48px] px-3.5 py-2.5 rounded-2xl flex items-center justify-between gap-3 text-left cursor-pointer transition-all"
+                        className="min-h-[48px] px-3.5 py-2.5 rounded-2xl flex items-center justify-between gap-3 text-left cursor-pointer transition-all border"
                         style={{
                           backgroundColor: isCurrent
                             ? t.selectedContainer
                             : palette.surfaceElevated,
-                          boxShadow: isCurrent
-                            ? `inset 0 0 0 1.5px ${t.selectedBorder}`
-                            : 'none',
+                          borderColor: isCurrent ? t.selectedBorder : palette.outline,
                         }}
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <span
-                            className="w-5 h-5 rounded-full shrink-0"
+                            className="w-5 h-5 rounded-full shrink-0 border border-white/20"
                             style={{ backgroundColor: t.primaryAccent }}
                           />
                           <div className="min-w-0">
-                            <div className="text-sm font-bold truncate">{t.titleRu}</div>
+                            <div className="text-sm font-bold text-[#FFF8EB] truncate">
+                              {t.titleRu}
+                            </div>
                           </div>
                         </div>
                         {isCurrent && (
@@ -1736,21 +1770,24 @@ export default function App() {
             </div>
           </div>
         ) : activeTab === 'plan' ? (
-          /* WORKOUT PLAN & FREE INTERVALS SCREEN */
-          <div className="max-w-[540px] mx-auto space-y-5">
+          /* WORKOUT PLAN & FREE INTERVALS SCREEN IN CHANTAL CARD STYLE */
+          <div className="max-w-[580px] mx-auto space-y-5">
             <div
-              className="rounded-2xl p-1.5 grid grid-cols-2 gap-1.5"
-              style={{ backgroundColor: palette.surfaceElevated }}
+              className="rounded-2xl p-1.5 grid grid-cols-2 gap-1.5 border"
+              style={{
+                backgroundColor: palette.surface,
+                borderColor: palette.outline,
+              }}
             >
               <button
                 onClick={() => setPlanSubTab('scheduled')}
-                className="min-h-[44px] rounded-xl text-sm font-bold cursor-pointer transition-colors"
+                className="min-h-[44px] rounded-xl text-xs sm:text-sm font-extrabold cursor-pointer transition-colors"
                 style={{
                   backgroundColor:
-                    planSubTab === 'scheduled' ? palette.surface : 'transparent',
+                    planSubTab === 'scheduled' ? '#382B20' : 'transparent',
                   color:
                     planSubTab === 'scheduled'
-                      ? palette.primaryAccent
+                      ? '#F59E0B'
                       : palette.textSecondary,
                 }}
               >
@@ -1758,13 +1795,13 @@ export default function App() {
               </button>
               <button
                 onClick={() => setPlanSubTab('free')}
-                className="min-h-[44px] rounded-xl text-sm font-bold cursor-pointer transition-colors"
+                className="min-h-[44px] rounded-xl text-xs sm:text-sm font-extrabold cursor-pointer transition-colors"
                 style={{
                   backgroundColor:
-                    planSubTab === 'free' ? palette.surface : 'transparent',
+                    planSubTab === 'free' ? '#382B20' : 'transparent',
                   color:
                     planSubTab === 'free'
-                      ? palette.primaryAccent
+                      ? '#F59E0B'
                       : palette.textSecondary,
                 }}
               >
@@ -1774,46 +1811,51 @@ export default function App() {
 
             {planSubTab === 'scheduled' ? (
               <div
-                className="rounded-[26px] p-5 sm:p-6 border space-y-4"
+                className="rounded-[26px] p-5 sm:p-6 border space-y-4 shadow-md"
                 style={{
                   backgroundColor: palette.surface,
-                  borderColor: `${palette.outline}38`,
+                  borderColor: palette.outline,
                 }}
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-xl font-extrabold">Ежедневная программа</h2>
+                    <div className="text-xs font-extrabold text-[#F59E0B]">
+                      3 рубежа дня · Энергия для походов Шанталь
+                    </div>
+                    <h2 className="text-xl font-extrabold text-[#FFF8EB]">
+                      Ежедневная программа Кегеля
+                    </h2>
                     <p
                       className="text-xs font-medium mt-0.5"
                       style={{ color: palette.textSecondary }}
                     >
-                      3 этапа в день по 3 обязательные тренировки
+                      Каждое упражнение даёт +10 Энергии и +5 Монет (3 упражнения = 30 Энергии на поход)
                     </p>
                   </div>
-                  <span
-                    className="text-sm font-extrabold tabular-nums"
-                    style={{ color: palette.primaryAccent }}
-                  >
+                  <span className="px-3 py-1.5 rounded-xl bg-[#281F18] border border-[#F59E0B]/50 text-sm font-extrabold text-[#F59E0B] tabular-nums">
                     {todayCompletedSlotIds.size} / 9
                   </span>
                 </div>
 
                 <div
-                  className="grid grid-cols-3 gap-2 p-1.5 rounded-2xl"
-                  style={{ backgroundColor: palette.surfaceElevated }}
+                  className="grid grid-cols-3 gap-2 p-1.5 rounded-2xl border"
+                  style={{
+                    backgroundColor: '#15100C',
+                    borderColor: palette.outline,
+                  }}
                 >
                   {(['MORNING', 'NOON', 'EVENING'] as PlanGroupCode[]).map((g) => {
                     const label =
-                      g === 'MORNING' ? 'Утро' : g === 'NOON' ? 'Обед' : 'Вечер';
+                      g === 'MORNING' ? '🌅 Утро' : g === 'NOON' ? '☀️ Обед' : '🌙 Вечер';
                     const isSelected = selectedGroupCode === g;
                     return (
                       <button
                         key={g}
                         onClick={() => setSelectedGroupCode(g)}
-                        className="min-h-[44px] rounded-xl text-sm font-bold cursor-pointer"
+                        className="min-h-[42px] rounded-xl text-xs sm:text-sm font-extrabold cursor-pointer transition-colors"
                         style={{
-                          backgroundColor: isSelected ? palette.surface : 'transparent',
-                          color: isSelected ? palette.primaryAccent : palette.textSecondary,
+                          backgroundColor: isSelected ? '#382B20' : 'transparent',
+                          color: isSelected ? '#F59E0B' : palette.textSecondary,
                         }}
                       >
                         {label}
@@ -1831,17 +1873,23 @@ export default function App() {
                       return (
                         <div
                           key={slot.id}
-                          className="rounded-2xl p-4 flex items-center justify-between gap-4"
-                          style={{ backgroundColor: palette.surfaceElevated }}
+                          className="rounded-2xl p-4 border flex items-center justify-between gap-4"
+                          style={{
+                            backgroundColor: palette.surfaceElevated,
+                            borderColor: isDone ? '#10B98180' : palette.outline,
+                          }}
                         >
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-base font-extrabold">
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-base font-extrabold text-[#FFF8EB]">
                                 {slot.titleRu}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-lg bg-[#15100C] border border-[#4D3D2C] text-[11px] font-extrabold text-[#10B981]">
+                                +10 ⚡ Эн. · +5 🪙 М
                               </span>
                               {isDone && (
                                 <span
-                                  className="text-xs font-bold"
+                                  className="text-xs font-extrabold"
                                   style={{ color: palette.successAccent }}
                                 >
                                   ✓ Выполнено
@@ -1849,7 +1897,7 @@ export default function App() {
                               )}
                             </div>
                             <div
-                              className="text-xs font-medium mt-1 tabular-nums"
+                              className="text-xs font-medium tabular-nums"
                               style={{ color: palette.textSecondary }}
                             >
                               Удержание {slot.contractionSec} с · Отдых {slot.relaxationSec} с ·{' '}
@@ -1859,11 +1907,12 @@ export default function App() {
 
                           <button
                             onClick={() => startSlotWorkout(slot)}
-                            className="min-h-[44px] px-4 rounded-xl text-xs font-bold shrink-0 cursor-pointer"
+                            className="min-h-[44px] px-4 rounded-xl text-xs font-extrabold shrink-0 cursor-pointer border"
                             style={{
                               backgroundColor: isDone
                                 ? palette.surface
-                                : palette.primaryAccent,
+                                : '#EA580C',
+                              borderColor: isDone ? palette.outline : '#F59E0B66',
                               color: isDone ? palette.primaryAccent : '#FFFFFF',
                             }}
                           >
@@ -1877,19 +1926,22 @@ export default function App() {
               </div>
             ) : (
               <div
-                className="rounded-[26px] p-5 sm:p-6 border space-y-4"
+                className="rounded-[26px] p-5 sm:p-6 border space-y-4 shadow-md"
                 style={{
                   backgroundColor: palette.surface,
-                  borderColor: `${palette.outline}38`,
+                  borderColor: palette.outline,
                 }}
               >
                 <div>
-                  <h2 className="text-xl font-extrabold">Мои интервалы</h2>
+                  <div className="text-xs font-extrabold text-[#F59E0B]">
+                    Свободный конструктор ритма
+                  </div>
+                  <h2 className="text-xl font-extrabold text-[#FFF8EB]">Мои интервалы</h2>
                   <p
                     className="text-xs font-medium mt-0.5"
                     style={{ color: palette.textSecondary }}
                   >
-                    Дополнительные свободные тренировки (учитываются в статистике дня отдельно от обязательной программы)
+                    Дополнительные свободные тренировки также приносят +10 Энергии и +5 Монет для Шанталь
                   </p>
                 </div>
 
@@ -1899,12 +1951,22 @@ export default function App() {
                     return (
                       <div
                         key={tpl.slotIndex}
-                        className="rounded-2xl p-4 space-y-3"
-                        style={{ backgroundColor: palette.surfaceElevated }}
+                        className="rounded-2xl p-4 border space-y-3"
+                        style={{
+                          backgroundColor: palette.surfaceElevated,
+                          borderColor: palette.outline,
+                        }}
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <div className="text-base font-extrabold">{tpl.name}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-base font-extrabold text-[#FFF8EB]">
+                                {tpl.name}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-lg bg-[#15100C] text-[11px] font-bold text-[#10B981]">
+                                +10 ⚡ Эн.
+                              </span>
+                            </div>
                             <div
                               className="text-xs font-medium mt-1 tabular-nums"
                               style={{ color: palette.textSecondary }}
@@ -1920,9 +1982,10 @@ export default function App() {
                               onClick={() =>
                                 setEditingTemplateIdx(isEditing ? null : idx)
                               }
-                              className="min-h-[42px] px-3 rounded-xl text-xs font-bold cursor-pointer"
+                              className="min-h-[42px] px-3 rounded-xl border text-xs font-bold cursor-pointer"
                               style={{
                                 backgroundColor: palette.surface,
+                                borderColor: palette.outline,
                                 color: palette.textSecondary,
                               }}
                             >
@@ -1930,11 +1993,7 @@ export default function App() {
                             </button>
                             <button
                               onClick={() => startFreeTemplateWorkout(tpl)}
-                              className="min-h-[42px] px-4 rounded-xl text-xs font-bold cursor-pointer"
-                              style={{
-                                backgroundColor: palette.primaryAccent,
-                                color: '#FFFFFF',
-                              }}
+                              className="min-h-[42px] px-4 rounded-xl text-xs font-extrabold cursor-pointer bg-[#EA580C] text-white"
                             >
                               Начать
                             </button>
@@ -1958,8 +2017,12 @@ export default function App() {
                                     )
                                   );
                                 }}
-                                className="mt-1 w-full rounded-xl px-3 py-2 text-sm font-bold tabular-nums"
-                                style={{ backgroundColor: palette.surface }}
+                                className="mt-1 w-full rounded-xl px-3 py-2 text-sm font-bold tabular-nums border"
+                                style={{
+                                  backgroundColor: palette.surface,
+                                  borderColor: palette.outline,
+                                  color: palette.textPrimary,
+                                }}
                               />
                             </label>
                             <label className="text-xs font-semibold">
@@ -1977,8 +2040,12 @@ export default function App() {
                                     )
                                   );
                                 }}
-                                className="mt-1 w-full rounded-xl px-3 py-2 text-sm font-bold tabular-nums"
-                                style={{ backgroundColor: palette.surface }}
+                                className="mt-1 w-full rounded-xl px-3 py-2 text-sm font-bold tabular-nums border"
+                                style={{
+                                  backgroundColor: palette.surface,
+                                  borderColor: palette.outline,
+                                  color: palette.textPrimary,
+                                }}
                               />
                             </label>
                             <label className="text-xs font-semibold">
@@ -1996,8 +2063,12 @@ export default function App() {
                                     )
                                   );
                                 }}
-                                className="mt-1 w-full rounded-xl px-3 py-2 text-sm font-bold tabular-nums"
-                                style={{ backgroundColor: palette.surface }}
+                                className="mt-1 w-full rounded-xl px-3 py-2 text-sm font-bold tabular-nums border"
+                                style={{
+                                  backgroundColor: palette.surface,
+                                  borderColor: palette.outline,
+                                  color: palette.textPrimary,
+                                }}
                               />
                             </label>
                           </div>
@@ -2016,28 +2087,44 @@ export default function App() {
             coins={chantalCoins}
             setCoins={setChantalCoins}
             currentStreakDays={overviewStats.currentStreak}
+            todayPlannedDoneCount={
+              dayAggregatesMap.get(TODAY_ISO)?.plannedCompletedCount ?? 0
+            }
+            todayClosedPeriodsCount={
+              dayAggregatesMap.get(TODAY_ISO)?.closedPeriodsCount ?? 0
+            }
+            lastCompletedWorkoutTitle={
+              historyRecords[0]?.localDate === TODAY_ISO
+                ? historyRecords[0]?.titleRu
+                : undefined
+            }
             onGoToWorkout={() => setActiveTab('plan')}
             soundEnabled={soundEnabled}
             onPlayTone={playVelarisTone}
           />
         ) : (
-          /* SETTINGS SCREEN */
-          <div className="max-w-[540px] mx-auto space-y-5">
+          /* SETTINGS SCREEN IN CHANTAL HEARTHSIDE STYLE */
+          <div className="max-w-[560px] mx-auto space-y-5">
             <div
-              className="rounded-[26px] p-5 sm:p-6 border space-y-4"
+              className="rounded-[26px] p-5 sm:p-6 border space-y-4 shadow-md"
               style={{
                 backgroundColor: palette.surface,
-                borderColor: `${palette.outline}38`,
+                borderColor: palette.outline,
               }}
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-extrabold">Звук и акустический профиль</h2>
+                  <div className="text-xs font-extrabold text-[#F59E0B]">
+                    Акустика каминного зала
+                  </div>
+                  <h2 className="text-xl font-extrabold text-[#FFF8EB]">
+                    Звук и акустический профиль
+                  </h2>
                   <p
                     className="text-xs font-medium mt-0.5"
                     style={{ color: palette.textSecondary }}
                   >
-                    Эмоциональные тоны для фаз сокращения и расслабления
+                    Эмоциональные тоны для фаз сокращения, расслабления и событий Шанталь
                   </p>
                 </div>
                 <Volume2
@@ -2047,38 +2134,45 @@ export default function App() {
               </div>
 
               <div
-                className="rounded-2xl p-4 flex items-center justify-between"
-                style={{ backgroundColor: palette.surfaceElevated }}
+                className="rounded-2xl p-4 border flex items-center justify-between"
+                style={{
+                  backgroundColor: palette.surfaceElevated,
+                  borderColor: palette.outline,
+                }}
               >
                 <div>
-                  <div className="text-sm font-bold">Звуковые сигналы фаз</div>
+                  <div className="text-sm font-bold text-[#FFF8EB]">
+                    Звуковые сигналы фаз и отклика Шанталь
+                  </div>
                   <div
                     className="text-xs mt-0.5"
                     style={{ color: palette.textSecondary }}
                   >
-                    Плавное скольжение частоты и субгармоники
+                    Плавное скольжение частоты и мягкие аккорды
                   </div>
                 </div>
                 <button
                   onClick={() => setSoundEnabled((s) => !s)}
-                  className="min-h-[42px] px-4 rounded-xl text-xs font-bold cursor-pointer"
+                  className="min-h-[42px] px-4 rounded-xl text-xs font-extrabold cursor-pointer border"
                   style={{
                     backgroundColor: soundEnabled
-                      ? palette.primaryAccent
+                      ? '#EA580C'
                       : palette.surface,
+                    borderColor: soundEnabled ? '#F59E0B' : palette.outline,
                     color: soundEnabled ? '#FFFFFF' : palette.textSecondary,
                   }}
                 >
-                  {soundEnabled ? 'Включены' : 'Выключены'}
+                  {soundEnabled ? 'Включены ✓' : 'Выключены'}
                 </button>
               </div>
 
               <div className="grid grid-cols-2 gap-2.5">
                 <button
                   onClick={() => playVelarisTone('hold')}
-                  className="min-h-[46px] rounded-2xl text-xs font-bold cursor-pointer"
+                  className="min-h-[46px] rounded-2xl border text-xs font-extrabold cursor-pointer"
                   style={{
                     backgroundColor: palette.surfaceElevated,
+                    borderColor: palette.outline,
                     color: palette.primaryAccent,
                   }}
                 >
@@ -2086,14 +2180,75 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => playVelarisTone('relax')}
-                  className="min-h-[46px] rounded-2xl text-xs font-bold cursor-pointer"
+                  className="min-h-[46px] rounded-2xl border text-xs font-extrabold cursor-pointer"
                   style={{
                     backgroundColor: palette.surfaceElevated,
-                    color: palette.secondaryAccent,
+                    borderColor: palette.outline,
+                    color: palette.successAccent,
                   }}
                 >
                   ▶ Прослушать «Отдых»
                 </button>
+              </div>
+            </div>
+
+            {/* Theme Selection in Settings as well */}
+            <div
+              className="rounded-[26px] p-5 sm:p-6 border space-y-4 shadow-md"
+              style={{
+                backgroundColor: palette.surface,
+                borderColor: palette.outline,
+              }}
+            >
+              <div>
+                <div className="text-xs font-extrabold text-[#F59E0B]">
+                  Единый стиль с карточкой Шанталь
+                </div>
+                <h2 className="text-xl font-extrabold text-[#FFF8EB]">
+                  Палитра оформления приложения
+                </h2>
+              </div>
+              <div className="grid grid-cols-1 gap-2.5">
+                {(Object.keys(VELARIS_THEMES) as VelarisThemeId[]).map((id) => {
+                  const t = VELARIS_THEMES[id];
+                  const isCurrent = id === themeId;
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => setThemeId(id)}
+                      className="min-h-[54px] px-4 py-3 rounded-2xl flex items-center justify-between gap-3 text-left cursor-pointer transition-all border"
+                      style={{
+                        backgroundColor: isCurrent
+                          ? t.selectedContainer
+                          : palette.surfaceElevated,
+                        borderColor: isCurrent ? t.selectedBorder : palette.outline,
+                      }}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span
+                          className="w-5 h-5 rounded-full shrink-0 border border-white/20"
+                          style={{ backgroundColor: t.primaryAccent }}
+                        />
+                        <div className="min-w-0">
+                          <div className="text-sm font-extrabold text-[#FFF8EB] truncate">
+                            {t.titleRu}
+                          </div>
+                          <div className="text-xs text-[#D5C3AA] truncate">
+                            {t.subtitleRu}
+                          </div>
+                        </div>
+                      </div>
+                      {isCurrent && (
+                        <span
+                          className="text-xs font-extrabold shrink-0"
+                          style={{ color: t.primaryAccent }}
+                        >
+                          Активна ✓
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -2104,20 +2259,17 @@ export default function App() {
       {activeWorkout && !isTimerScreenOpen && (
         <div className="fixed bottom-16 left-0 right-0 z-30 px-4 pb-2">
           <div
-            className="max-w-[460px] mx-auto rounded-2xl px-4 py-3 shadow-md flex items-center justify-between gap-3 border"
+            className="max-w-[460px] mx-auto rounded-2xl px-4 py-3 shadow-xl flex items-center justify-between gap-3 border-2"
             style={{
               backgroundColor: palette.surface,
-              borderColor: palette.primaryAccent,
+              borderColor: '#F59E0B',
             }}
           >
             <div className="min-w-0">
-              <div className="text-xs font-extrabold truncate">
+              <div className="text-xs font-extrabold text-[#FFF8EB] truncate">
                 {activeWorkout.titleRu}
               </div>
-              <div
-                className="text-xs font-semibold tabular-nums"
-                style={{ color: palette.primaryAccent }}
-              >
+              <div className="text-xs font-semibold text-[#F59E0B] tabular-nums">
                 {activeWorkout.isPaused
                   ? 'На паузе'
                   : activeWorkout.phase === 'CONTRACTION'
@@ -2129,11 +2281,7 @@ export default function App() {
             </div>
             <button
               onClick={() => setIsTimerScreenOpen(true)}
-              className="min-h-[40px] px-3.5 rounded-xl text-xs font-bold shrink-0 cursor-pointer"
-              style={{
-                backgroundColor: palette.primaryAccent,
-                color: '#FFFFFF',
-              }}
+              className="min-h-[38px] px-3.5 rounded-xl bg-[#EA580C] text-white text-xs font-extrabold shrink-0 cursor-pointer"
             >
               Открыть
             </button>
@@ -2141,31 +2289,33 @@ export default function App() {
         </div>
       )}
 
-      {/* Fixed 3-Tab Bottom Navigation Bar (Samsung S25 Ultra Thumb Zone) */}
+      {/* Fixed 4-Tab Bottom Navigation Bar in Chantal Hearthside Wood Style */}
       <nav
         aria-label="Нижняя навигация Velaris"
-        className="fixed bottom-0 left-0 right-0 z-40 backdrop-blur-md border-t"
+        className="fixed bottom-0 left-0 right-0 z-40 backdrop-blur-md border-t shadow-2xl"
         style={{
-          backgroundColor: `${palette.surface}F2`,
-          borderColor: `${palette.outline}55`,
+          backgroundColor: `${palette.surface}F8`,
+          borderColor: palette.outline,
         }}
       >
-        <div className="max-w-[460px] mx-auto grid grid-cols-4 h-16 items-center px-2">
+        <div className="max-w-[480px] mx-auto grid grid-cols-4 h-16 items-center px-2 gap-1">
           <button
             onClick={() => {
               setIsTimerScreenOpen(false);
               setActiveTab('home');
             }}
-            className="h-full flex flex-col items-center justify-center cursor-pointer"
+            className="h-12 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-colors"
             style={{
+              backgroundColor:
+                activeTab === 'home' && !isTimerScreenOpen ? '#281F18' : 'transparent',
               color:
                 activeTab === 'home' && !isTimerScreenOpen
-                  ? palette.primaryAccent
+                  ? '#F59E0B'
                   : palette.textSecondary,
             }}
           >
             <Home className="w-5 h-5" />
-            <span className="text-[11px] font-bold mt-1 whitespace-nowrap">Главная</span>
+            <span className="text-[11px] font-extrabold mt-0.5 whitespace-nowrap">Главная</span>
           </button>
 
           <button
@@ -2173,16 +2323,18 @@ export default function App() {
               setIsTimerScreenOpen(false);
               setActiveTab('plan');
             }}
-            className="h-full flex flex-col items-center justify-center cursor-pointer"
+            className="h-12 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-colors"
             style={{
+              backgroundColor:
+                activeTab === 'plan' && !isTimerScreenOpen ? '#281F18' : 'transparent',
               color:
                 activeTab === 'plan' && !isTimerScreenOpen
-                  ? palette.primaryAccent
+                  ? '#F59E0B'
                   : palette.textSecondary,
             }}
           >
             <Flame className="w-5 h-5" />
-            <span className="text-[11px] font-bold mt-1 whitespace-nowrap">Тренировки</span>
+            <span className="text-[11px] font-extrabold mt-0.5 whitespace-nowrap">Тренировки</span>
           </button>
 
           <button
@@ -2190,8 +2342,10 @@ export default function App() {
               setIsTimerScreenOpen(false);
               setActiveTab('chantal');
             }}
-            className="h-full flex flex-col items-center justify-center cursor-pointer"
+            className="h-12 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-colors"
             style={{
+              backgroundColor:
+                activeTab === 'chantal' && !isTimerScreenOpen ? '#281F18' : 'transparent',
               color:
                 activeTab === 'chantal' && !isTimerScreenOpen
                   ? '#EA580C'
@@ -2199,7 +2353,7 @@ export default function App() {
             }}
           >
             <Heart className="w-5 h-5" />
-            <span className="text-[11px] font-bold mt-1 whitespace-nowrap">Шанталь</span>
+            <span className="text-[11px] font-extrabold mt-0.5 whitespace-nowrap">Шанталь</span>
           </button>
 
           <button
@@ -2207,16 +2361,18 @@ export default function App() {
               setIsTimerScreenOpen(false);
               setActiveTab('settings');
             }}
-            className="h-full flex flex-col items-center justify-center cursor-pointer"
+            className="h-12 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-colors"
             style={{
+              backgroundColor:
+                activeTab === 'settings' && !isTimerScreenOpen ? '#281F18' : 'transparent',
               color:
                 activeTab === 'settings' && !isTimerScreenOpen
-                  ? palette.primaryAccent
+                  ? '#F59E0B'
                   : palette.textSecondary,
             }}
           >
             <Settings className="w-5 h-5" />
-            <span className="text-[11px] font-bold mt-1 whitespace-nowrap">Настройки</span>
+            <span className="text-[11px] font-extrabold mt-0.5 whitespace-nowrap">Настройки</span>
           </button>
         </div>
       </nav>

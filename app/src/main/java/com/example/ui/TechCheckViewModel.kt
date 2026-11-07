@@ -41,6 +41,7 @@ enum class VelarisNavDestination(
 ) {
     HOME("home", "Главная"),
     PLAN("plan", "Тренировка"),
+    CHANTAL("chantal", "Шанталь"),
     WORKOUT("workout", "Текущая тренировка"),
     READER("reader", "Книга"),
     SETTINGS("settings", "Настройки"),

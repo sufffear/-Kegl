@@ -98,6 +98,7 @@ import java.util.Locale
 private val MAIN_NAV_DESTINATIONS = listOf(
     VelarisNavDestination.HOME,
     VelarisNavDestination.PLAN,
+    VelarisNavDestination.CHANTAL,
     VelarisNavDestination.SETTINGS
 )
 
@@ -496,6 +497,15 @@ fun TechCheckScreen(
                                     onDuplicateCustomProgram = { prog -> viewModel.duplicateCustomProgram(prog) },
                                     onReorderCustomPrograms = { list -> viewModel.reorderCustomPrograms(list) },
                                     onReturnToWorkout = { viewModel.navigateTo(VelarisNavDestination.WORKOUT) }
+                                )
+                            }
+
+                            VelarisNavDestination.CHANTAL -> {
+                                VelarisChantalScreen(
+                                    completedWorkoutsCount = realCompletionsCount + demoCompletionsCount,
+                                    currentStreakDays = weeklyOverview.currentStreakDays,
+                                    onOpenWorkoutPlan = { viewModel.navigateTo(VelarisNavDestination.PLAN) },
+                                    onPlaySampleTone = { sig -> viewModel.playSample(sig) }
                                 )
                             }
 

@@ -21,8 +21,22 @@ const ai = new GoogleGenAI({
   },
 });
 
+export interface ThreeTierChroniclePayload {
+  fullChroniclePassports: string[];
+  npcRelationshipDossier: string[];
+  recentThreeFullStories: Array<{
+    journeyNumber: number;
+    titleRu: string;
+    regionTitleRu: string;
+    encounteredNpcRu: string;
+    storyTextRu: string;
+    chosenActionRu: string;
+  }>;
+}
+
 export interface StoryGenerationPayload {
-  provider: 'grok' | 'gemini';
+  provider: 'gemini' | 'openrouter' | 'grok';
+  openRouterModel?: string;
   difficulty: 'EASY' | 'MEDIUM' | 'HARD' | 'SUPER_HARD';
   stageNumber: 1 | 2 | 3 | 4;
   isTransformed: boolean;
@@ -32,6 +46,8 @@ export interface StoryGenerationPayload {
   regionTitleRu: string;
   regionLoreRu: string;
   encounteredNpcRu: string;
+  stayedInSameRegion?: boolean;
+  autonomousReasonRu?: string;
   equippedItemsRu: string[];
   denItemsRu: string[];
   traits: {
@@ -45,8 +61,7 @@ export interface StoryGenerationPayload {
   isFillerEpisode: boolean;
   customFillerPrompt?: string;
   customLoreText?: string;
-  hasEquippedLantern?: boolean;
-  hasEquippedSatchel?: boolean;
+  chronicleMemory?: ThreeTierChroniclePayload;
 }
 
 const STORY_RESPONSE_SCHEMA = {
@@ -64,7 +79,12 @@ const STORY_RESPONSE_SCHEMA = {
     chantalMapNoteRu: {
       type: Type.STRING,
       description:
-        'Короткая заметка на карте: куда именно свернула Шанталь и кого/что она там встретила (1-2 предложения).',
+        'Короткая заметка на карте: куда именно свернула Шанталь, почему она выбрала этот маршрут (или вернулась туда снова) и кого встретила (1-2 предложения).',
+    },
+    pastEchoNoteRu: {
+      type: Type.STRING,
+      description:
+        'Короткая пометка для игрока (1 предложение): на какой именно прошлый поход (например Поход #1, #2, #3 или #5) и какой прошлый выбор игрока сделана отсылка в этой главе.',
     },
     lootItem: {
       type: Type.OBJECT,
@@ -131,6 +151,7 @@ const STORY_RESPONSE_SCHEMA = {
     'titleRu',
     'storyTextRu',
     'chantalMapNoteRu',
+    'pastEchoNoteRu',
     'lootItem',
     'outcomeType',
     'coinsEarned',
@@ -152,14 +173,45 @@ function buildSystemInstruction(payload: StoryGenerationPayload): string {
     ? `АКТ II (После снятия проклятия): Шанталь больше не лисёнок — проклятие пало, и она предстала в своём истинном облике прекрасной рыжеволосой девушки (проклятого дитя принцессы, внешне и по харизме напоминающей Трисс Меригольд). Тон повествования — богатое магическое фэнтези в духе «Ведьмака»: древние чары, королевские тайны, романтика, остроумие и поиски того, кто наложил проклятие.`
     : `АКТ I (До трансформации, стадия роста ${payload.stageNumber} из 3): Шанталь — живой, выразительный рыжий лисёнок. Настроение в духе «Хоббита» — тепло, добрый юмор, чудо, живая драма без давящего мрака. ВАЖНО: НЕ раскрывай прямым текстом, что она заколдованная принцесса-девушка! Лишь изредка оставляй тонкие сказочные полунамёки (необычно осмысленный взгляд, странная реакция на королевские гербы или древние руны).`;
 
+  const autonomousContext = payload.autonomousReasonRu
+    ? `Причина выбора маршрута самой Шанталь: ${payload.autonomousReasonRu}`
+    : `Шанталь сама выбрала путь на карте: "${payload.regionTitleRu}" (${payload.regionLoreRu}) и встретила там: ${payload.encounteredNpcRu}.`;
+
   const episodeRule = payload.isFillerEpisode
     ? `ЭТО ОДНОРАЗОВЫЙ ПОБОЧНЫЙ ЭПИЗОД (ФИЛЛЕР) по личному поручению пользователя: "${payload.customFillerPrompt || 'Прогуляться и устроить шалость'}". Отыграй это поручение ярко, с юмором и деталями, но не двигай глобальный канонический сюжет.`
-    : `ЭТО КАНОНИЧЕСКИЙ СЮЖЕТНЫЙ ПОХОД (Шаг дневной арки ${payload.dailyArcStep} из 3: ${
+    : `ЭТО КАНОНИЧЕСКИЙ СЮЖЕТНЫЙ ПОХОД #${payload.totalJourneys} (Шаг дневной арки ${payload.dailyArcStep} из 3: ${
         payload.dailyArcStep === 1 ? 'Утренняя завязка' : payload.dailyArcStep === 2 ? 'Дневная кульминация' : 'Вечерняя развязка'
-      }). Шанталь сама выбрала путь на карте: "${payload.regionTitleRu}" (${payload.regionLoreRu}) и встретила там: ${payload.encounteredNpcRu}.`;
+      }). ${autonomousContext}`;
+
+  const mem = payload.chronicleMemory;
+  const layer1Passports =
+    mem && mem.fullChroniclePassports.length > 0
+      ? `\n=== СЛОЙ 1: ПОЛНАЯ ЛЕТОПИСЬ ВСЕХ РЕШЕНИЙ С 1-ГО ПОХОДА (Используй это, чтобы даже в 20-м походе делать живые отсылки к 1-му, 3-му или 5-му походу!) ===\n` +
+        mem.fullChroniclePassports.join('\n') +
+        '\n'
+      : '';
+
+  const layer2NpcDossier =
+    mem && mem.npcRelationshipDossier.length > 0
+      ? `\n=== СЛОЙ 2: КАРТОТЕКА ОТНОШЕНИЙ С ПЕРСОНАЖАМИ И ОБЕЩАНИЙ ===\n` +
+        mem.npcRelationshipDossier.join('\n') +
+        '\n'
+      : '';
+
+  const layer3RecentFull =
+    mem && mem.recentThreeFullStories.length > 0
+      ? `\n=== СЛОЙ 3: ПОЛНЫЙ ТЕКСТ ПОСЛЕДНИХ 3 ГЛАВ (ДЛЯ ЕДИНОГО СТИЛЯ И ПРЕЕМСТВЕННОСТИ) ===\n` +
+        mem.recentThreeFullStories
+          .map(
+            (st) =>
+              `[Поход #${st.journeyNumber}: «${st.titleRu}» | ${st.regionTitleRu}, ${st.encounteredNpcRu}]\nТекст: ${st.storyTextRu}\nВыбор игрока: «${st.chosenActionRu}»`
+          )
+          .join('\n\n') +
+        '\n'
+      : '';
 
   const customLoreSection = payload.customLoreText
-    ? `\nДОПОЛНИТЕЛЬНЫЙ ФАЙЛ ЛОРА И ПЕРСОНАЛИЗАЦИИ ОТ ПОЛЬЗОВАТЕЛЯ (обязательно учитывай эти детали в истории):\n"""\n${payload.customLoreText.slice(0, 6000)}\n"""\n`
+    ? `\n=== ДОПОЛНИТЕЛЬНЫЙ ФАЙЛ ЛОРА И ПЕРСОНАЛИЗАЦИИ ОТ ПОЛЬЗОВАТЕЛЯ ===\n"""\n${payload.customLoreText.slice(0, 6000)}\n"""\n`
     : '';
 
   return `Ты — ведущий нарративный дизайнер ролевой игры о Шанталь.
@@ -177,14 +229,17 @@ ${episodeRule}
 
 Экипировка на Шанталь: ${payload.equippedItemsRu.join(', ') || 'нет'}.
 Обустройство домика: ${payload.denItemsRu.join(', ') || 'скромный уголок'}.
-Время суток: ${payload.timeOfDayRu}. Всего походов за плечами: ${payload.totalJourneys}.
-${customLoreSection}
+Время суток: ${payload.timeOfDayRu}. Текущий номер похода: #${payload.totalJourneys}.
+${layer1Passports}${layer2NpcDossier}${layer3RecentFull}${customLoreSection}
 ТРЕБОВАНИЯ К ИСТОРИИ:
 1. Напиши полноценную, литературно завершённую историю на русском языке объёмом около 9–11 предложений (разделяй на 2–3 абзаца для удобства чтения с экрана телефона).
-2. Чередуй структуру: используй живые сценки, диалоги со встреченными обитателями леса, неожиданные находки или маленькие детективные загадки.
+2. ПРАВИЛО «ЭХО ПРОШЛОГО»: обязательно вплети в сюжет живую отсылку к одному из более ранних походов из СЛОЯ 1 или СЛОЯ 2 (например, вспомни решение игрока из Похода #1, #2, #3 или #5, данное обещание или прошлую находку) и укажи это в поле pastEchoNoteRu!
 3. Обязательно опиши интересный предмет (lootItem), который Шанталь принесла с собой в инвентарь, с атмосферным описанием.
 4. Верни ответ СТРОГО в формате JSON по заданной схеме.`;
 }
+
+const JSON_FORMAT_REMINDER =
+  '\nОтвечай строго валидным JSON объектом с полями: titleRu, storyTextRu, chantalMapNoteRu, pastEchoNoteRu, lootItem {titleRu, category, descriptionRu, sellPriceCoins}, outcomeType (GOOD_REWARD | BAD_DEBT | BAD_EXHAUSTION), coinsEarned, badNewsTitleRu, debtAmountCoins, choices (массив из 3 объектов {labelRu, followUpReactionRu, traitDeltas: {curiosity, tenderness, playfulness, romanticism, courage, wit}}).';
 
 app.post('/api/chantal/generate-story', async (req, res) => {
   try {
@@ -192,9 +247,44 @@ app.post('/api/chantal/generate-story', async (req, res) => {
     const systemInstruction = buildSystemInstruction(payload);
     const userPrompt = payload.isFillerEpisode
       ? `Сгенерируй побочный эпизод (филлер) по заданию игрока: "${payload.customFillerPrompt}". Верни JSON.`
-      : `Сгенерируй новую историю путешествия Шанталь в локацию "${payload.regionTitleRu}", встреча: "${payload.encounteredNpcRu}". Верни JSON.`;
+      : `Сгенерируй новую историю путешествия #${payload.totalJourneys} Шанталь в локацию "${payload.regionTitleRu}", встреча: "${payload.encounteredNpcRu}". ${payload.autonomousReasonRu || ''} Верни JSON.`;
 
-    // 1. If Grok (xAI) is selected and XAI_API_KEY is available in environment
+    // 1. OpenRouter Gateway (supports selecting any model: Grok, Claude, DeepSeek, Gemini, Llama, etc.)
+    if (payload.provider === 'openrouter' && process.env.OPENROUTER_API_KEY) {
+      const targetModel = payload.openRouterModel?.trim() || 'google/gemini-2.5-flash';
+      const orResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'HTTP-Referer': process.env.APP_URL || 'http://localhost:3000',
+          'X-Title': 'Velaris Chantal Companion',
+        },
+        body: JSON.stringify({
+          model: targetModel,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: systemInstruction + JSON_FORMAT_REMINDER },
+            { role: 'user', content: userPrompt },
+          ],
+        }),
+      });
+
+      if (orResp.ok) {
+        const orJson = (await orResp.json()) as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+        const content = orJson.choices?.[0]?.message?.content;
+        if (content) {
+          return res.json({
+            source: `OpenRouter (${targetModel})`,
+            story: JSON.parse(content),
+          });
+        }
+      }
+    }
+
+    // 2. Direct Grok (xAI API) if selected and XAI_API_KEY is configured
     if (payload.provider === 'grok' && process.env.XAI_API_KEY) {
       const grokResp = await fetch('https://api.x.ai/v1/chat/completions', {
         method: 'POST',
@@ -206,12 +296,7 @@ app.post('/api/chantal/generate-story', async (req, res) => {
           model: 'grok-3-mini',
           response_format: { type: 'json_object' },
           messages: [
-            {
-              role: 'system',
-              content:
-                systemInstruction +
-                '\nОтвечай строго валидным JSON объектом с полями: titleRu, storyTextRu, chantalMapNoteRu, lootItem {titleRu, category, descriptionRu, sellPriceCoins}, outcomeType (GOOD_REWARD | BAD_DEBT | BAD_EXHAUSTION), coinsEarned, badNewsTitleRu, debtAmountCoins, choices (массив из 3 объектов {labelRu, followUpReactionRu, traitDeltas: {curiosity, tenderness, playfulness, romanticism, courage, wit}}).',
-            },
+            { role: 'system', content: systemInstruction + JSON_FORMAT_REMINDER },
             { role: 'user', content: userPrompt },
           ],
         }),
@@ -224,14 +309,14 @@ app.post('/api/chantal/generate-story', async (req, res) => {
         const content = grokJson.choices?.[0]?.message?.content;
         if (content) {
           return res.json({
-            source: 'grok-xai',
+            source: 'Grok (xAI API)',
             story: JSON.parse(content),
           });
         }
       }
     }
 
-    // 2. Default: Server-side Gemini API (@google/genai)
+    // 3. Default #1 Primary Path: Direct Gemini API (@google/genai)
     const response = await ai.models.generateContent({
       model: 'gemini-3.8-flash',
       contents: userPrompt,
@@ -246,7 +331,12 @@ app.post('/api/chantal/generate-story', async (req, res) => {
     const parsedStory = JSON.parse(rawText);
 
     return res.json({
-      source: payload.provider === 'grok' ? 'gemini-fallback-for-grok' : 'gemini-3.8-flash',
+      source:
+        payload.provider === 'openrouter'
+          ? `Gemini Flash (резерв для OpenRouter ${payload.openRouterModel || ''})`
+          : payload.provider === 'grok'
+          ? 'Gemini Flash (резерв для Grok)'
+          : 'Gemini Flash (Прямой ключ)',
       story: parsedStory,
     });
   } catch (error) {

@@ -84,9 +84,10 @@ class ExampleRobolectricTest {
     fun `verify v1_4 3-tab navigation, clean Home without versionCode clutter, and Diagnostics in Settings`() {
         composeTestRule.waitForIdle()
 
-        // 1. В нижней навигации ровно 3 основных раздела: Главная, Тренировки, Настройки
+        // 1. В нижней навигации разделы: Главная, Тренировки, Шанталь, Настройки
         composeTestRule.onNodeWithTag("nav_home").assertExists()
         composeTestRule.onNodeWithTag("nav_plan").assertExists()
+        composeTestRule.onNodeWithTag("nav_chantal").assertExists()
         composeTestRule.onNodeWithTag("nav_settings").assertExists()
         composeTestRule.onNodeWithTag("nav_reader").assertDoesNotExist()
         composeTestRule.onNodeWithTag("nav_workout").assertDoesNotExist()
