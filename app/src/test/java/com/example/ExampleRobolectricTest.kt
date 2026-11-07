@@ -70,8 +70,8 @@ class ExampleRobolectricTest {
             PackageManager.GET_PERMISSIONS
         )
         val permissions = packageInfo.requestedPermissions?.toList() ?: emptyList()
-        assertFalse(
-            "Приложение не должно запрашивать разрешение INTERNET",
+        assertTrue(
+            "Gemini требует разрешение INTERNET для явного запроса истории",
             permissions.contains(Manifest.permission.INTERNET)
         )
         assertTrue(

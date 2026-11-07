@@ -1425,8 +1425,9 @@ internal fun ChantalAiLoreSectionCard(
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            ChantalGeminiSettings()
             Text(
-                text = "Шлюз нейросети: Gemini, OpenRouter или Grok",
+                text = "Настройки других провайдеров (подключение пока недоступно)",
                 style = MaterialTheme.typography.titleMedium,
                 fontFamily = FontFamily.SansSerif,
                 fontWeight = FontWeight.Bold,

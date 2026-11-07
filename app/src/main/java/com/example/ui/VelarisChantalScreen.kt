@@ -48,6 +48,7 @@ import com.example.domain.SignalType
 import com.example.domain.computeChantalMaturityProgress
 import com.example.domain.resolveChantalStageStatus
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.random.Random
@@ -191,6 +192,11 @@ fun VelarisChantalScreen(
 
     // Непрочитанная история после возвращения
     var pendingEpisode by remember { mutableStateOf<ChantalStoryEpisode?>(saved.optJSONObject("pendingEpisode")?.let { ChantalProgressCodec.decodeChantalStoryEpisode(it) }) }
+    val generationScope = androidx.compose.runtime.rememberCoroutineScope()
+    val geminiAccess = remember(context) { com.example.data.ChantalGeminiAccess(context) }
+    var generationJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var isGenerating by remember { mutableStateOf(false) }
+    var generationMessage by remember { mutableStateOf("") }
     var fillerTextInput by remember { mutableStateOf(saved.optString("fillerTextInput", "")) }
     var customLoreNotes by remember { mutableStateOf(saved.optString("customLoreNotes", "")) }
     var selectedAiProvider by remember { mutableStateOf(saved.optString("selectedAiProvider", ChantalAiProvider.GEMINI.code)) }
@@ -835,8 +841,46 @@ fun VelarisChantalScreen(
             onOpenWorkoutPlan = onOpenWorkoutPlan
         )
 
-        // 6. Компактная карточка текущей истории или игрового события
-        ChantalCompactStoryEventCard(
+        // Generate only on an explicit user request. The persisted original survives all failures.
+        pendingEpisode?.takeIf { !it.isFiller && !it.isMilestoneChest && !it.id.startsWith("lantern_chain_") }?.let { base ->
+            if (isGenerating) {
+                Text("Шанталь вспоминает приключение…")
+                androidx.compose.material3.TextButton(onClick = { generationJob?.cancel() }) { Text("Отменить и оставить историю") }
+            } else {
+                androidx.compose.material3.OutlinedButton(onClick = {
+                    if (!geminiAccess.hasKey()) {
+                        subTab = "ai"; isBurgerMenuOpen = true
+                    } else if (!geminiAccess.claimRequest()) {
+                        generationMessage = "Между запросами нужна минута. Текущую историю можно прочитать сейчас."
+                    } else {
+                        isGenerating = true
+                        generationMessage = ""
+                        generationJob = generationScope.launch {
+                            try {
+                                val result = try {
+                                    val secret = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { geminiAccess.read() }
+                                    com.example.data.ChantalStoryGeneration.generate(
+                                        com.example.data.GeminiStoryTransport(secret, geminiAccess.model()), base,
+                                        progressRepository.load().optJSONObject("worldMemory") ?: com.example.data.ChantalWorldMemory.empty(), traits)
+                                } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                                  catch (_: Exception) { com.example.data.ChantalGenerationResult.Unavailable }
+                                if (pendingEpisode?.id == base.id && journalList.none { it.id == base.id }) {
+                                    if (result is com.example.data.ChantalGenerationResult.Ready) {
+                                        pendingEpisode = result.story.episode
+                                        generationMessage = "История Gemini готова. Выбери, как ответить Шанталь."
+                                    } else generationMessage = "Gemini пока недоступен: проверь ключ, модель, связь и квоту. Исходная история сохранена."
+                                }
+                            } finally { isGenerating = false }
+                        }
+                    }
+                }, modifier = Modifier.fillMaxWidth().testTag("generate_gemini_story")) {
+                    Text("Новая версия истории · Gemini")
+                }
+            }
+        }
+        if (generationMessage.isNotBlank()) Text(generationMessage)
+        // Hide decision actions while a request is in flight; cancellation restores the original.
+        if (!isGenerating) ChantalCompactStoryEventCard(
             pendingEpisode = pendingEpisode,
             fillerTextInput = fillerTextInput,
             onFillerTextChange = { fillerTextInput = it },
