@@ -72,7 +72,7 @@ class WorkoutMapTest {
         compose.onNodeWithTag("map_label_1").performClick()
         compose.mainClock.advanceTimeBy(400)
         compose.onNodeWithTag("map_place_details").assertIsDisplayed()
-        compose.onNodeWithText("Янтарная дубрава").assertIsDisplayed()
+        compose.onNode(hasText("Янтарная дубрава") and hasAnyAncestor(hasTestTag("map_place_details"))).assertIsDisplayed()
         compose.onNodeWithTag("choose_map_route").assertIsDisplayed().assertIsEnabled()
         compose.onNodeWithTag("close_map_details").performClick()
         compose.onNodeWithTag("map_label_3").performClick()
