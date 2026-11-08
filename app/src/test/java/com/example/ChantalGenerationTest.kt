@@ -30,7 +30,7 @@ class ChantalGenerationTest {
     @Test fun narrativeV3AcceptsLongerParagraphStoryAndPreservesFullEndingSummary() {
         val sample = ChantalNarrativeSample.episode()
         assertTrue(sample.storyTextRu.count { it == '.' || it == '?' || it == '!' } > 12)
-        val summary = "Шанталь ошибочно обвинила барсука, затем помогла укрыть зайца и бельчат и извинилась."
+        val summary = "Шанталь испугалась шороха листа на хвосте, посмеялась с воробьём и принесла лист домой."
         val reply = response().apply {
             remove("sentencesRu")
             put("paragraphsRu", JSONArray(sample.storyTextRu.split("\n\n")))
@@ -57,11 +57,29 @@ class ChantalGenerationTest {
     }
     @Test fun generationPromptCarriesApprovedVoiceAndConversationalChoices() {
         val prompt = ChantalStoryGeneration.prompt(episode(), ChantalWorldMemory.empty(), ChantalTraits())
-        assertTrue(prompt.contains("ЛИТЕРАТУРНАЯ ИНСТРУКЦИЯ 3.1"))
+        assertTrue(prompt.contains("ЛИТЕРАТУРНАЯ ИНСТРУКЦИЯ 3.2"))
         assertTrue(prompt.contains("от первого лица"))
-        assertTrue(prompt.contains("Нет квоты в 12 предложений"))
+        assertTrue(prompt.contains("100–180 слов"))
+        assertFalse(prompt.contains("300–650 слов"))
         assertTrue(prompt.contains("реплики игрока"))
         assertFalse(prompt.contains("из 10–12 полных предложений"))
+    }
+
+    @Test fun requestsUseActualCompanionStageInBothRulesAndContext() {
+        val baby = ChantalStoryGeneration.prompt(episode(), ChantalWorldMemory.empty(), ChantalTraits(), 1, 10)
+        assertTrue(baby.contains("спасённый маленький лисёнок"))
+        assertTrue(baby.contains("\"stageNumber\":1"))
+        assertTrue(baby.contains("не более 220 слов"))
+        val older = ChantalStoryGeneration.prompt(episode(), ChantalWorldMemory.empty(), ChantalTraits(), 12, 120)
+        assertTrue(older.contains("\"stageNumber\":2"))
+        assertTrue(older.contains("120–220 слов"))
+        assertFalse(older.contains("не более 220 слов"))
+        assertEquals(1, ChantalNarrativeGuide.stage(10, 100))
+        assertEquals(2, ChantalNarrativeGuide.stage(11, 110))
+        assertEquals(3, ChantalNarrativeGuide.stage(51, 510))
+        assertEquals(4, ChantalNarrativeGuide.stage(100, 1000))
+        // Petting XP can advance the same stage used by the portrait, even with few journeys.
+        assertEquals(2, ChantalNarrativeGuide.stage(0, 120))
     }
 
     @Test fun geminiEnvelopeRejectsTruncatedAndBlockedResponses() {

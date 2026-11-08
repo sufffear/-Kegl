@@ -862,7 +862,7 @@ fun VelarisChantalScreen(
                                     val secret = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { geminiAccess.read() }
                                     com.example.data.ChantalStoryGeneration.generate(
                                         com.example.data.GeminiStoryTransport(secret, geminiAccess.model()), base,
-                                        progressRepository.load().optJSONObject("worldMemory") ?: com.example.data.ChantalWorldMemory.empty(), traits)
+                                        progressRepository.load().optJSONObject("worldMemory") ?: com.example.data.ChantalWorldMemory.empty(), traits, totalJourneys, maturityXp)
                                 } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                                   catch (_: Exception) { com.example.data.ChantalGenerationResult.Unavailable }
                                 if (pendingEpisode?.id == base.id && journalList.none { it.id == base.id }) {

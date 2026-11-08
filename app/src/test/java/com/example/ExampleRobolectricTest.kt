@@ -57,12 +57,12 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify story3_1 versionCode 9, applicationId and optional network manifest`() {
+    fun `verify story3_2 versionCode 10, applicationId and optional network manifest`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         assertEquals("Velaris", context.getString(R.string.app_name))
         assertEquals("com.velaris.app", BuildConfig.APPLICATION_ID)
-        assertEquals("0.8.1-story3.1", BuildConfig.VERSION_NAME)
-        assertEquals(9, BuildConfig.VERSION_CODE)
+        assertEquals("0.8.2-story3.2", BuildConfig.VERSION_NAME)
+        assertEquals(10, BuildConfig.VERSION_CODE)
 
         @Suppress("DEPRECATION")
         val packageInfo = context.packageManager.getPackageInfo(

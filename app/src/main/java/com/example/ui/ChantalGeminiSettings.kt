@@ -31,7 +31,7 @@ internal fun ChantalGeminiSettings() {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         OutlinedCard(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Gemini · истории 3.1", style = MaterialTheme.typography.titleLarge)
+                Text("Gemini · добрые истории", style = MaterialTheme.typography.titleLarge)
                 Text(if (hasKey) "Ключ сохранён на телефоне" else "Добавь API-ключ из AI Studio")
                 if (editKey) {
                     OutlinedTextField(secret, { secret = it; keyMessage = "" }, label = { Text("API-ключ") },
@@ -118,7 +118,7 @@ internal fun ChantalGeminiSettings() {
         val secretValue = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { access.read() }
         com.example.data.ChantalStoryGeneration.generate(
             com.example.data.GeminiStoryTransport(secretValue, access.model()),
-            com.example.data.ChantalOfflineAdventure.previewBase(), memory, character)
+            com.example.data.ChantalOfflineAdventure.previewBase(), memory, character, saved.optInt("totalJourneys", 0), saved.optInt("maturityXp", 0))
     }
 
 }
