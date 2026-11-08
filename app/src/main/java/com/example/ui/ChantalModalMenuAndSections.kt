@@ -371,6 +371,13 @@ internal fun ChantalModalMenuDialog(
     forceTransformPreview: Boolean,
     onToggleTransformPreview: () -> Unit
 ) {
+    val diaryContext = androidx.compose.ui.platform.LocalContext.current
+    val diaryMemory = remember(journalList.toList()) {
+        val saved = com.example.data.ChantalProgressRepository(diaryContext).load().optJSONObject("worldMemory")
+        val journal = org.json.JSONArray().apply { journalList.forEach { put(com.example.data.ChantalProgressCodec.encode(it)) } }
+        com.example.data.ChantalLanternAdventure.consequences(
+            com.example.data.ChantalWorldMemory.reconcile(saved, journal), journalList)
+    }
     var showSettingsSections by remember { mutableStateOf(false) }
     Dialog(
         onDismissRequest = onDismiss,
@@ -552,6 +559,7 @@ internal fun ChantalModalMenuDialog(
                     "map" -> {
                         Column {
                             ChantalWorldMap(totalJourneys, preferredRegionId, routeLocked, onChooseRoute)
+                            ChantalOpenTasks(diaryMemory)
                             journalList.filter { it.regionTitleRu.isNotBlank() }.groupBy { it.regionTitleRu }.forEach { (place, visits) ->
                                 Text("$place · посещений: ${visits.size}", color = HobbitCream)
                                 visits.take(3).forEach { entry ->
@@ -594,6 +602,7 @@ internal fun ChantalModalMenuDialog(
                     }
 
                     "journal" -> {
+                        ChantalWorldDiary(diaryMemory, journalList, inventoryList)
                         ChantalJournalSectionCard(journalList = journalList)
                     }
 
@@ -1346,59 +1355,16 @@ internal fun ChantalJournalSectionCard(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
-                text = "📖 Летопись странствий (Трёхслойная Память Хроник)",
+                text = "📖 Завершённые приключения",
                 style = MaterialTheme.typography.titleMedium,
                 fontFamily = FontFamily.SansSerif,
                 fontWeight = FontWeight.Bold,
                 color = HobbitCream
             )
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = HobbitElevatedBg,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "Слой 1 (Вечная летопись с Похода #1):",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontFamily = FontFamily.SansSerif,
-                        fontWeight = FontWeight.Bold,
-                        color = HobbitGold
-                    )
-                    Text(
-                        text = "• [Поход #1] Старая мельница | Барсук Брамбл -> «Спрятать медальон в шкатулку тайн»\n• [Поход #2] Янтарная дубрава | Ворон Корвус -> «Попросить приносить лесные письма»\n• [Поход #3] Старая мельница | Перевозчик Хьюго -> «Пообещать найти ключ от ларца»",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = FontFamily.SansSerif,
-                        fontWeight = FontWeight.Normal,
-                        lineHeight = 20.sp,
-                        color = HobbitCream
-                    )
-                }
-            }
-            journalList.forEachIndexed { idx, entry ->
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = HobbitElevatedBg,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            text = "${if (idx < 3) "★ " else "✓ "}${entry.titleRu}",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontFamily = FontFamily.SansSerif,
-                            fontWeight = FontWeight.Bold,
-                            color = HobbitGold
-                        )
-                        Text(
-                            text = entry.storyTextRu,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontFamily = FontFamily.SansSerif,
-                            fontWeight = FontWeight.Normal,
-                            lineHeight = 20.sp,
-                            color = HobbitCream
-                        )
-                    }
-                }
+            if (journalList.isEmpty()) Text("Здесь появятся приключения после твоего ответа Шанталь.", color = HobbitMuted)
+            journalList.forEach { entry ->
+                DiaryEntry(entry.titleRu, entry.storyTextRu +
+                    (entry.chosenActionSummaryRu?.let { "\n\nТвой ответ: $it" } ?: ""))
             }
         }
     }
