@@ -75,7 +75,7 @@ internal fun ChantalWorldMap(journeys: Int, selectedId: String, locked: Boolean,
                     val panelVisible=detailsId!=null || listOpen
                     val map: @Composable (Modifier)->Unit = { modifier ->
                         MapCanvas(modifier,scale,centerX,centerY,selectedId,memory,
-                            onCamera={s,x,y->scale=s;centerX=x;centerY=y},onPlace={detailsId=it;listOpen=false})
+                            onCamera={s,x,y->scale=s;centerX=x;centerY=y},onPlace={if(it.isEmpty()) { detailsId=null;listOpen=true } else { detailsId=it;listOpen=false }})
                     }
                     val panel: @Composable (Modifier)->Unit = { modifier ->
                         Surface(modifier,color=HobbitCardBg,shape=RoundedCornerShape(18.dp)) {
@@ -138,7 +138,15 @@ private fun MapCanvas(modifier:Modifier, scale:Float, centerX:Float, centerY:Flo
         }
         Box(Modifier.fillMaxSize().testTag("map_gesture_surface").semantics { stateDescription="Масштаб $scale" }
             .pointerInput(w,h) { detectTransformGestures { focus,pan,zoom,_->transform(focus,pan,zoom) } }
-            .pointerInput(w,h) { detectTapGestures(onDoubleTap={p-> if(currentScale>1.05f) onCamera(1f,.5f,.5f) else transform(p,Offset.Zero,2.5f)}) },contentAlignment=Alignment.Center) {
+            .pointerInput(w,h) { detectTapGestures(onTap={ tap ->
+                val s=currentScale
+                val x=clampMapCenter(currentX,iw,w,s);val y=clampMapCenter(currentY,ih,h,s)
+                val matches=chantalMapAnchors.filter { a ->
+                    kotlin.math.abs(tap.x-(w/2+(a.x-x)*iw*s))<=with(density){48.dp.toPx()} &&
+                    kotlin.math.abs(tap.y-(h/2+(a.y-y)*ih*s))<=with(density){24.dp.toPx()}
+                }
+                if(matches.size==1) onPlace(matches.first().id) else if(matches.size>1) onPlace("")
+            },onDoubleTap={p-> if(currentScale>1.05f) onCamera(1f,.5f,.5f) else transform(p,Offset.Zero,2.5f)}) },contentAlignment=Alignment.Center) {
             Image(painter,"Пергаментная карта",Modifier.size(with(density){iw.toDp()},with(density){ih.toDp()}).graphicsLayer {
                 scaleX=scale;scaleY=scale;translationX=(.5f-cx)*iw*scale;translationY=(.5f-cy)*ih*scale
             },contentScale=ContentScale.Fit)
@@ -147,8 +155,8 @@ private fun MapCanvas(modifier:Modifier, scale:Float, centerX:Float, centerY:Flo
                 val px=w/2+(a.x-cx)*iw*scale;val py=h/2+(a.y-cy)*ih*scale
                 if(px in 0f..w && py in 0f..h) Box(Modifier.align(Alignment.TopStart)
                     .offset { IntOffset((px-with(density){48.dp.toPx()}).toInt(),(py-with(density){24.dp.toPx()}).toInt()) }
-                    .size(width=96.dp,height=48.dp).clickable(role=Role.Button) { onPlace(a.id) }
-                    .testTag("map_label_$index").semantics { contentDescription=region.titleRu },contentAlignment=Alignment.Center) {
+                    .size(width=96.dp,height=48.dp)
+                    .testTag("map_label_$index").semantics { contentDescription=region.titleRu; role=Role.Button; onClick { onPlace(a.id);true } },contentAlignment=Alignment.Center) {
                     Text((if(selected==a.id) "• " else "")+region.shortTitleRu,color=Color(0xFF302015),style=MaterialTheme.typography.labelLarge,
                         modifier=Modifier.graphicsLayer { shadowElevation=0f })
                 }
