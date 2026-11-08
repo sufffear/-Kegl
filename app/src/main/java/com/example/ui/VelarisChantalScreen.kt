@@ -472,6 +472,11 @@ fun VelarisChantalScreen(
             },
             onGiftTrinket = { item -> giftItemId = item.id },
             worldInteractions = JSONObject(worldInteractions),
+            onMagicPractice = { choice ->
+                val memory = progressRepository.load().optJSONObject("worldMemory") ?: com.example.data.ChantalWorldMemory.empty()
+                runCatching { com.example.data.ChantalMagicPractice.apply(JSONObject(worldInteractions), memory, choice) }
+                    .onSuccess { worldInteractions = it.toString() }
+            },
             onCompareClues = { first, second ->
                 runCatching { com.example.data.ChantalWorldInteractions.compare(JSONObject(worldInteractions), first, second, inventoryList) }
                     .onSuccess { worldInteractions = it.toString() }

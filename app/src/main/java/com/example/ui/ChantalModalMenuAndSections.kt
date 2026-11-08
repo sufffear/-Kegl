@@ -358,6 +358,7 @@ internal fun ChantalModalMenuDialog(
     onBuyShopItem: (ChantalShopItem) -> Unit,
     worldInteractions: org.json.JSONObject,
     onCompareClues: (String, String) -> Unit,
+    onMagicPractice: (Int) -> Unit,
     journalList: List<ChantalStoryEpisode>,
     onSelectAiProvider: (String) -> Unit,
     selectedOpenRouterModel: String,
@@ -560,7 +561,7 @@ internal fun ChantalModalMenuDialog(
 
                     "map" -> {
                         Column {
-                            ChantalWorldMap(totalJourneys, preferredRegionId, routeLocked, onChooseRoute)
+                            ChantalWorldMap(totalJourneys, preferredRegionId, routeLocked, diaryMemory, onChooseRoute)
                             ChantalOpenTasks(diaryMemory)
                             journalList.filter { it.regionTitleRu.isNotBlank() }.groupBy { it.regionTitleRu }.forEach { (place, visits) ->
                                 Text("$place · посещений: ${visits.size}", color = HobbitCream)
@@ -604,7 +605,7 @@ internal fun ChantalModalMenuDialog(
                     }
 
                     "journal" -> {
-                        ChantalWorldDiary(diaryMemory, journalList, inventoryList, worldInteractions, onCompareClues)
+                        ChantalWorldDiary(diaryMemory, journalList, inventoryList, worldInteractions, onCompareClues, onMagicPractice)
                         ChantalJournalSectionCard(journalList = journalList)
                     }
 

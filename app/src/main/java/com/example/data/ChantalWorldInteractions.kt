@@ -22,6 +22,11 @@ object ChantalWorldInteractions {
                 }
             }
         }
+        value.optJSONObject("silverThreadPractice")?.let {
+            require(it.get("choice") is Int && it.getInt("choice") in 0..2)
+            require(it.getString("sourceEpisodeId").isNotBlank())
+            require(it.getString("textRu") == ChantalMagicPractice.reactions[it.getInt("choice")])
+        }
         return value
     }
     fun gift(state: JSONObject, itemId: String, npc: String, inventory: List<ChantalInventoryLootItem>, journal: List<ChantalStoryEpisode>): JSONObject {

@@ -36,7 +36,7 @@ internal fun DiaryEntry(title: String, detail: String) {
 
 /** Read-only presentation of accepted facts: opening the diary never grants rewards. */
 @Composable
-internal fun ChantalWorldDiary(memory: JSONObject, journal: List<ChantalStoryEpisode>, inventory: List<ChantalInventoryLootItem>, interactions: JSONObject = com.example.data.ChantalWorldInteractions.empty(), onCompare: (String, String) -> Unit = { _, _ -> }) {
+internal fun ChantalWorldDiary(memory: JSONObject, journal: List<ChantalStoryEpisode>, inventory: List<ChantalInventoryLootItem>, interactions: JSONObject = com.example.data.ChantalWorldInteractions.empty(), onCompare: (String, String) -> Unit = { _, _ -> }, onMagicPractice: (Int) -> Unit = {}) {
     var selectedClue by remember { mutableStateOf<String?>(null) }
     var tab by remember { mutableStateOf("Дела") }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -97,6 +97,14 @@ internal fun ChantalWorldDiary(memory: JSONObject, journal: List<ChantalStoryEpi
             "Магия" -> {
                 val items = records(memory, "magicItems")
                 if (items.isEmpty()) Text("Пока нет находок с известным волшебным свойством.", color = HobbitMuted)
+                if (items.any { it.getString("id") == "silver_thread" }) {
+                    Text("Проба серебряной нити · бесплатно", color = HobbitGold)
+                    Text("Нитка хранит один напев и возвращает его у воды. Она не открывает замки и не исполняет желания.", color = HobbitCream)
+                    val practice = interactions.optJSONObject("silverThreadPractice")
+                    if (practice == null) com.example.data.ChantalMagicPractice.choices.forEachIndexed { index, label ->
+                        OutlinedButton(onClick = { onMagicPractice(index) }) { Text(label, color = HobbitCream) }
+                    } else Text(practice.getString("textRu"), color = HobbitCream)
+                }
                 items.forEach { DiaryEntry(it.getString("descriptionRu"), "${it.getString("propertyRu")}\n${sourceText(memory, it)}") }
             }
         }
