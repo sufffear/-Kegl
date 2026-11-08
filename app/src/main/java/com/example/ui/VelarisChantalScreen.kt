@@ -206,9 +206,6 @@ fun VelarisChantalScreen(
     var customOpenRouterModelInput by remember { mutableStateOf(saved.optString("customOpenRouterModelInput", "")) }
     var selectedDifficulty by remember { mutableStateOf(saved.optString("selectedDifficulty", ChantalStoryDifficulty.MEDIUM.code)) }
 
-    LaunchedEffect(activeJourneyStartMs) {
-        while (activeJourneyStartMs > 0) { trailNow = timeProvider.currentWallTimeMs(); delay(10_000) }
-    }
     val ownedShopItemIds = remember { mutableStateListOf<String>().apply { addAll(ChantalProgressCodec.strings(saved.optJSONArray("ownedShopItemIds"))) } }
     val claimedMerchantOfferIds = remember { mutableStateListOf<String>().apply { addAll(ChantalProgressCodec.strings(saved.optJSONArray("claimedMerchantOfferIds"))) } }
 
@@ -226,6 +223,9 @@ fun VelarisChantalScreen(
     var favoriteSnack by remember { mutableIntStateOf(saved.optInt("favoriteSnack", 0).coerceIn(0, 3)) }
     var sharedGreeting by remember { mutableIntStateOf(saved.optInt("sharedGreeting", 0).coerceIn(0, 3)) }
     var trailNow by remember { mutableLongStateOf(timeProvider.currentWallTimeMs()) }
+    LaunchedEffect(activeJourneyStartMs) {
+        while (activeJourneyStartMs > 0) { trailNow = timeProvider.currentWallTimeMs(); delay(10_000) }
+    }
     var friendSceneAnswers by remember { mutableStateOf(saved.optJSONObject("friendSceneAnswers")?.toString() ?: "{}") }
     var homeSceneIndex by remember { mutableIntStateOf(saved.optInt("homeSceneIndex", 0)) }
     var homeSceneAnswer by remember { mutableStateOf<Int?>(if (saved.isNull("homeSceneAnswer")) null else saved.getInt("homeSceneAnswer").coerceIn(0, 2)) }
