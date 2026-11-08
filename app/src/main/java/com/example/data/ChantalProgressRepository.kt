@@ -57,7 +57,20 @@ class ChantalProgressRepository(private val context: Context) {
         val episodes = if (journal == null) emptyList() else (0 until journal.length()).map {
             ChantalProgressCodec.decodeChantalStoryEpisode(journal.getJSONObject(it))
         }
-        return ChantalLanternAdventure.consequences(memory, episodes)
+        var confirmed = ChantalLanternAdventure.consequences(memory, episodes)
+        snapshot.optJSONObject("worldInteractions")?.let { interactions ->
+            val gifts = ChantalWorldInteractions.validate(interactions).getJSONArray("gifts")
+            repeat(gifts.length()) { index ->
+                val gift = gifts.getJSONObject(index)
+                val source = gift.getString("sourceEpisodeId")
+                if (episodes.any { it.id == source && !it.chosenActionSummaryRu.isNullOrBlank() }) {
+                    confirmed = ChantalWorldMemory.withFact(confirmed, "relationships", JSONObject()
+                        .put("id", "gift:" + gift.getString("id"))
+                        .put("sourceEpisodeId", source).put("descriptionRu", gift.getString("textRu")))
+                }
+            }
+        }
+        return confirmed
     }
 
     fun save(snapshot: JSONObject) {

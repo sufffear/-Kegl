@@ -374,7 +374,7 @@ internal fun ChantalModalMenuDialog(
     onToggleTransformPreview: () -> Unit
 ) {
     val diaryContext = androidx.compose.ui.platform.LocalContext.current
-    val diaryMemory = remember(journalList.toList()) {
+    val diaryMemory = remember(journalList.toList(), worldInteractions.toString()) {
         val saved = com.example.data.ChantalProgressRepository(diaryContext).load().optJSONObject("worldMemory")
         val journal = org.json.JSONArray().apply { journalList.forEach { put(com.example.data.ChantalProgressCodec.encode(it)) } }
         com.example.data.ChantalLanternAdventure.consequences(
