@@ -43,6 +43,8 @@ class WorkoutMapTest {
         compose.onNodeWithTag("map_gesture_surface").assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription,"Масштаб 1.0"))
         screenshot("map_overview.png")
         compose.onNodeWithTag("map_label_1").performClick()
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithTag("choose_map_route").assertIsDisplayed()
         screenshot("map_details.png")
     }
     @Test fun lockedRegionCanBeInspectedButCannotBeSelected() {
@@ -68,11 +70,13 @@ class WorkoutMapTest {
         compose.onNodeWithText("Карта троп · приближай двумя пальцами").assertDoesNotExist()
         compose.onNodeWithText("Сброс").assertDoesNotExist()
         compose.onNodeWithTag("map_label_1").performClick()
+        compose.mainClock.advanceTimeBy(400)
         compose.onNodeWithTag("map_place_details").assertIsDisplayed()
         compose.onNodeWithText("Янтарная дубрава").assertIsDisplayed()
         compose.onNodeWithTag("choose_map_route").assertIsDisplayed().assertIsEnabled()
         compose.onNodeWithTag("close_map_details").performClick()
         compose.onNodeWithTag("map_label_3").performClick()
+        compose.mainClock.advanceTimeBy(400)
         compose.onNodeWithTag("choose_map_route").assertIsDisplayed().assertIsNotEnabled()
         compose.onNodeWithTag("close_map_details").performClick()
         compose.onNodeWithTag("close_world_map").performClick()
@@ -90,8 +94,10 @@ class WorkoutMapTest {
         } }
         compose.onNodeWithTag("open_world_map").performScrollTo().performClick()
         compose.onNodeWithTag("map_label_1").performClick()
+        compose.mainClock.advanceTimeBy(400)
         compose.onNodeWithTag("choose_map_route").assertIsDisplayed()
         compose.onNodeWithTag("close_map_details").assertIsDisplayed()
+        screenshot("map_landscape.png")
     }
 
 }
