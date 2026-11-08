@@ -30,7 +30,7 @@ class ChantalGenerationTest {
     @Test fun narrativeV3AcceptsLongerParagraphStoryAndPreservesFullEndingSummary() {
         val sample = ChantalNarrativeSample.episode()
         assertTrue(sample.storyTextRu.count { it == '.' || it == '?' || it == '!' } > 12)
-        val summary = "Шанталь испугалась шороха листа на хвосте, посмеялась с воробьём и принесла лист домой."
+        val summary = "Шанталь рассыпала шерсть, помогая воробью строить гнездо; они вместе собрали часть и устроили мягкую подстилку."
         val reply = response().apply {
             remove("sentencesRu")
             put("paragraphsRu", JSONArray(sample.storyTextRu.split("\n\n")))
@@ -57,9 +57,10 @@ class ChantalGenerationTest {
     }
     @Test fun generationPromptCarriesApprovedVoiceAndConversationalChoices() {
         val prompt = ChantalStoryGeneration.prompt(episode(), ChantalWorldMemory.empty(), ChantalTraits())
-        assertTrue(prompt.contains("ЛИТЕРАТУРНАЯ ИНСТРУКЦИЯ 3.2"))
+        assertTrue(prompt.contains("ЛИТЕРАТУРНАЯ ИНСТРУКЦИЯ 3.3"))
         assertTrue(prompt.contains("от первого лица"))
-        assertTrue(prompt.contains("100–180 слов"))
+        assertTrue(prompt.contains("350–600 слов"))
+        assertFalse(prompt.contains("100–180 слов"))
         assertFalse(prompt.contains("300–650 слов"))
         assertTrue(prompt.contains("реплики игрока"))
         assertFalse(prompt.contains("из 10–12 полных предложений"))
@@ -67,12 +68,15 @@ class ChantalGenerationTest {
 
     @Test fun requestsUseActualCompanionStageInBothRulesAndContext() {
         val baby = ChantalStoryGeneration.prompt(episode(), ChantalWorldMemory.empty(), ChantalTraits(), 1, 10)
-        assertTrue(baby.contains("спасённый маленький лисёнок"))
+        assertTrue(baby.contains("совсем маленький лисёнок"))
         assertTrue(baby.contains("\"stageNumber\":1"))
-        assertTrue(baby.contains("не более 220 слов"))
+        assertTrue(baby.contains("350–600 слов"))
         val older = ChantalStoryGeneration.prompt(episode(), ChantalWorldMemory.empty(), ChantalTraits(), 12, 120)
         assertTrue(older.contains("\"stageNumber\":2"))
-        assertTrue(older.contains("120–220 слов"))
+        assertTrue(older.contains("\"narrativeAgeMode\":\"very_young\""))
+        assertTrue(older.contains("350–600 слов"))
+        val growing = ChantalStoryGeneration.prompt(episode(), ChantalWorldMemory.empty(), ChantalTraits(), 30, 300)
+        assertTrue(growing.contains("\"narrativeAgeMode\":\"growing\""))
         assertFalse(older.contains("не более 220 слов"))
         assertEquals(1, ChantalNarrativeGuide.stage(10, 100))
         assertEquals(2, ChantalNarrativeGuide.stage(11, 110))
@@ -80,6 +84,16 @@ class ChantalGenerationTest {
         assertEquals(4, ChantalNarrativeGuide.stage(100, 1000))
         // Petting XP can advance the same stage used by the portrait, even with few journeys.
         assertEquals(2, ChantalNarrativeGuide.stage(0, 120))
+    }
+
+    @Test fun completeUserStyleIsPreservedVerbatimAndIncludedInRequests() {
+        val expectedSha = "8a1bd6fecf448fd134b81048508509ffab1cfef91ce1ef50cacc681e3792fd34"
+        val actualSha = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(ChantalNarrativeGuide.userStyle.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+        assertEquals(expectedSha, actualSha)
+        val prompt = ChantalStoryGeneration.prompt(episode(), ChantalWorldMemory.empty(), ChantalTraits())
+        assertTrue(prompt.contains(ChantalNarrativeGuide.userStyle))
+        assertTrue(prompt.indexOf(ChantalNarrativeGuide.userStyle) < prompt.indexOf("ДОПОЛНЕНИЯ ДЛЯ ПРИЛОЖЕНИЯ"))
     }
 
     @Test fun geminiEnvelopeRejectsTruncatedAndBlockedResponses() {

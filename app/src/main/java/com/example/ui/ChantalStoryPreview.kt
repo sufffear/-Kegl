@@ -29,7 +29,7 @@ internal fun ChantalStoryPreview(onDismiss: () -> Unit, generate: suspend () -> 
                 Text("Пробная история Gemini", style = MaterialTheme.typography.titleLarge)
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Без ожидания похода. Энергия, награды, журнал и характер не меняются. Запрос использует игровую память и квоту Gemini.")
-                    Text(if (isAuthoredSample) "Авторский образец для маленькой Шанталь · 3.2 · вне игрового журнала" else "Новый рассказ Gemini · вне игрового журнала")
+                    Text(if (isAuthoredSample) "Авторский образец разговорного стиля · 3.3 · вне игрового журнала" else "Новый рассказ Gemini · вне игрового журнала")
                     episode?.let { ep ->
                         Text(ep.titleRu, style = MaterialTheme.typography.titleMedium)
                         Text(ep.storyTextRu, modifier = Modifier.testTag("preview_story_text"))
