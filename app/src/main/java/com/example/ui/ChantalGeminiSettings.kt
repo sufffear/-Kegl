@@ -31,7 +31,7 @@ internal fun ChantalGeminiSettings() {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         OutlinedCard(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Gemini · добрые истории", style = MaterialTheme.typography.titleLarge)
+                Text("Gemini · истории Шанталь", style = MaterialTheme.typography.titleLarge)
                 Text(if (hasKey) "Ключ сохранён на телефоне" else "Добавь API-ключ из AI Studio")
                 if (editKey) {
                     OutlinedTextField(secret, { secret = it; keyMessage = "" }, label = { Text("API-ключ") },
