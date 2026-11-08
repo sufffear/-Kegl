@@ -628,31 +628,6 @@ fun VelarisChantalScreen(
             activeRegionTitleRu = activeRegionTitleRu
         )
 
-        ChantalAnimatedCompanion(
-            state = com.example.domain.ChantalVisualState.resolve(isJourneyActive, pendingEpisode != null,
-                isHeartPulseActive, isExhausted45, denAccordionTab == "loadout"),
-            transformed = stageInfo.isTransformed,
-            motionAllowed = rememberCompanionMotionAllowed()
-        )
-
-        if (isJourneyActive && activeTrailNotes.isNotEmpty()) ChantalTrailNotesView(activeTrailNotes,
-            com.example.data.ChantalTrailLife.visibleCount(activeJourneyStartMs, trailNow))
-        else if (pendingEpisode?.trailNotesRu?.isNotEmpty() == true) ChantalTrailNotesView(pendingEpisode!!.trailNotesRu, 2)
-        if (!isJourneyActive) ChantalSharedHabits(favoriteSnack, sharedGreeting, { favoriteSnack=it }, { sharedGreeting=it })
-
-        if (!isJourneyActive) ChantalFriendScenes(journalList, JSONObject(friendSceneAnswers)) { key, answer ->
-            val updated = JSONObject(friendSceneAnswers)
-            if (!updated.has(key)) { updated.put(key, answer); friendSceneAnswers = updated.toString() }
-        }
-
-        if (!isJourneyActive) ChantalHomeScenes(homeSceneIndex, homeSceneAnswer,
-            onAnswer = { if (homeSceneAnswer == null) homeSceneAnswer = it },
-            onNext = { homeSceneIndex = (homeSceneIndex + 1) % chantalHomeScenes.size; homeSceneAnswer = null })
-
-        ChantalDenShelfView(shelfItems, shelfSelection) { id ->
-            shelfSelection = com.example.data.ChantalDenShelf.select(shelfSelection, id, shelfItems)
-        }
-
         // 3. Панель уровня, XP и настроения (с компактными чипами Характера и Интерьера)
         ChantalLevelXpMoodPanel(
             maturityProgress = maturityProgress,
@@ -701,6 +676,31 @@ fun VelarisChantalScreen(
                 }
             }
         )
+
+        ChantalAnimatedCompanion(
+            state = com.example.domain.ChantalVisualState.resolve(isJourneyActive, pendingEpisode != null,
+                isHeartPulseActive, isExhausted45, denAccordionTab == "loadout"),
+            transformed = stageInfo.isTransformed,
+            motionAllowed = rememberCompanionMotionAllowed()
+        )
+
+        if (isJourneyActive && activeTrailNotes.isNotEmpty()) ChantalTrailNotesView(activeTrailNotes,
+            com.example.data.ChantalTrailLife.visibleCount(activeJourneyStartMs, trailNow))
+        else if (pendingEpisode?.trailNotesRu?.isNotEmpty() == true) ChantalTrailNotesView(pendingEpisode!!.trailNotesRu, 2)
+        if (!isJourneyActive) ChantalSharedHabits(favoriteSnack, sharedGreeting, { favoriteSnack=it }, { sharedGreeting=it })
+
+        if (!isJourneyActive) ChantalFriendScenes(journalList, JSONObject(friendSceneAnswers)) { key, answer ->
+            val updated = JSONObject(friendSceneAnswers)
+            if (!updated.has(key)) { updated.put(key, answer); friendSceneAnswers = updated.toString() }
+        }
+
+        if (!isJourneyActive) ChantalHomeScenes(homeSceneIndex, homeSceneAnswer,
+            onAnswer = { if (homeSceneAnswer == null) homeSceneAnswer = it },
+            onNext = { homeSceneIndex = (homeSceneIndex + 1) % chantalHomeScenes.size; homeSceneAnswer = null })
+
+        ChantalDenShelfView(shelfItems, shelfSelection) { id ->
+            shelfSelection = com.example.data.ChantalDenShelf.select(shelfSelection, id, shelfItems)
+        }
 
         // 5. Отдельная игровая панель подготовки к походу и 4 слотов экипировки (открывается кнопкой «Поход»), а также раскрывающиеся панели Характера / Интерьера
         ChantalExpeditionAndSubPanelsSection(
