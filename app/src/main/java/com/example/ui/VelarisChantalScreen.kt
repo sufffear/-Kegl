@@ -607,6 +607,13 @@ fun VelarisChantalScreen(
             activeRegionTitleRu = activeRegionTitleRu
         )
 
+        ChantalAnimatedCompanion(
+            state = com.example.domain.ChantalVisualState.resolve(isJourneyActive, pendingEpisode != null,
+                isHeartPulseActive, isExhausted45, denAccordionTab == "loadout"),
+            transformed = stageInfo.isTransformed,
+            motionAllowed = rememberCompanionMotionAllowed()
+        )
+
         ChantalDenShelfView(shelfItems, shelfSelection) { id ->
             shelfSelection = com.example.data.ChantalDenShelf.select(shelfSelection, id, shelfItems)
         }
