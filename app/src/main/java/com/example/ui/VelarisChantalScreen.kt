@@ -447,9 +447,11 @@ fun VelarisChantalScreen(
                 selectedBagItemId = null
             },
             onBrewHerb = { item ->
-                isExhausted45 = false
-                moodPct = (moodPct + 15).coerceAtMost(100)
-                inventoryList.removeAll { it.id == item.id }
+                val current = inventoryList.firstOrNull { it.id == item.id && it.category == ChantalLootCategory.HERB }
+                if (current != null && inventoryList.remove(current)) {
+                    isExhausted45 = false
+                    moodPct = (moodPct + 15).coerceAtMost(100)
+                }
                 selectedBagItemId = null
             },
             onGiftTrinket = { item -> giftItemId = item.id },
@@ -458,9 +460,12 @@ fun VelarisChantalScreen(
                 runCatching { com.example.data.ChantalWorldInteractions.compare(JSONObject(worldInteractions), first, second, inventoryList) }
                     .onSuccess { worldInteractions = it.toString() }
             },
-            onSellLootItem = { item, sellPrice ->
-                coins += sellPrice
-                inventoryList.removeAll { it.id == item.id }
+            onSellLootItem = { item, _ ->
+                val current = inventoryList.firstOrNull { it.id == item.id &&
+                    it.category in listOf(ChantalLootCategory.HERB, ChantalLootCategory.TRINKET) }
+                if (current != null && inventoryList.remove(current)) {
+                    coins += (current.sellPriceCoins * (100 + perks.witMerchantSellBonusPct)) / 100
+                }
                 selectedBagItemId = null
             },
             onCraftRoadAmulet = {

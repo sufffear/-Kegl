@@ -71,12 +71,40 @@ object ChantalWorldMemory {
         return validate(copy)
     }
 
-    /** Compact context for future generation; does not include the full accumulated stories. */
+    /** Bounded request view. Full history stays in the save; every selected fact retains its source. */
     fun context(memory: JSONObject, recentCount: Int = 6): JSONObject {
-        val copy = JSONObject(validate(memory).toString())
-        val events = copy.getJSONArray("events")
-        val recent = JSONArray()
-        for (i in (events.length() - recentCount.coerceIn(0, 12)).coerceAtLeast(0) until events.length()) recent.put(events.getJSONObject(i))
-        return copy.put("events", recent)
+        validate(memory)
+        val events = memory.getJSONArray("events")
+        val byId = (0 until events.length()).associate { events.getJSONObject(it).getString("episodeId") to events.getJSONObject(it) }
+        var result = empty()
+        fun compactEvent(event: JSONObject) = JSONObject(event.toString())
+            .put("summaryRu", event.getString("summaryRu").take(700))
+            .put("choiceRu", event.getString("choiceRu").take(280))
+            .put("regionRu", event.getString("regionRu").take(140))
+        fun addEvent(target: JSONObject, event: JSONObject) {
+            val selected = target.getJSONArray("events")
+            if ((0 until selected.length()).none { selected.getJSONObject(it).getString("episodeId") == event.getString("episodeId") }) selected.put(compactEvent(event))
+        }
+        for (i in (events.length() - recentCount.coerceIn(0, 12)).coerceAtLeast(0) until events.length()) {
+            val trial = JSONObject(result.toString())
+            addEvent(trial, events.getJSONObject(i))
+            if (trial.toString().length <= 30_000) result = trial
+        }
+        // Open commitments first; bounded recent facts keep long-running saves usable.
+        for (category in listOf("promises", "magicItems", "keepsakes", "relationships")) {
+            val all = memory.getJSONArray(category)
+            val records = (0 until all.length()).map { all.getJSONObject(it) }.asReversed()
+            val chosen = if (category == "promises") records.filter { it.getString("status") == "open" } + records.filter { it.getString("status") == "resolved" }.take(3)
+                else records.take(12)
+            for (record in chosen) {
+                val trial = JSONObject(result.toString())
+                val fact = JSONObject(record.toString()).put("descriptionRu", record.getString("descriptionRu").take(400))
+                if (fact.has("propertyRu")) fact.put("propertyRu", fact.getString("propertyRu").take(400))
+                addEvent(trial, byId.getValue(fact.getString("sourceEpisodeId")))
+                trial.getJSONArray(category).put(fact)
+                if (trial.toString().length <= 30_000) result = trial
+            }
+        }
+        return validate(result)
     }
 }

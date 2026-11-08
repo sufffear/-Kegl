@@ -45,7 +45,17 @@ class ChantalProgressRepository(private val context: Context) {
             }
             snapshot.optJSONObject("pendingEpisode")?.let { ChantalProgressCodec.decodeChantalStoryEpisode(it) }
             snapshot.optJSONObject("rewardPopupData")?.let { ChantalProgressCodec.decodeChantalRewardPopupData(it) }
-            snapshot.optJSONObject("worldInteractions")?.let { ChantalWorldInteractions.validate(it) }
+            if (snapshot.has("worldInteractions")) ChantalWorldInteractions.validate(snapshot.getJSONObject("worldInteractions"))
+            if (snapshot.has("shelfSelection")) {
+                val shelf = snapshot.getJSONArray("shelfSelection")
+                require(shelf.length() <= ChantalDenShelf.CAPACITY)
+                val ids = (0 until shelf.length()).map { index ->
+                    val id = shelf.get(index)
+                    require(id is String && id.isNotBlank())
+                    id
+                }
+                require(ids.distinct().size == ids.size)
+            }
             if (snapshot.has("worldMemory")) ChantalWorldMemory.validate(snapshot.getJSONObject("worldMemory"))
             return snapshot
         }
