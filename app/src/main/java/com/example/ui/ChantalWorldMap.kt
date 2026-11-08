@@ -157,8 +157,11 @@ private fun MapCanvas(modifier:Modifier, scale:Float, centerX:Float, centerY:Flo
                     .offset { IntOffset((px-with(density){48.dp.toPx()}).toInt(),(py-with(density){24.dp.toPx()}).toInt()) }
                     .size(width=96.dp,height=48.dp)
                     .testTag("map_label_$index").semantics { contentDescription=region.titleRu; role=Role.Button; onClick { onPlace(a.id);true } },contentAlignment=Alignment.Center) {
-                    Text((if(selected==a.id) "• " else "")+region.shortTitleRu,color=Color(0xFF302015),style=MaterialTheme.typography.labelLarge,
-                        modifier=Modifier.graphicsLayer { shadowElevation=0f })
+                    // Keep geographic labels within their hit areas; full-size names remain in the accessible list and detail card.
+                    CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides Density(density.density, density.fontScale.coerceAtMost(1.3f))) {
+                        Text((if(selected==a.id) "• " else "")+region.shortTitleRu,color=Color(0xFF302015),style=MaterialTheme.typography.labelLarge,
+                            maxLines=1, overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
                 }
             }
             val lantern = records(memory,"keepsakes").firstOrNull { it.getString("id")=="wooden_light" }
