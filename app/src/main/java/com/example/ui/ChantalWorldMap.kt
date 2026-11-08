@@ -136,7 +136,7 @@ private fun MapCanvas(modifier:Modifier, scale:Float, centerX:Float, centerY:Flo
             val y=oldY+(focus.y-h/2)/ih*(1/old-1/next)-pan.y/(ih*next)
             onCamera(next,clampMapCenter(x,iw,w,next),clampMapCenter(y,ih,h,next))
         }
-        Box(Modifier.fillMaxSize().testTag("map_gesture_surface")
+        Box(Modifier.fillMaxSize().testTag("map_gesture_surface").semantics { stateDescription="Масштаб $scale" }
             .pointerInput(w,h) { detectTransformGestures { focus,pan,zoom,_->transform(focus,pan,zoom) } }
             .pointerInput(w,h) { detectTapGestures(onDoubleTap={p-> if(currentScale>1.05f) onCamera(1f,.5f,.5f) else transform(p,Offset.Zero,2.5f)}) },contentAlignment=Alignment.Center) {
             Image(painter,"Пергаментная карта",Modifier.size(with(density){iw.toDp()},with(density){ih.toDp()}).graphicsLayer {

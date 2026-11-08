@@ -16,8 +16,35 @@ import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], qualifiers = "w360dp-h800dp")
+@org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
 class WorkoutMapTest {
     @get:Rule val compose = createComposeRule()
+    private fun screenshot(name: String) {
+        compose.runOnIdle {
+            val global=Class.forName("android.view.WindowManagerGlobal")
+            val instance=global.getMethod("getInstance").invoke(null)
+            @Suppress("UNCHECKED_CAST")
+            val views=global.getDeclaredField("mViews").apply { isAccessible=true }.get(instance) as List<android.view.View>
+            val view=views.last { it.visibility==android.view.View.VISIBLE && it.width>0 }
+            val bitmap=android.graphics.Bitmap.createBitmap(view.width,view.height,android.graphics.Bitmap.Config.ARGB_8888)
+            view.draw(android.graphics.Canvas(bitmap))
+            val dir=java.io.File("build/reports/chantal-screenshots").apply { mkdirs() }
+            java.io.FileOutputStream(java.io.File(dir,name)).use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,95,it) }
+            bitmap.recycle()
+        }
+    }
+    @Test fun doubleTapZoomsAndReturnsToOverviewWithoutOpeningPlace() {
+        compose.setContent { ChantalWorldMap(0, "", false) {} }
+        compose.onNodeWithTag("open_world_map").performClick()
+        compose.onNodeWithTag("map_gesture_surface").performTouchInput { doubleClick(center) }
+        compose.onNodeWithTag("map_gesture_surface").assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription,"Масштаб 2.5"))
+        compose.onNodeWithTag("map_place_details").assertDoesNotExist()
+        compose.onNodeWithTag("map_gesture_surface").performTouchInput { doubleClick(center) }
+        compose.onNodeWithTag("map_gesture_surface").assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription,"Масштаб 1.0"))
+        screenshot("map_overview.png")
+        compose.onNodeWithTag("map_label_1").performClick()
+        screenshot("map_details.png")
+    }
     @Test fun lockedRegionCanBeInspectedButCannotBeSelected() {
         var selected = ""
         compose.setContent { Column(Modifier.verticalScroll(rememberScrollState())) {
