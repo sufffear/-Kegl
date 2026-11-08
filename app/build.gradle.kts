@@ -16,8 +16,8 @@ android {
     applicationId = "com.velaris.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 16
-    versionName = "0.12.0-rc1"
+    versionCode = 17
+    versionName = "0.13.0-world-home"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

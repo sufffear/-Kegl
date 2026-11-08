@@ -48,7 +48,14 @@ object ChantalStoryGeneration {
             choices содержит ровно три разных реплики игрока и личные ответы Шанталь на каждую.
             trait: curiosity, tenderness, playfulness, romanticism, courage или wit.
             references: идентификаторы событий из памяти, на которые есть явная отсылка.
-            Пока proposals оставь пустым: новые последствия мира добавляет авторская логика приложения.
+            proposals: от 0 до 3 последствий, не более одного для каждого ответа. Можно оставить пустым.
+            Формат каждого: {"choiceIndex":0,"kind":"relationship","descriptionRu":"Конкретное изменение отношений после этого ответа","targetId":""}.
+            choiceIndex — 0, 1 или 2. kind: relationship (новый факт отношений), promise (явное добровольное обещание игрока), resolve (выполнение открытого обещания).
+            Для resolve targetId — точный id открытого обещания из памяти, иначе пустая строка.
+            Не создавай обещание без согласия в соответствующей реплике. Если открыто уже три дела — promise запрещён.
+            Описывай только случившийся факт; будущая встреча — возможность, без сроков, штрафов и обязательных редких вещей.
+            Последствия применяются только после выбора указанного ответа. Не повторяй уже известный факт.
+            Учитывай эти факты в следующих рассказах: иногда возвращай знакомого или результат помощи, не делай отсылку обязательной в каждом рассказе.
             Не возвращай монеты, опыт, цены, инвентарь или команды приложению.
             ДАННЫЕ: $input
         """.trimIndent()
@@ -94,9 +101,11 @@ object ChantalStoryGeneration {
         val refs = root.getJSONArray("references")
         require(refs.length() <= 12)
         repeat(refs.length()) { require(refs.getString(it) in known) { "Unknown past event" } }
-        // Until consequences have a complete acceptance protocol, the model cannot change the world.
-        require(root.getJSONArray("proposals").length() == 0)
-        return ChantalGeneratedStory(base.copy(titleRu = title, storyTextRu = story, choices = options, memorySummaryRu = summary), emptyList())
+        val proposals = root.getJSONArray("proposals")
+        ChantalGeneratedConsequences.validate(proposals, memory)
+        return ChantalGeneratedStory(base.copy(titleRu = title, storyTextRu = story, choices = options, memorySummaryRu = summary,
+            narrativeConsequences = proposals.toString(), chosenOptionIndex = null),
+            (0 until proposals.length()).map { proposals.getJSONObject(it) })
     }
 
     suspend fun generate(transport: ChantalStoryTransport, base: ChantalStoryEpisode,

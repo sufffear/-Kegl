@@ -80,7 +80,7 @@ class ChantalProgressRepository(private val context: Context) {
                 }
             }
         }
-        return confirmed
+        return ChantalGeneratedConsequences.apply(confirmed, episodes)
     }
 
     fun save(snapshot: JSONObject) {

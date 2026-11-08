@@ -219,6 +219,8 @@ fun VelarisChantalScreen(
 
     var worldInteractions by remember { mutableStateOf(saved.optJSONObject("worldInteractions")?.toString() ?: com.example.data.ChantalWorldInteractions.empty().toString()) }
     var shelfSelection by remember { mutableStateOf(ChantalProgressCodec.strings(saved.optJSONArray("shelfSelection"))) }
+    var homeSceneIndex by remember { mutableIntStateOf(saved.optInt("homeSceneIndex", 0)) }
+    var homeSceneAnswer by remember { mutableStateOf<Int?>(if (saved.isNull("homeSceneAnswer")) null else saved.getInt("homeSceneAnswer").coerceIn(0, 2)) }
     var giftItemId by remember { mutableStateOf<String?>(null) }
 
     val journalList = remember {
@@ -354,6 +356,8 @@ fun VelarisChantalScreen(
         put("journalList", JSONArray(journalList.map { ChantalProgressCodec.encode(it) }))
         put("worldInteractions", JSONObject(worldInteractions))
         put("shelfSelection", JSONArray(shelfSelection))
+        put("homeSceneIndex", homeSceneIndex)
+        put("homeSceneAnswer", homeSceneAnswer ?: JSONObject.NULL)
         put("pendingEpisode", pendingEpisode?.let { ChantalProgressCodec.encode(it) } ?: JSONObject.NULL)
         put("rewardPopupData", rewardPopupData?.let { ChantalProgressCodec.encode(it) } ?: JSONObject.NULL)
     }
@@ -618,6 +622,10 @@ fun VelarisChantalScreen(
             transformed = stageInfo.isTransformed,
             motionAllowed = rememberCompanionMotionAllowed()
         )
+
+        if (!isJourneyActive) ChantalHomeScenes(homeSceneIndex, homeSceneAnswer,
+            onAnswer = { if (homeSceneAnswer == null) homeSceneAnswer = it },
+            onNext = { homeSceneIndex = (homeSceneIndex + 1) % chantalHomeScenes.size; homeSceneAnswer = null })
 
         ChantalDenShelfView(shelfItems, shelfSelection) { id ->
             shelfSelection = com.example.data.ChantalDenShelf.select(shelfSelection, id, shelfItems)
@@ -971,7 +979,7 @@ fun VelarisChantalScreen(
                 }
                 journalList.add(
                     0,
-                    ep.copy(chosenActionSummaryRu = "${opt.labelRu} — Реакция Шанталь: ${opt.reactionRu}")
+                    ep.copy(chosenActionSummaryRu = "${opt.labelRu} — Реакция Шанталь: ${opt.reactionRu}", chosenOptionIndex = ep.choices.indexOf(opt))
                 )
                 rewardPopupData = ChantalRewardPopupData(
                     episodeTitleRu = ep.titleRu,
