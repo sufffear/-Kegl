@@ -161,10 +161,13 @@ private fun MapCanvas(modifier:Modifier, scale:Float, centerX:Float, centerY:Flo
                         modifier=Modifier.graphicsLayer { shadowElevation=0f })
                 }
             }
-            if(records(memory,"keepsakes").any { it.getString("id")=="wooden_light" }) {
+            val lantern = records(memory,"keepsakes").firstOrNull { it.getString("id")=="wooden_light" }
+            val lanternEvent = lantern?.let { fact -> records(memory,"events").firstOrNull { it.getString("episodeId")==fact.getString("sourceEpisodeId") } }
+            val lanternRegion = lanternEvent?.let { event -> DEFAULT_CHANTAL_MAP_REGIONS.firstOrNull { it.titleRu==event.getString("regionRu") } }
+            if(lanternRegion != null) {
                 val x=w/2+(.39f-cx)*iw*scale;val y=h/2+(.70f-cy)*ih*scale
                 if(x in 0f..w && y in 0f..h) Text("✦",color=Color(0xFF8E4808),modifier=Modifier.align(Alignment.TopStart).offset { IntOffset(x.toInt(),y.toInt()) }
-                    .size(48.dp).clickable { onPlace("reg_old_mill") }.semantics { contentDescription="Фонарь у переправы: память о Брамбле" })
+                    .size(48.dp).clickable { onPlace(lanternRegion.id) }.semantics { contentDescription="Фонарь у переправы: память о Брамбле" })
             }
         }
     }

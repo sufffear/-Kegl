@@ -100,4 +100,21 @@ class WorkoutMapTest {
         screenshot("map_landscape.png")
     }
 
+    @Test
+    @Config(qualifiers = "w412dp-h915dp")
+    fun detailsRemainUsableAtDoubleFontSize() {
+        compose.setContent {
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(androidx.compose.ui.platform.LocalDensity.current.density, 2f)) {
+                ChantalWorldMap(0, "", false) {}
+            }
+        }
+        compose.onNodeWithTag("open_world_map").performClick()
+        compose.onNodeWithTag("map_label_0").performClick()
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithTag("choose_map_route").assertIsDisplayed()
+        compose.onNodeWithTag("close_map_details").assertIsDisplayed()
+        screenshot("map_large_font.png")
+    }
+
 }
