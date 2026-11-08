@@ -542,7 +542,8 @@ data class ChantalStoryEpisode(
     val chosenActionSummaryRu: String? = null,
     val memorySummaryRu: String? = null,
     val narrativeConsequences: String? = null,
-    val chosenOptionIndex: Int? = null
+    val chosenOptionIndex: Int? = null,
+    val narrativeThemeRu: String? = null
 )
 
 data class ChantalRewardPopupData(

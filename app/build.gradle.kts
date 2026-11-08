@@ -16,8 +16,8 @@ android {
     applicationId = "com.velaris.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 17
-    versionName = "0.13.0-world-home"
+    versionCode = 18
+    versionName = "0.14.0-forest-friends"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

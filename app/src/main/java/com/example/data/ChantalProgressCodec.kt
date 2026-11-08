@@ -83,6 +83,7 @@ object ChantalProgressCodec {
         put("memorySummaryRu", value.memorySummaryRu ?: JSONObject.NULL)
         put("narrativeConsequences", value.narrativeConsequences ?: JSONObject.NULL)
         put("chosenOptionIndex", value.chosenOptionIndex ?: JSONObject.NULL)
+        put("narrativeThemeRu", value.narrativeThemeRu ?: JSONObject.NULL)
     }
 
     fun decodeChantalStoryEpisode(value: JSONObject): ChantalStoryEpisode = ChantalStoryEpisode(
@@ -105,7 +106,8 @@ object ChantalProgressCodec {
         chosenActionSummaryRu = if (value.isNull("chosenActionSummaryRu")) null else value.getString("chosenActionSummaryRu"),
         memorySummaryRu = if (value.isNull("memorySummaryRu")) null else value.getString("memorySummaryRu"),
         narrativeConsequences = if (value.isNull("narrativeConsequences")) null else value.getString("narrativeConsequences").also { ChantalGeneratedConsequences.validate(JSONArray(it), ChantalWorldMemory.empty(), false) },
-        chosenOptionIndex = if (value.isNull("chosenOptionIndex")) null else value.getInt("chosenOptionIndex").also { require(it in 0..2) }
+        chosenOptionIndex = if (value.isNull("chosenOptionIndex")) null else value.getInt("chosenOptionIndex").also { require(it in 0..2) },
+        narrativeThemeRu = if (value.isNull("narrativeThemeRu")) null else value.getString("narrativeThemeRu")
     )
 
     fun encode(value: ChantalRewardPopupData): JSONObject = JSONObject().apply {

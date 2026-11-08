@@ -219,6 +219,7 @@ fun VelarisChantalScreen(
 
     var worldInteractions by remember { mutableStateOf(saved.optJSONObject("worldInteractions")?.toString() ?: com.example.data.ChantalWorldInteractions.empty().toString()) }
     var shelfSelection by remember { mutableStateOf(ChantalProgressCodec.strings(saved.optJSONArray("shelfSelection"))) }
+    var friendSceneAnswers by remember { mutableStateOf(saved.optJSONObject("friendSceneAnswers")?.toString() ?: "{}") }
     var homeSceneIndex by remember { mutableIntStateOf(saved.optInt("homeSceneIndex", 0)) }
     var homeSceneAnswer by remember { mutableStateOf<Int?>(if (saved.isNull("homeSceneAnswer")) null else saved.getInt("homeSceneAnswer").coerceIn(0, 2)) }
     var giftItemId by remember { mutableStateOf<String?>(null) }
@@ -356,6 +357,7 @@ fun VelarisChantalScreen(
         put("journalList", JSONArray(journalList.map { ChantalProgressCodec.encode(it) }))
         put("worldInteractions", JSONObject(worldInteractions))
         put("shelfSelection", JSONArray(shelfSelection))
+        put("friendSceneAnswers", JSONObject(friendSceneAnswers))
         put("homeSceneIndex", homeSceneIndex)
         put("homeSceneAnswer", homeSceneAnswer ?: JSONObject.NULL)
         put("pendingEpisode", pendingEpisode?.let { ChantalProgressCodec.encode(it) } ?: JSONObject.NULL)
@@ -622,6 +624,11 @@ fun VelarisChantalScreen(
             transformed = stageInfo.isTransformed,
             motionAllowed = rememberCompanionMotionAllowed()
         )
+
+        if (!isJourneyActive) ChantalFriendScenes(journalList, JSONObject(friendSceneAnswers)) { key, answer ->
+            val updated = JSONObject(friendSceneAnswers)
+            if (!updated.has(key)) { updated.put(key, answer); friendSceneAnswers = updated.toString() }
+        }
 
         if (!isJourneyActive) ChantalHomeScenes(homeSceneIndex, homeSceneAnswer,
             onAnswer = { if (homeSceneAnswer == null) homeSceneAnswer = it },

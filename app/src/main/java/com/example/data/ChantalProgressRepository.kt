@@ -46,6 +46,12 @@ class ChantalProgressRepository(private val context: Context) {
             snapshot.optJSONObject("pendingEpisode")?.let { ChantalProgressCodec.decodeChantalStoryEpisode(it) }
             snapshot.optJSONObject("rewardPopupData")?.let { ChantalProgressCodec.decodeChantalRewardPopupData(it) }
             if (snapshot.has("worldInteractions")) ChantalWorldInteractions.validate(snapshot.getJSONObject("worldInteractions"))
+            snapshot.optJSONObject("friendSceneAnswers")?.let { answers ->
+                answers.keys().forEach { key ->
+                    require(ChantalLivingWorld.profiles.any { it.key == key })
+                    require(answers.get(key) is Int && answers.getInt(key) in 0..2)
+                }
+            }
             if (snapshot.has("shelfSelection")) {
                 val shelf = snapshot.getJSONArray("shelfSelection")
                 require(shelf.length() <= ChantalDenShelf.CAPACITY)
@@ -77,6 +83,17 @@ class ChantalProgressRepository(private val context: Context) {
                     confirmed = ChantalWorldMemory.withFact(confirmed, "relationships", JSONObject()
                         .put("id", "gift:" + gift.getString("id"))
                         .put("sourceEpisodeId", source).put("descriptionRu", gift.getString("textRu")))
+                }
+            }
+        }
+        snapshot.optJSONObject("friendSceneAnswers")?.let { answers ->
+            ChantalLivingWorld.profiles.forEach { p ->
+                val meetings = episodes.filter { !it.chosenActionSummaryRu.isNullOrBlank() && ChantalLivingWorld.profile(it.npcNameRu)?.key == p.key }.distinctBy { it.id }
+                if (answers.has(p.key) && meetings.size >= 3) {
+                    val reply = p.replies[answers.getInt(p.key)]
+                    confirmed = ChantalWorldMemory.withFact(confirmed, "relationships", JSONObject()
+                        .put("id", "friend-scene:${p.key}").put("sourceEpisodeId", meetings.first().id)
+                        .put("descriptionRu", "Совместная встреча с ${p.name}. Ответ игрока: ${reply.first}. Шанталь рассказала: ${reply.second}"))
                 }
             }
         }

@@ -62,7 +62,7 @@ internal fun ChantalWorldDiary(memory: JSONObject, journal: List<ChantalStoryEpi
                 val visits = journal.filter { !it.chosenActionSummaryRu.isNullOrBlank() && it.npcNameRu.isNotBlank() }.groupBy { it.npcNameRu }
                 if (visits.isEmpty()) Text("Здесь появятся знакомые из завершённых приключений.", color = HobbitMuted)
                 visits.forEach { (name, stories) ->
-                    DiaryEntry("$name · встреч: ${stories.size}", stories.joinToString("\n\n") {
+                    DiaryEntry("$name · встреч: ${stories.size}", (com.example.data.ChantalLivingWorld.profile(name)?.let { "${it.habit}\n${it.concern}\n\n" } ?: "") + stories.joinToString("\n\n") {
                         "${it.titleRu}\n${it.memorySummaryRu ?: it.mapNoteRu}\nТвой ответ: ${it.chosenActionSummaryRu}"
                     })
                 }
