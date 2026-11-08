@@ -36,7 +36,8 @@ internal fun DiaryEntry(title: String, detail: String) {
 
 /** Read-only presentation of accepted facts: opening the diary never grants rewards. */
 @Composable
-internal fun ChantalWorldDiary(memory: JSONObject, journal: List<ChantalStoryEpisode>, inventory: List<ChantalInventoryLootItem>) {
+internal fun ChantalWorldDiary(memory: JSONObject, journal: List<ChantalStoryEpisode>, inventory: List<ChantalInventoryLootItem>, interactions: JSONObject = com.example.data.ChantalWorldInteractions.empty(), onCompare: (String, String) -> Unit = { _, _ -> }) {
+    var selectedClue by remember { mutableStateOf<String?>(null) }
     var tab by remember { mutableStateOf("Дела") }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Дневник нашего мира", color = HobbitCream, style = MaterialTheme.typography.titleLarge)
@@ -65,12 +66,32 @@ internal fun ChantalWorldDiary(memory: JSONObject, journal: List<ChantalStoryEpi
                         "${it.titleRu}\n${it.memorySummaryRu ?: it.mapNoteRu}\nТвой ответ: ${it.chosenActionSummaryRu}"
                     })
                 }
+                val gifts = interactions.getJSONArray("gifts")
+                repeat(gifts.length()) { index ->
+                    val gift = gifts.getJSONObject(index)
+                    DiaryEntry("🎁 ${gift.getString("npcRu")} · ${gift.getString("itemTitleRu")}", gift.getString("textRu"))
+                }
                 records(memory, "relationships").forEach { DiaryEntry(it.getString("descriptionRu"), sourceText(memory, it)) }
             }
             "Шкатулка" -> {
                 val clues = inventory.filter { it.category == ChantalLootCategory.ROYAL_CLUE }
                 if (clues.isEmpty()) Text("Пока нет королевских улик. Найденные улики появятся здесь.", color = HobbitMuted)
                 clues.forEach { DiaryEntry("${it.emoji} ${it.titleRu}", "${it.descriptionRu}\nНайдена: ${it.foundAtRegionRu}\n${if (it.inspectedBonusClaimed) "Уже исследована" else "Исследовать можно в Сумке находок"}") }
+                val studied = clues.filter { it.inspectedBonusClaimed }
+                Text("Сопоставление улик", color = HobbitGold)
+                Text("Изучи две находки в сумке, затем выбери их здесь. Сравнение не расходует вещи.", color = HobbitMuted)
+                studied.forEach { clue ->
+                    OutlinedButton(onClick = {
+                        val first = selectedClue
+                        if (first == null) selectedClue = clue.id
+                        else if (first == clue.id) selectedClue = null
+                        else { onCompare(first, clue.id); selectedClue = null }
+                    }) { Text("${if (selectedClue == clue.id) "✓ " else ""}${clue.titleRu}", color = HobbitCream) }
+                }
+                val comparisons = interactions.getJSONArray("comparisons")
+                repeat(comparisons.length()) { index ->
+                    DiaryEntry("Сопоставление ${index + 1}", comparisons.getJSONObject(index).getString("textRu"))
+                }
                 records(memory, "keepsakes").forEach { DiaryEntry(it.getString("descriptionRu"), sourceText(memory, it)) }
             }
             "Магия" -> {

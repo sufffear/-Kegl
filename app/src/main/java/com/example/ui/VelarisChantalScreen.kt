@@ -11,6 +11,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -215,6 +217,9 @@ fun VelarisChantalScreen(
         }
     }
 
+    var worldInteractions by remember { mutableStateOf(saved.optJSONObject("worldInteractions")?.toString() ?: com.example.data.ChantalWorldInteractions.empty().toString()) }
+    var giftItemId by remember { mutableStateOf<String?>(null) }
+
     val journalList = remember {
         mutableStateListOf<ChantalStoryEpisode>().apply {
             saved.optJSONArray("journalList")?.let { a ->
@@ -341,6 +346,7 @@ fun VelarisChantalScreen(
         put("pantryProvisionCounts", JSONObject(pantryProvisionCounts.toMap()))
         put("inventoryList", JSONArray(inventoryList.map { ChantalProgressCodec.encode(it) }))
         put("journalList", JSONArray(journalList.map { ChantalProgressCodec.encode(it) }))
+        put("worldInteractions", JSONObject(worldInteractions))
         put("pendingEpisode", pendingEpisode?.let { ChantalProgressCodec.encode(it) } ?: JSONObject.NULL)
         put("rewardPopupData", rewardPopupData?.let { ChantalProgressCodec.encode(it) } ?: JSONObject.NULL)
     }
@@ -372,6 +378,31 @@ fun VelarisChantalScreen(
         )
     }
 
+    giftItemId?.let { id ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { giftItemId = null },
+            title = { Text("Кому подарить находку?") },
+            text = { Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text("Подарок останется в истории знакомства. Одинаковую вещь одному знакомому дарим только один раз; монет за подарок нет.")
+                val names = journalList.filter { !it.chosenActionSummaryRu.isNullOrBlank() }.map { it.npcNameRu }.filter { it.isNotBlank() }.distinct()
+                if (names.isEmpty()) Text("Сначала познакомься с кем-нибудь в приключении. Находка останется в сумке.")
+                names.forEach { name ->
+                    androidx.compose.material3.TextButton(onClick = {
+                        runCatching { com.example.data.ChantalWorldInteractions.gift(JSONObject(worldInteractions), id, name, inventoryList, journalList) }
+                            .onSuccess {
+                                worldInteractions = it.toString()
+                                inventoryList.removeAll { item -> item.id == id }
+                                lastReactionBanner = "Подарок для $name записан в дневнике."
+                                giftItemId = null
+                                selectedBagItemId = null
+                            }.onFailure { lastReactionBanner = "Такую вещь уже дарили этому знакомому. Выбери другую."; giftItemId = null }
+                    }) { Text(name) }
+                }
+            } },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { giftItemId = null }) { Text("Отмена") } }
+        )
+    }
+
     // Модальное меню с 6 игровыми разделами (открывается поверх экрана, НЕ сдвигая сцену с персонажем вниз)
     if (isBurgerMenuOpen) {
         ChantalModalMenuDialog(
@@ -400,10 +431,10 @@ fun VelarisChantalScreen(
                 if (id != null) newlyAddedBagItemIds.remove(id)
             },
             onInspectClue = { item ->
-                if (!item.inspectedBonusClaimed) {
+                val idx = inventoryList.indexOfFirst { it.id == item.id && it.category == ChantalLootCategory.ROYAL_CLUE }
+                if (idx >= 0 && !inventoryList[idx].inspectedBonusClaimed) {
                     curiosity = (curiosity + 1).coerceAtMost(100)
-                    val idx = inventoryList.indexOfFirst { it.id == item.id }
-                    if (idx >= 0) inventoryList[idx] = item.copy(inspectedBonusClaimed = true)
+                    inventoryList[idx] = inventoryList[idx].copy(inspectedBonusClaimed = true)
                     activeArrowToast = "Любопытство ↑"
                 }
                 selectedBagItemId = null
@@ -414,12 +445,11 @@ fun VelarisChantalScreen(
                 inventoryList.removeAll { it.id == item.id }
                 selectedBagItemId = null
             },
-            onGiftTrinket = { item ->
-                coins += 18
-                tenderness = (tenderness + 1).coerceAtMost(100)
-                activeArrowToast = "Нежность ↑"
-                inventoryList.removeAll { it.id == item.id }
-                selectedBagItemId = null
+            onGiftTrinket = { item -> giftItemId = item.id },
+            worldInteractions = JSONObject(worldInteractions),
+            onCompareClues = { first, second ->
+                runCatching { com.example.data.ChantalWorldInteractions.compare(JSONObject(worldInteractions), first, second, inventoryList) }
+                    .onSuccess { worldInteractions = it.toString() }
             },
             onSellLootItem = { item, sellPrice ->
                 coins += sellPrice

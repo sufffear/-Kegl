@@ -356,6 +356,8 @@ internal fun ChantalModalMenuDialog(
     claimedMerchantOfferIds: List<String>,
     onBuyMerchantOffer: (String) -> Unit,
     onBuyShopItem: (ChantalShopItem) -> Unit,
+    worldInteractions: org.json.JSONObject,
+    onCompareClues: (String, String) -> Unit,
     journalList: List<ChantalStoryEpisode>,
     onSelectAiProvider: (String) -> Unit,
     selectedOpenRouterModel: String,
@@ -602,7 +604,7 @@ internal fun ChantalModalMenuDialog(
                     }
 
                     "journal" -> {
-                        ChantalWorldDiary(diaryMemory, journalList, inventoryList)
+                        ChantalWorldDiary(diaryMemory, journalList, inventoryList, worldInteractions, onCompareClues)
                         ChantalJournalSectionCard(journalList = journalList)
                     }
 
@@ -888,7 +890,7 @@ internal fun ChantalBagSectionCard(
                                                 colors = ButtonDefaults.buttonColors(containerColor = HobbitCardBg)
                                             ) {
                                                 Text(
-                                                    "🎁 Подарить (+18 М)",
+                                                    "🎁 Подарить знакомому",
                                                     style = MaterialTheme.typography.labelLarge,
                                                     fontFamily = FontFamily.SansSerif,
                                                     fontWeight = FontWeight.Bold,

@@ -45,6 +45,7 @@ class ChantalProgressRepository(private val context: Context) {
             }
             snapshot.optJSONObject("pendingEpisode")?.let { ChantalProgressCodec.decodeChantalStoryEpisode(it) }
             snapshot.optJSONObject("rewardPopupData")?.let { ChantalProgressCodec.decodeChantalRewardPopupData(it) }
+            snapshot.optJSONObject("worldInteractions")?.let { ChantalWorldInteractions.validate(it) }
             if (snapshot.has("worldMemory")) ChantalWorldMemory.validate(snapshot.getJSONObject("worldMemory"))
             return snapshot
         }
