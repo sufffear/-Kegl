@@ -218,6 +218,7 @@ fun VelarisChantalScreen(
     }
 
     var worldInteractions by remember { mutableStateOf(saved.optJSONObject("worldInteractions")?.toString() ?: com.example.data.ChantalWorldInteractions.empty().toString()) }
+    var shelfSelection by remember { mutableStateOf(ChantalProgressCodec.strings(saved.optJSONArray("shelfSelection"))) }
     var giftItemId by remember { mutableStateOf<String?>(null) }
 
     val journalList = remember {
@@ -226,6 +227,11 @@ fun VelarisChantalScreen(
                 repeat(a.length()) { add(ChantalProgressCodec.decodeChantalStoryEpisode(a.getJSONObject(it))) }
             }
         }
+    }
+
+    val shelfItems = remember(journalList.toList(), inventoryList.toList(), ownedShopItemIds.toList()) {
+        val memory = com.example.data.ChantalWorldMemory.reconcile(saved.optJSONObject("worldMemory"), JSONArray(journalList.map { ChantalProgressCodec.encode(it) }))
+        com.example.data.ChantalDenShelf.items(com.example.data.ChantalLanternAdventure.consequences(memory, journalList), journalList, inventoryList, ownedShopItemIds)
     }
 
     // Подсчёт предметов интерьера (10 предметов = новый уровень Домика!)
@@ -347,6 +353,7 @@ fun VelarisChantalScreen(
         put("inventoryList", JSONArray(inventoryList.map { ChantalProgressCodec.encode(it) }))
         put("journalList", JSONArray(journalList.map { ChantalProgressCodec.encode(it) }))
         put("worldInteractions", JSONObject(worldInteractions))
+        put("shelfSelection", JSONArray(shelfSelection))
         put("pendingEpisode", pendingEpisode?.let { ChantalProgressCodec.encode(it) } ?: JSONObject.NULL)
         put("rewardPopupData", rewardPopupData?.let { ChantalProgressCodec.encode(it) } ?: JSONObject.NULL)
     }
@@ -599,6 +606,10 @@ fun VelarisChantalScreen(
             isJourneyActive = isJourneyActive,
             activeRegionTitleRu = activeRegionTitleRu
         )
+
+        ChantalDenShelfView(shelfItems, shelfSelection) { id ->
+            shelfSelection = com.example.data.ChantalDenShelf.select(shelfSelection, id, shelfItems)
+        }
 
         // 3. Панель уровня, XP и настроения (с компактными чипами Характера и Интерьера)
         ChantalLevelXpMoodPanel(

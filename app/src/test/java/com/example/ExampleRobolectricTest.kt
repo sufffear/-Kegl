@@ -61,8 +61,8 @@ class ExampleRobolectricTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         assertEquals("Velaris", context.getString(R.string.app_name))
         assertEquals("com.velaris.app", BuildConfig.APPLICATION_ID)
-        assertEquals("0.9.1-world-actions", BuildConfig.VERSION_NAME)
-        assertEquals(13, BuildConfig.VERSION_CODE)
+        assertEquals("0.10.0-den-shelf", BuildConfig.VERSION_NAME)
+        assertEquals(14, BuildConfig.VERSION_CODE)
 
         @Suppress("DEPRECATION")
         val packageInfo = context.packageManager.getPackageInfo(
