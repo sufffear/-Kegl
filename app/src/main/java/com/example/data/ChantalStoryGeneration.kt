@@ -27,7 +27,7 @@ object ChantalStoryGeneration {
             .put("stageNumber", ChantalNarrativeGuide.stage(totalJourneys, maturityXp))
             .put("narrativeAgeMode", if (totalJourneys < 30) "very_young" else "growing")
             .put("completedJourneys", totalJourneys.coerceAtLeast(0)).put("maturityXp", maturityXp.coerceAtLeast(0))
-            .put("storyDirection", ChantalLivingWorld.direction(memory, base.npcNameRu, base.journeyNumber)).put("world", context).put("traits", JSONObject().put("curiosity", character.curiosity)
+            .put("confirmedTrailNotesRu", JSONArray(base.trailNotesRu)).put("personalDetailsRu", base.personalDetailsRu).put("storyDirection", ChantalLivingWorld.direction(memory, base.npcNameRu, base.journeyNumber)).put("world", context).put("traits", JSONObject().put("curiosity", character.curiosity)
                 .put("tenderness", character.tenderness).put("playfulness", character.playfulness)
                 .put("romanticism", character.romanticism).put("courage", character.courage).put("wit", character.wit))
         return """
@@ -35,6 +35,10 @@ object ChantalStoryGeneration {
 
             ${ChantalNarrativeGuide.ageInstructions(totalJourneys, maturityXp)}
 
+            confirmedTrailNotesRu — уже отправленные весточки этого похода. Не противоречь им: это завершённый эпизод по пути, не обязательно основной сюжет.
+            Можно кратко вспомнить встречу, но не повторяй весь текст весточек. Не отменяй их развязку.
+            personalDetailsRu — выбранные игроком привычки; иногда естественно используй одну. Не выдумывай, что игрок уже угостил или произнёс приветствие.
+            Вводи необычных новых знакомых с понятным желанием и смешной слабостью. Один яркий поворот лучше нескольких случайных; избегай обязательной тайны в каждой истории.
             storyDirection задаёт направление нового сюжета, а не обязательный шаблон сцен.
             Не повторяй проблему, находку, способ решения и начало недавних историй из world.events.
             Профиль знакомого — его характер и текущие интересы, НЕ доказательство прошлой встречи или уже выполненного дела.

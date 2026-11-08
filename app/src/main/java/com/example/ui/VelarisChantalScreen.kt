@@ -206,6 +206,9 @@ fun VelarisChantalScreen(
     var customOpenRouterModelInput by remember { mutableStateOf(saved.optString("customOpenRouterModelInput", "")) }
     var selectedDifficulty by remember { mutableStateOf(saved.optString("selectedDifficulty", ChantalStoryDifficulty.MEDIUM.code)) }
 
+    LaunchedEffect(activeJourneyStartMs) {
+        while (activeJourneyStartMs > 0) { trailNow = timeProvider.currentWallTimeMs(); delay(10_000) }
+    }
     val ownedShopItemIds = remember { mutableStateListOf<String>().apply { addAll(ChantalProgressCodec.strings(saved.optJSONArray("ownedShopItemIds"))) } }
     val claimedMerchantOfferIds = remember { mutableStateListOf<String>().apply { addAll(ChantalProgressCodec.strings(saved.optJSONArray("claimedMerchantOfferIds"))) } }
 
@@ -219,6 +222,10 @@ fun VelarisChantalScreen(
 
     var worldInteractions by remember { mutableStateOf(saved.optJSONObject("worldInteractions")?.toString() ?: com.example.data.ChantalWorldInteractions.empty().toString()) }
     var shelfSelection by remember { mutableStateOf(ChantalProgressCodec.strings(saved.optJSONArray("shelfSelection"))) }
+    var activeTrailNotes by remember { mutableStateOf(ChantalProgressCodec.strings(saved.optJSONArray("activeTrailNotes"))) }
+    var favoriteSnack by remember { mutableIntStateOf(saved.optInt("favoriteSnack", 0).coerceIn(0, 3)) }
+    var sharedGreeting by remember { mutableIntStateOf(saved.optInt("sharedGreeting", 0).coerceIn(0, 3)) }
+    var trailNow by remember { mutableLongStateOf(timeProvider.currentWallTimeMs()) }
     var friendSceneAnswers by remember { mutableStateOf(saved.optJSONObject("friendSceneAnswers")?.toString() ?: "{}") }
     var homeSceneIndex by remember { mutableIntStateOf(saved.optInt("homeSceneIndex", 0)) }
     var homeSceneAnswer by remember { mutableStateOf<Int?>(if (saved.isNull("homeSceneAnswer")) null else saved.getInt("homeSceneAnswer").coerceIn(0, 2)) }
@@ -357,6 +364,9 @@ fun VelarisChantalScreen(
         put("journalList", JSONArray(journalList.map { ChantalProgressCodec.encode(it) }))
         put("worldInteractions", JSONObject(worldInteractions))
         put("shelfSelection", JSONArray(shelfSelection))
+        put("activeTrailNotes", JSONArray(activeTrailNotes))
+        put("favoriteSnack", favoriteSnack)
+        put("sharedGreeting", sharedGreeting)
         put("friendSceneAnswers", JSONObject(friendSceneAnswers))
         put("homeSceneIndex", homeSceneIndex)
         put("homeSceneAnswer", homeSceneAnswer ?: JSONObject.NULL)
@@ -625,6 +635,11 @@ fun VelarisChantalScreen(
             motionAllowed = rememberCompanionMotionAllowed()
         )
 
+        if (isJourneyActive && activeTrailNotes.isNotEmpty()) ChantalTrailNotesView(activeTrailNotes,
+            com.example.data.ChantalTrailLife.visibleCount(activeJourneyStartMs, trailNow))
+        else if (pendingEpisode?.trailNotesRu?.isNotEmpty() == true) ChantalTrailNotesView(pendingEpisode!!.trailNotesRu, 2)
+        if (!isJourneyActive) ChantalSharedHabits(favoriteSnack, sharedGreeting, { favoriteSnack=it }, { sharedGreeting=it })
+
         if (!isJourneyActive) ChantalFriendScenes(journalList, JSONObject(friendSceneAnswers)) { key, answer ->
             val updated = JSONObject(friendSceneAnswers)
             if (!updated.has(key)) { updated.put(key, answer); friendSceneAnswers = updated.toString() }
@@ -816,6 +831,11 @@ fun VelarisChantalScreen(
                         progressRepository.load().optJSONObject("worldMemory") ?: com.example.data.ChantalWorldMemory.empty())
                         ?.let { pendingEpisode = it }
                 }
+                pendingEpisode = pendingEpisode?.copy(trailNotesRu = activeTrailNotes,
+                    personalDetailsRu = listOfNotNull(
+                        com.example.data.ChantalTrailLife.snacks.getOrNull(favoriteSnack)?.takeIf { favoriteSnack > 0 }?.let { "Любимое угощение: $it" },
+                        com.example.data.ChantalTrailLife.greetings.getOrNull(sharedGreeting)?.takeIf { sharedGreeting > 0 }?.let { "Наше приветствие: $it" }
+                    ).joinToString("; "))
                 activeJourneyStartMs = 0L
                 denAccordionTab = "none"
             },
@@ -897,6 +917,7 @@ fun VelarisChantalScreen(
                     activeIsFiller = fillerTextInput.isNotBlank()
                     activeFillerPrompt = fillerTextInput
                     fillerTextInput = ""
+                    activeTrailNotes = com.example.data.ChantalTrailLife.notes(totalJourneys)
                     activeJourneyStartMs = timeProvider.currentWallTimeMs()
                     if (android.os.Build.VERSION.SDK_INT >= 33) {
                         val prefs = context.getSharedPreferences("chantal_notifications", android.content.Context.MODE_PRIVATE)

@@ -55,7 +55,7 @@ object ChantalWorldMemory {
             val excerpt = episode.storyTextRu.replace(Regex("\\s+"), " ").trim().take(600)
             events.put(JSONObject().put("episodeId", episode.id).put("journeyNumber", episode.journeyNumber)
                 .put("regionRu", episode.regionTitleRu).put("summaryRu", episode.memorySummaryRu?.takeIf { it.isNotBlank() }?.take(700) ?: excerpt.ifBlank { episode.titleRu })
-                .put("choiceRu", choice).put("themeRu", episode.narrativeThemeRu ?: ""))
+                .put("choiceRu", choice).put("themeRu", episode.narrativeThemeRu ?: "").put("trailNotesRu", JSONArray(episode.trailNotesRu)))
         }
         return validate(memory)
     }

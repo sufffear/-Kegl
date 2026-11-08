@@ -543,7 +543,9 @@ data class ChantalStoryEpisode(
     val memorySummaryRu: String? = null,
     val narrativeConsequences: String? = null,
     val chosenOptionIndex: Int? = null,
-    val narrativeThemeRu: String? = null
+    val narrativeThemeRu: String? = null,
+    val trailNotesRu: List<String> = emptyList(),
+    val personalDetailsRu: String = ""
 )
 
 data class ChantalRewardPopupData(

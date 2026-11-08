@@ -1365,7 +1365,7 @@ internal fun ChantalJournalSectionCard(
             )
             if (journalList.isEmpty()) Text("Здесь появятся приключения после твоего ответа Шанталь.", color = HobbitMuted)
             journalList.forEach { entry ->
-                DiaryEntry(entry.titleRu, entry.storyTextRu +
+                DiaryEntry(entry.titleRu, (if (entry.trailNotesRu.isEmpty()) "" else "Весточки с тропы:\n${entry.trailNotesRu.joinToString("\n")}\n\n") + entry.storyTextRu +
                     (entry.chosenActionSummaryRu?.let { "\n\nТвой ответ: $it" } ?: ""))
             }
         }
