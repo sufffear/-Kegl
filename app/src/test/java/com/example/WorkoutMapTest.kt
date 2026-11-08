@@ -86,6 +86,7 @@ class WorkoutMapTest {
     @Test
     @Config(qualifiers = "w800dp-h360dp")
     fun placeActionsStayVisibleInLandscape() {
+        org.robolectric.RuntimeEnvironment.setFontScale(1.5f)
         compose.setContent { Column(Modifier.verticalScroll(rememberScrollState())) {
             androidx.compose.runtime.CompositionLocalProvider(
                 androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(androidx.compose.ui.platform.LocalDensity.current.density, 1.5f)) {
@@ -103,6 +104,7 @@ class WorkoutMapTest {
     @Test
     @Config(qualifiers = "w412dp-h915dp")
     fun detailsRemainUsableAtDoubleFontSize() {
+        org.robolectric.RuntimeEnvironment.setFontScale(2f)
         compose.setContent {
             androidx.compose.runtime.CompositionLocalProvider(
                 androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(androidx.compose.ui.platform.LocalDensity.current.density, 2f)) {
