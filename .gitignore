@@ -26,3 +26,6 @@ coverage/
 !.env.example
 bun.lock
 public/assets/aistudio/
+
+# Local verification tooling
+/scripts/**/__pycache__/

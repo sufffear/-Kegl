@@ -77,6 +77,34 @@ class ChantalNarrativeSessionTest {
         assertTrue(runCatching { repo.publishNarrative(next,response(next.snapshot),"openrouter") }.isFailure)
         assertEquals("INTERRUPTED",repo.load().getJSONObject("narrativeBinding").getString("status"))
     }
+
+    @Test fun staleScreenCannotBeginPaidRequestAfterExternalRestore() {
+        seed(); repo.prepareNarrative()
+        val stale = ChantalProgressRepository(context, db).also { it.load() }
+        // Restoring even the same pending ID invalidates the old screen's consent/context.
+        repo.replace(repo.export())
+        val before = repo.export()
+        assertTrue(runCatching { stale.beginNarrativeRequest("pending") }.isFailure)
+        assertEquals(before, repo.export())
+        stale.load()
+        val ticket = stale.beginNarrativeRequest("pending")
+        assertEquals("pending", ticket.episodeId)
+        stale.finishNarrativeRequest(ticket, true)
+    }
+
+    @Test fun oldCancellationCannotCancelNewRequestAndDuplicatePublishIsRejected() {
+        seed(); repo.prepareNarrative()
+        val old = repo.beginNarrativeRequest("pending")
+        val next = repo.beginNarrativeRequest("pending")
+        repo.finishNarrativeRequest(old, true)
+        assertEquals(next.token, repo.load().getJSONObject("narrativeBinding").getString("activeRequest"))
+        val published = repo.publishNarrative(next, response(next.snapshot), "openrouter")
+        val acceptedText = published.getJSONObject("pendingEpisode").toString()
+        assertTrue(runCatching { repo.publishNarrative(next, response(next.snapshot), "openrouter") }.isFailure)
+        repo.finishNarrativeRequest(old, false)
+        assertEquals(acceptedText, repo.load().getJSONObject("pendingEpisode").toString())
+        assertEquals(100, repo.load().getInt("coins"))
+    }
     @Test fun engineAndRewardRollbackTogetherOnDiskFailure() {
         seed();repo.prepareNarrative()
         db.openHelper.writableDatabase.execSQL("CREATE TRIGGER fail_confirmation BEFORE INSERT ON chantal_aggregate BEGIN SELECT RAISE(ABORT,'injected'); END")

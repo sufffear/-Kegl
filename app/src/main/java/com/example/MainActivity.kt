@@ -25,9 +25,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val recovery = runCatching { com.example.data.RestoreStartupGate.ensureRecovered(this) }
+        val recovery = runCatching {
+            com.example.data.RestoreStartupGate.ensureRecovered(this)
+            com.example.data.RestoreStartupGate.ensureFinalStart(this)
+        }
         if (recovery.isFailure) {
-            setContent { androidx.compose.material3.Text("Не удалось завершить восстановление данных. Сохранения не сброшены. Перезапусти приложение.") }
+            setContent { androidx.compose.material3.Text("Не удалось подготовить данные приложения. Перезапусти приложение; при повторной ошибке сохрани её для диагностики.") }
             return
         }
         if (intent?.action == com.example.service.ChantalReturnScheduler.OPEN_CHANTAL) returnRequest++

@@ -40,8 +40,8 @@ class AppBuildInfoRepository(private val context: Context) {
 
         return AppBuildInfo(
             appName = "Velaris",
-            stageCode = "Итерация v1.4",
-            stageTitle = "Насыщенный дизайн, плавная навигация и чистый интерфейс",
+            stageCode = "Этап 7 · RC1",
+            stageTitle = "Кандидат на приёмку на устройстве",
             applicationId = BuildConfig.APPLICATION_ID,
             versionName = BuildConfig.VERSION_NAME,
             versionCode = BuildConfig.VERSION_CODE,
@@ -54,7 +54,7 @@ class AppBuildInfoRepository(private val context: Context) {
             androidSdkInt = sdkInt,
             hasInternetPermission = hasInternetPermission,
             isOfflineVerified = !hasInternetPermission,
-            isDemoOnlyStage = true
+            isDemoOnlyStage = false
         )
     }
 }

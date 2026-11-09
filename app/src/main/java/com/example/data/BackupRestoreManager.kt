@@ -1,6 +1,7 @@
 package com.example.data
 
 import android.content.Context
+import androidx.room.withTransaction
 import com.example.domain.MarkdownNovelParser
 import com.example.domain.MetronomeTickStyle
 import com.example.domain.ReaderFontSize
@@ -491,6 +492,40 @@ class BackupRestoreManager(
         runCatching { recoverPendingRestoreLocked() }
     }
 
+    /** One agreed clean start, not a per-version reset. Same journal/commit protocol as restore. */
+    suspend fun startFinalGameIfNeeded(): Result<Boolean> = serialized {
+        runCatching {
+            recoverPendingRestoreLocked()
+            if (database.chantalDao().markerPresentAsync(FINAL_START_ID)) return@runCatching false
+            withContext(NonCancellable) {
+                val before = preferencesRepository.signalSettingsFlow.first()
+                val book = File(targetBooksDir, StoryRepository.ACTIVE_SOURCE_FILE_NAME)
+                recoveryJournal.write(JSONObject().put("operationId", FINAL_START_ID)
+                    .put("preferences", settingsSnapshot(before).toJson())
+                    .put("bookExisted", book.exists())
+                    .put("bookBase64", if (book.exists()) Base64.encodeToString(book.readBytes(), Base64.NO_WRAP) else ""))
+                try {
+                    database.withTransaction {
+                        dao.clearFinalStartCompletions()
+                        dao.clearFinalStartRuns()
+                        dao.clearFinalStartSlots()
+                        dao.clearFinalStartDays()
+                        // Null aggregate is a tombstone: never reimport the old SharedPreferences game.
+                        chantalRepository.replaceWithinRestore(null)
+                        preferencesRepository.updateSettings(before.copy(frozenDates = emptySet()))
+                        database.chantalDao().insertMarkerAsync(ChantalRestoreMarkerEntity(FINAL_START_ID))
+                    }
+                    recoveryJournal.clear()
+                } catch (failure: Exception) {
+                    recoverPendingRestoreLocked()
+                    throw failure
+                }
+            }
+            runCatching { com.example.service.ChantalReturnScheduler.sync(context, 0) }
+            true
+        }
+    }
+
     private suspend fun recoverPendingRestoreLocked() {
         val record = recoveryJournal.read() ?: return
         val committed = database.chantalDao().markerPresentAsync(record.getString("operationId"))
@@ -576,9 +611,11 @@ class BackupRestoreManager(
     }
 
     companion object {
+        // Do not increment with app versions. Backups never remove this installation-local marker.
+        const val FINAL_START_ID = "final-start-v1"
         private val operationMutex = Mutex()
-        const val APP_VERSION = "0.5.0-v1.2"
-        const val APP_VERSION_CODE = 5
+        const val APP_VERSION = com.example.BuildConfig.VERSION_NAME
+        const val APP_VERSION_CODE = com.example.BuildConfig.VERSION_CODE
 
         const val MAX_MANIFEST_SIZE_BYTES = 64 * 1024L // 64 КБ
         const val MAX_TOTAL_UNCOMPRESSED_SIZE_BYTES = 60 * 1024 * 1024L // 60 МБ

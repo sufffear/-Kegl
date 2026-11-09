@@ -1,8 +1,7 @@
 name: Build Velaris Debug APK
 
 on:
-  push:
-    branches: [ "**" ]
+  # APK packaging is explicit; ordinary code pushes must not build an APK.
   workflow_dispatch:
 
 jobs:
@@ -35,22 +34,10 @@ jobs:
             exit 1
           fi
 
-      - name: Build Debug APK
-        run: gradle :app:assembleDebug
-
-      - name: Run Android unit and Robolectric tests
-        run: gradle :app:testDebugUnitTest
-
-      - name: Verify APK signing certificate
-        run: |
-          expected='7cb0deb615308fa329eaba824b772767a93f1d2587dec50f6958a9e42794d8c7'
-          apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
-          "$apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk > signing-report.txt
-          actual=$(sed -n 's/^.* certificate SHA-256 digest: //p' signing-report.txt | tr '[:upper:]' '[:lower:]')
-          cat signing-report.txt
-          grep -q '^Number of signers: 1$' signing-report.txt
-          test "$actual" = "$expected" || { echo '::error::Unexpected APK signing certificate'; exit 1; }
-          cat signing-report.txt
+      - name: Test, package and verify APK
+        env:
+          ANDROID_GRADLE_BIN: gradle
+        run: python3 scripts/check-android.py release
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
@@ -68,4 +55,5 @@ jobs:
             app/build/reports/chantal-screenshots/
             app/build/reports/tests/
             app/build/test-results/
+            build/checks/
           if-no-files-found: warn

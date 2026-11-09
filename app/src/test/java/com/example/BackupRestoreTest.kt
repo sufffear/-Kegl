@@ -203,4 +203,75 @@ class BackupRestoreTest {
         assertNull(RestoreRecoveryJournal(context.filesDir).read())
     }
 
+    @Test fun finalStartClearsProgressOnceAndPreservesCredentialsSettingsAndPrograms() = runBlocking {
+        val settings = BenchSignalSettings(soundEnabled=false, duckOtherApps=true, frozenDates=setOf("2026-11-06"))
+        prefs.updateSettings(settings)
+        val custom = CustomProgramEntity("retained", "Мой план")
+        db.velarisDao().upsertCustomProgram(custom)
+        val credentialStores = listOf("chantal_openrouter_access", "chantal_gemini_access", "chantal_ai_selection")
+        credentialStores.forEach { context.getSharedPreferences(it,0).edit().putString("sentinel", "dummy-encrypted-test-value").commit() }
+        repeat(3) { i -> db.velarisDao().insertCompletionIgnore(WorkoutCompletionEntity("old-$i","old-slot-$i","2026-11-06",1,null,false)) }
+        chantal.save(JSONObject().put("coins",42).put("totalJourneys",101).put("maturityXp",2000))
+        context.getSharedPreferences("chantal_progress",0).edit().putString("snapshot","{\"schemaVersion\":1,\"coins\":999}").commit()
+        assertEquals(30,db.velarisDao().observeWorkoutEnergy().first())
+        val oldArchive = archive()
+        assertTrue(manager().startFinalGameIfNeeded().getOrThrow())
+        assertEquals(0,db.velarisDao().observeWorkoutEnergy().first())
+        assertFalse(chantal.load().has("coins"))
+        assertNotNull(db.chantalDao().aggregate())
+        assertNull(db.chantalDao().aggregate()!!.payload)
+        assertEquals(settings.copy(frozenDates=emptySet()),prefs.signalSettingsFlow.first())
+        assertEquals(listOf(custom),db.velarisDao().getAllCustomPrograms())
+        credentialStores.forEach { assertEquals("dummy-encrypted-test-value",context.getSharedPreferences(it,0).getString("sentinel",null)) }
+        chantal.save(JSONObject().put("coins",7).put("totalJourneys",1))
+        assertFalse(manager().startFinalGameIfNeeded().getOrThrow())
+        assertEquals(7,chantal.load().getInt("coins"))
+        // An explicit old-archive restore is allowed and must not re-arm the one-time wipe.
+        manager().restoreBackup(oldArchive.inputStream(),false).getOrThrow()
+        assertFalse(manager().startFinalGameIfNeeded().getOrThrow())
+        assertEquals(42,chantal.load().getInt("coins"))
+        assertEquals(30,db.velarisDao().observeWorkoutEnergy().first())
+    }
+
+    @Test fun finalStartMarkerFailureRollsBackGameTrainingAndExternalSettings() = runBlocking {
+        val before = BenchSignalSettings(soundEnabled=false,frozenDates=setOf("2026-11-06"))
+        prefs.updateSettings(before)
+        chantal.save(JSONObject().put("coins",17))
+        db.velarisDao().insertCompletionIgnore(WorkoutCompletionEntity("before","before-slot","2026-11-06",1,null,false))
+        db.openHelper.writableDatabase.execSQL("CREATE TRIGGER fail_final_start BEFORE INSERT ON chantal_restore_markers BEGIN SELECT RAISE(ABORT,'injected'); END")
+        assertTrue(manager().startFinalGameIfNeeded().isFailure)
+        assertEquals(17,chantal.load().getInt("coins"))
+        assertEquals(10,db.velarisDao().observeWorkoutEnergy().first())
+        assertEquals(before,prefs.signalSettingsFlow.first())
+        assertFalse(db.chantalDao().markerPresent(BackupRestoreManager.FINAL_START_ID))
+        assertNull(RestoreRecoveryJournal(context.filesDir).read())
+        db.openHelper.writableDatabase.execSQL("DROP TRIGGER fail_final_start")
+        assertTrue(manager().startFinalGameIfNeeded().getOrThrow())
+        assertEquals(0,db.velarisDao().observeWorkoutEnergy().first())
+    }
+
+    @Test fun interruptedFinalStartCleanupKeepsCommittedResetAndLaterProgress() = runBlocking {
+        prefs.updateSettings(BenchSignalSettings(frozenDates=setOf("2026-11-06")))
+        val oldPreferences = preferencesFromArchive(archive())
+        assertTrue(manager().startFinalGameIfNeeded().getOrThrow())
+        chantal.save(JSONObject().put("coins",9))
+        RestoreRecoveryJournal(context.filesDir).write(JSONObject().put("operationId",BackupRestoreManager.FINAL_START_ID)
+            .put("preferences",oldPreferences).put("bookExisted",false).put("bookBase64",""))
+        manager().recoverPendingRestore().getOrThrow()
+        assertEquals(9,chantal.load().getInt("coins"))
+        assertTrue(prefs.signalSettingsFlow.first().frozenDates.isEmpty())
+        assertFalse(manager().startFinalGameIfNeeded().getOrThrow())
+        assertNull(RestoreRecoveryJournal(context.filesDir).read())
+    }
+
+    @Test fun emptyInstallAndRepeatedFinalStartAreIdempotentAndBackupVersionIsCurrent() = runBlocking {
+        assertTrue(manager().startFinalGameIfNeeded().getOrThrow())
+        assertFalse(manager().startFinalGameIfNeeded().getOrThrow())
+        assertEquals(0,db.velarisDao().observeWorkoutEnergy().first())
+        assertFalse(chantal.load().has("coins"))
+        val manifest = manager().createBackup(ByteArrayOutputStream()).getOrThrow()
+        assertEquals(com.example.BuildConfig.VERSION_NAME,manifest.appVersion)
+        assertEquals(com.example.BuildConfig.VERSION_CODE,manifest.appVersionCode)
+    }
+
 }

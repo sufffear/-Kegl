@@ -23,6 +23,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import com.example.data.ChantalProgressRepository
 import com.example.ui.VelarisChantalScreen
 import com.example.ui.theme.VelarisTheme
@@ -104,6 +106,16 @@ class ChantalScreenPersistenceTest {
     @Test fun modalMenuDoesNotShiftPortraitAndCoversAllFourJourneyStates() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         ChantalProgressRepository(context).replace(null)
+        val dao = com.example.data.VelarisDatabase.getInstance(context).velarisDao()
+        // Use actual persisted completion energy rather than a hard-coded UI allowance.
+        fun earnThree(prefix: String) = runBlocking {
+            repeat(3) { i -> dao.insertCompletionIgnore(com.example.data.WorkoutCompletionEntity(
+                "$prefix-$i", "$prefix-slot-$i", "2026-11-09", i.toLong(), null, false)) }
+            dao.observeWorkoutEnergy().first()
+        }
+        runBlocking { dao.clearFinalStartCompletions() }
+        var earnedEnergy by androidx.compose.runtime.mutableIntStateOf(earnThree("first"))
+        assertEquals(30, earnedEnergy)
 
         var capturedRootView: View? = null
         var wallNow by androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis())
@@ -117,6 +129,7 @@ class ChantalScreenPersistenceTest {
                     VelarisChantalScreen(
                         timeProvider = clock,
                         completedWorkoutsCount = 3,
+                        earnedWorkoutEnergy = earnedEnergy,
                         currentStreakDays = 3,
                         onOpenWorkoutPlan = {},
                         onPlaySampleTone = {}
@@ -182,6 +195,7 @@ class ChantalScreenPersistenceTest {
         // Launch expedition (30 energy available from 3 completed workouts)
         compose.onNodeWithTag("btn_start_chantal_journey").performScrollTo().performClick()
         compose.waitForIdle()
+        compose.runOnIdle { assertEquals(30, ChantalProgressRepository(context).load().getInt("spentEnergy")) }
 
         // State 4: Active expedition & return with reward popup
         compose.onNodeWithTag("chantal_active_journey_card").performScrollTo().assertIsDisplayed()
@@ -208,6 +222,21 @@ class ChantalScreenPersistenceTest {
             assertTrue(saved.getInt("coins") > 0)
             assertEquals(1, saved.getJSONArray("inventoryList").length())
             assertEquals(1, saved.getJSONArray("journalList").length())
+            assertEquals(1, saved.getJSONArray("storyEvents").length())
+            assertTrue(saved.getJSONObject("worldMemory").getJSONArray("events").length() > 0)
+        }
+        compose.runOnIdle { earnedEnergy = earnThree("second") }
+        compose.waitForIdle()
+        if (compose.onAllNodesWithTag("btn_start_chantal_journey").fetchSemanticsNodes().isEmpty()) {
+            compose.onNodeWithTag("btn_quick_expedition").performScrollTo().performClick()
+        }
+        compose.onNodeWithTag("btn_start_chantal_journey").performScrollTo().assertIsEnabled().performClick()
+        compose.waitForIdle()
+        compose.runOnIdle {
+            val saved = ChantalProgressRepository(context).load()
+            assertEquals(60, saved.getInt("spentEnergy"))
+            assertEquals(1, saved.getInt("totalJourneys"))
+            assertTrue(saved.getLong("activeJourneyStartMs") > 0)
         }
     }
 }

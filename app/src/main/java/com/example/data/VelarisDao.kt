@@ -11,6 +11,16 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface VelarisDao {
+    // Only the explicitly versioned final-start operation calls these; definitions/settings survive.
+    @Query("DELETE FROM workout_completions")
+    suspend fun clearFinalStartCompletions()
+    @Query("DELETE FROM workout_runs")
+    suspend fun clearFinalStartRuns()
+    @Query("DELETE FROM daily_slots")
+    suspend fun clearFinalStartSlots()
+    @Query("DELETE FROM daily_plans")
+    suspend fun clearFinalStartDays()
+
     @Query("SELECT COALESCE(SUM(CASE WHEN isFreeMode = 1 THEN 5 ELSE 10 END), 0) FROM workout_completions WHERE isDemo = 0")
     fun observeWorkoutEnergy(): Flow<Int>
 

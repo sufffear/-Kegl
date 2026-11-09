@@ -155,7 +155,9 @@ class ChantalProgressRepository(private val context: Context, private val databa
     }
     fun beginNarrativeRequest(episodeId: String): NarrativeTicket = io {
         database.runInTransaction(java.util.concurrent.Callable {
-            val row=requireNotNull(dao.aggregate());val snapshot=validate(requireNotNull(row.payload))
+            val row=requireNotNull(dao.aggregate())
+            require(expectedRevision == row.revision) { "Progress changed; reload before requesting a story" }
+            val snapshot=validate(requireNotNull(row.payload))
             val ep=ChantalProgressCodec.decodeChantalStoryEpisode(snapshot.getJSONObject("pendingEpisode"))
             require(ep.id==episodeId)
             val binding=snapshot.getJSONObject("narrativeBinding")

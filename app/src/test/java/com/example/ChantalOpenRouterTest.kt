@@ -47,6 +47,28 @@ class ChantalOpenRouterTest {
         assertTrue(runCatching { cancelled.generate("check") }.exceptionOrNull() is CancellationException)
         assertEquals(2,count)
     }
+    @Test fun offlineTimeoutAndHttpFailuresNeverRetryOrExposeExceptionDetails() = runBlocking {
+        val privateText = "dummy-private-key-and-private-story"
+        val failures = listOf(
+            java.net.UnknownHostException(privateText),
+            java.net.SocketTimeoutException(privateText),
+            java.io.IOException(privateText),
+            IllegalStateException(privateText)
+        ) + listOf(401, 403, 404, 429, 500, 503).map { OpenRouterRequestException(it) }
+        for (failure in failures) {
+            var calls = 0
+            val transport = OpenRouterStoryTransport("dummy.only.long.enough.key", http = OpenRouterHttp { _, _ ->
+                calls++
+                throw failure
+            })
+            val error = runCatching { transport.generate("Private narrative context") }.exceptionOrNull()!!
+            assertEquals(1, calls)
+            val message = storyFailureMessage(error)
+            assertTrue(message.isNotBlank())
+            assertFalse(message.contains(privateText))
+            assertFalse(message.contains("Private narrative context"))
+        }
+    }
     @Test fun incompleteOrToolResponsesAreRejected() {
         assertTrue(runCatching { OpenRouterStoryTransport.decodeResponse(envelope("{}","length")) }.isFailure)
         assertTrue(runCatching { OpenRouterStoryTransport.decodeResponse("{\"error\":{\"message\":\"private\"}}") }.isFailure)
