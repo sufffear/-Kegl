@@ -86,6 +86,10 @@ fun VelarisChantalScreen(
     var totalJourneys by remember { mutableIntStateOf(saved.optInt("totalJourneys", 0)) }
     var maturityXp by remember { mutableIntStateOf(saved.optInt("maturityXp", 0)) }
     var recentXpGainText by remember { mutableStateOf<String?>(null) }
+    var homePresence by remember { mutableStateOf(com.example.data.ChantalHomePresence.encode(com.example.data.ChantalHomePresence.fromSnapshot(saved)).toString()) }
+    var feedbackJson by remember { mutableStateOf(saved.optJSONArray("storyFeedback")?.toString() ?: "[]") }
+    var feedbackMessage by remember { mutableStateOf("") }
+    var storyEmotion by remember { mutableStateOf(com.example.data.ChantalHomePresence.fromSnapshot(saved).storyEmotion.name) }
     var forceTransformPreview by remember { mutableStateOf(saved.optBoolean("forceTransformPreview", false)) }
     var hasUsedPetThisCycle by remember { mutableStateOf(saved.optBoolean("hasUsedPetThisCycle", false)) }
     var isBurgerMenuOpen by remember { mutableStateOf(false) }
@@ -141,10 +145,7 @@ fun VelarisChantalScreen(
     )
     val perks = remember(traits) { traits.computePerks() }
     val stageInfo = remember(totalJourneys, forceTransformPreview, maturityXp) {
-        resolveChantalStageStatus(totalJourneys, forceTransformPreview, maturityXp)
-    }
-    val maturityProgress = remember(maturityXp, stageInfo) {
-        computeChantalMaturityProgress(maturityXp, stageInfo)
+        resolveChantalStageStatus(totalJourneys, false, maturityXp)
     }
 
     LaunchedEffect(recentXpGainText) {
@@ -265,11 +266,11 @@ fun VelarisChantalScreen(
         else -> 1
     }
     val itemsInCurrentStep = if (denTierNumber >= 4) 10 else (totalDenItemsCount % 10)
-    val denInteriorResId = when (denTierNumber) {
+    val denInteriorResId = if(stageInfo.isTransformed) R.drawable.chantal_stage4 else when (denTierNumber) {
         4 -> R.drawable.chantal_den_tier4
         3 -> R.drawable.chantal_den_tier3
         2 -> R.drawable.chantal_den_tier2
-        else -> R.drawable.chantal_stage1
+        else -> when(stageInfo.stageNumber) { 2 -> R.drawable.chantal_stage2; 3 -> R.drawable.chantal_stage3; else -> R.drawable.chantal_stage1 }
     }
 
     val comfortDiscount = DEFAULT_CHANTAL_SHOP_ITEMS
@@ -315,6 +316,8 @@ fun VelarisChantalScreen(
 
     // Сохранение полного снимка прогресса (schemaVersion = 1 в ChantalProgressRepository)
     val progressSnapshot = JSONObject().apply {
+        put("homePresence",JSONObject(homePresence))
+        put("storyEmotion",storyEmotion)
         put("hasCompletedPrologue", hasCompletedPrologue)
         put("totalJourneys", totalJourneys)
         put("maturityXp", maturityXp)
@@ -418,6 +421,7 @@ fun VelarisChantalScreen(
 
     fun showCommittedJourney(result: com.example.data.ChantalJourneyConfirmation.Result) {
         val data = result.snapshot
+        storyEmotion=data.optString("storyEmotion","CALM")
         engineArchive=data.optJSONObject("storyEngineState")?.toString()
         coins = data.optInt("coins")
         maturityXp = data.optInt("maturityXp")
@@ -702,22 +706,6 @@ fun VelarisChantalScreen(
         )
 
         // 3. Панель уровня, XP и настроения (с компактными чипами Характера и Интерьера)
-        ChantalLevelXpMoodPanel(
-            maturityProgress = maturityProgress,
-            moodPct = moodPct,
-            totalJourneys = totalJourneys,
-            recentXpGainText = recentXpGainText,
-            dominantTraitNameRu = perks.dominantTraitNameRu,
-            denAccordionTab = denAccordionTab,
-            itemsInCurrentStep = itemsInCurrentStep,
-            onToggleTraits = {
-                denAccordionTab = if (denAccordionTab == "traits") "none" else "traits"
-            },
-            onToggleInterior = {
-                denAccordionTab = if (denAccordionTab == "housing") "none" else "housing"
-            }
-        )
-
         // 4. Четыре основные кнопки: Погладить, Поход, Сумка, История
         ChantalQuickActionsRow(
             canPet = canPet,
@@ -750,6 +738,11 @@ fun VelarisChantalScreen(
             }
         )
 
+        Column(Modifier.testTag("chantal_status_bar")) { ChantalAgeProgressPanel(totalJourneys,maturityXp) }
+        Text("Настроение: $moodPct% · $totalJourneys приключений",color=HobbitCream)
+        TextButton(onClick={denAccordionTab=if(denAccordionTab=="traits") "none" else "traits"},modifier=Modifier.testTag("btn_accordion_traits")) { Text("Характер") }
+        TextButton(onClick={denAccordionTab=if(denAccordionTab=="housing") "none" else "housing"},modifier=Modifier.testTag("btn_accordion_housing")) { Text("Интерьер · $itemsInCurrentStep из10") }
+
         ChantalAnimatedCompanion(
             state = com.example.domain.ChantalVisualState.resolve(isJourneyActive, pendingEpisode != null,
                 isHeartPulseActive, isExhausted45, denAccordionTab == "loadout"),
@@ -762,14 +755,29 @@ fun VelarisChantalScreen(
         else if (pendingEpisode?.trailNotesRu?.isNotEmpty() == true) ChantalTrailNotesView(pendingEpisode!!.trailNotesRu, 2)
         if (!isJourneyActive) ChantalSharedHabits(favoriteSnack, sharedGreeting, { favoriteSnack=it }, { sharedGreeting=it })
 
-        if (!isJourneyActive) ChantalFriendScenes(journalList, JSONObject(friendSceneAnswers)) { key, answer ->
-            val updated = JSONObject(friendSceneAnswers)
-            if (!updated.has(key)) { updated.put(key, answer); friendSceneAnswers = updated.toString() }
+        if(!isJourneyActive) {
+            val presence=com.example.data.ChantalHomePresence.decode(JSONObject(homePresence)).copy(storyEmotion=com.example.domain.ChantalStoryEmotion.valueOf(storyEmotion))
+            ChantalHomePresenceView(presence,isHeartPulseActive,
+                com.example.data.ChantalHomePresence.rememberedLine(progressSnapshot,com.example.domain.ChantalCharacterState.fromAdventures(totalJourneys)),
+                onWish={status -> homePresence=com.example.data.ChantalHomePresence.encode(com.example.data.ChantalHomePresence.respond(presence,status)).toString()},
+                onJournal={subTab="journal";isBurgerMenuOpen=true})
+            journalList.firstOrNull { !it.chosenActionSummaryRu.isNullOrBlank() }?.let { episode ->
+                val a=JSONArray(feedbackJson)
+                val f=(0 until a.length()).map { a.getJSONObject(it) }.firstOrNull { it.getString("episodeId")==episode.id }
+                val old=f?.let { com.example.domain.ChantalStoryFeedback(episode.id,com.example.domain.ChantalStoryRating.valueOf(it.getString("rating")),
+                    com.example.domain.ChantalFeedbackScope.valueOf(it.getString("scope")),
+                    (0 until it.getJSONArray("reasons").length()).map { n -> com.example.domain.ChantalFeedbackReason.valueOf(it.getJSONArray("reasons").getString(n)) }.toSet(),it.optString("comment")) }
+                ChantalStoryFeedbackView(episode.id,old) { feedback ->
+                    feedbackMessage=if(runCatching { progressRepository.saveFeedback(feedback) }.isSuccess) {
+                        feedbackJson=progressRepository.load().optJSONArray("storyFeedback")?.toString() ?: "[]";"Оценка сохранена для следующих рассказов."
+                    } else "Оценку не удалось сохранить. Попробуй позже."
+                }
+                TextButton(onClick={
+                    feedbackMessage=if(runCatching { progressRepository.saveFeedback(null) }.isSuccess) { feedbackJson="[]";"Оценки сброшены. Истории сохранены." } else "Не удалось сбросить оценки."
+                }) { Text("Сбросить оценки и предпочтения") }
+            }
+            if(feedbackMessage.isNotBlank()) Text(feedbackMessage,color=HobbitCream)
         }
-
-        if (!isJourneyActive) ChantalHomeScenes(homeSceneIndex, homeSceneAnswer,
-            onAnswer = { if (homeSceneAnswer == null) homeSceneAnswer = it },
-            onNext = { homeSceneIndex = (homeSceneIndex + 1) % chantalHomeScenes.size; homeSceneAnswer = null })
 
         ChantalDenShelfView(shelfItems, shelfSelection) { id ->
             shelfSelection = com.example.data.ChantalDenShelf.select(shelfSelection, id, shelfItems)

@@ -73,17 +73,17 @@ class ChantalGenerationTest {
         assertTrue(baby.contains("350–600 слов"))
         val older = ChantalStoryGeneration.prompt(episode(), ChantalWorldMemory.empty(), ChantalTraits(), 12, 120)
         assertTrue(older.contains("\"stageNumber\":2"))
-        assertTrue(older.contains("\"narrativeAgeMode\":\"very_young\""))
+        assertTrue(older.contains("\"narrativeAgeMode\":\"CUB\""))
         assertTrue(older.contains("350–600 слов"))
         val growing = ChantalStoryGeneration.prompt(episode(), ChantalWorldMemory.empty(), ChantalTraits(), 30, 300)
-        assertTrue(growing.contains("\"narrativeAgeMode\":\"growing\""))
+        assertTrue(growing.contains("\"narrativeAgeMode\":\"CUB\""))
         assertFalse(older.contains("не более 220 слов"))
-        assertEquals(1, ChantalNarrativeGuide.stage(10, 100))
+        assertEquals(2, ChantalNarrativeGuide.stage(10, 100))
         assertEquals(2, ChantalNarrativeGuide.stage(11, 110))
         assertEquals(3, ChantalNarrativeGuide.stage(51, 510))
         assertEquals(4, ChantalNarrativeGuide.stage(100, 1000))
-        // Petting XP can advance the same stage used by the portrait, even with few journeys.
-        assertEquals(2, ChantalNarrativeGuide.stage(0, 120))
+        // Petting XP is preserved but never advances age.
+        assertEquals(1, ChantalNarrativeGuide.stage(0, 120))
     }
 
     @Test fun completeUserStyleIsPreservedVerbatimAndIncludedInRequests() {

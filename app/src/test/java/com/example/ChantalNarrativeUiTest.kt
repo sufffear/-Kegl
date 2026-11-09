@@ -50,4 +50,32 @@ class ChantalNarrativeUiTest {
         assertEquals(121,saved.getInt("coins"));assertEquals(5,saved.getInt("totalJourneys"))
         assertTrue(saved.has("storyEngineState"));assertTrue(saved.isNull("pendingEpisode"))
     }
+    @Test fun homeWishAndStoryFeedbackPersistWithoutChangingRewardsOrStoryEmotion() {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        androidx.work.testing.WorkManagerTestInitHelper.initializeTestWorkManager(context)
+        val repo=ChantalProgressRepository(context)
+        val ep=ChantalNarrativeSample.episode().copy(id="remembered",chosenActionSummaryRu="Поддержать")
+        repo.replace(JSONObject().put("schemaVersion",1).put("hasCompletedPrologue",true).put("totalJourneys",1)
+            .put("maturityXp",2000).put("coins",100).put("storyEmotion","SADNESS").put("moodPct",100)
+            .put("journalList",JSONArray().put(ChantalProgressCodec.encode(ep))).toString())
+        val calls=context.getSharedPreferences("chantal_ai_selection",0).getLong("lastRequest",0)
+        compose.setContent { VelarisTheme { Column(Modifier.verticalScroll(rememberScrollState())) { VelarisChantalScreen(0,0,{},{}) } } }
+        compose.onNodeWithText("Мне немного грустно").assertExists()
+        compose.onNodeWithText("Побыть с Шанталь").performScrollTo().performClick()
+        compose.onNodeWithText("Не сейчас").performScrollTo().performClick()
+        compose.waitForIdle()
+        assertEquals("DEFERRED",repo.load().getJSONObject("homePresence").getJSONObject("wish").getString("status"))
+        compose.onNodeWithTag("feedback_expand").performScrollTo().performClick()
+        compose.onNodeWithTag("feedback_rating_LIKED").performScrollTo().performClick()
+        compose.onNodeWithTag("feedback_scope_GENERAL").performScrollTo().performClick()
+        compose.onNodeWithTag("feedback_reason_FUNNY").performScrollTo().performClick()
+        compose.onNodeWithTag("feedback_save").performScrollTo().performClick()
+        compose.waitForIdle()
+        val data=repo.load()
+        assertEquals("GENERAL",data.getJSONArray("storyFeedback").getJSONObject(0).getString("scope"))
+        assertEquals(100,data.getInt("coins"));assertEquals(2000,data.getInt("maturityXp"));assertEquals(1,data.getInt("totalJourneys"))
+        assertEquals("SADNESS",data.getString("storyEmotion"));assertEquals(100,data.getInt("moodPct"))
+        assertEquals(calls,context.getSharedPreferences("chantal_ai_selection",0).getLong("lastRequest",0))
+    }
+
 }

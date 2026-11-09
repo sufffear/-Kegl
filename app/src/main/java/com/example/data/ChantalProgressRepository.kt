@@ -95,6 +95,7 @@ class ChantalProgressRepository(private val context: Context, private val databa
             if (dao.receipt(episodeId) != null || !result.applied) return@Callable result.copy(applied=false)
             current.optJSONObject("narrativeBinding")?.let { binding ->
                 val description=ChantalNarrativeSession.describe(current,binding)
+                result.snapshot.put("storyEmotion",(description.plan?.emotion ?: com.example.domain.ChantalStoryEmotion.CALM).name)
                 if(description.tracked) {
                     val next=com.example.domain.ChantalStoryEngine.accept(requireNotNull(description.engine),requireNotNull(description.plan),requireNotNull(choiceIndex))
                     result.snapshot.put("storyEngineState",ChantalStoryEngineCodec.encode(next))
@@ -238,6 +239,8 @@ class ChantalProgressRepository(private val context: Context, private val databa
                 require(ids.distinct().size == ids.size)
             }
             if (snapshot.has("worldMemory")) ChantalWorldMemory.validate(snapshot.getJSONObject("worldMemory"))
+            if(snapshot.has("homePresence")) ChantalHomePresence.decode(snapshot.getJSONObject("homePresence"))
+            if(snapshot.has("storyEmotion")) com.example.domain.ChantalStoryEmotion.valueOf(snapshot.getString("storyEmotion"))
             if (snapshot.has("storyEngineState")) ChantalStoryEngineCodec.decode(snapshot.getJSONObject("storyEngineState"))
             if (snapshot.has("narrativeBinding")) ChantalNarrativeSession.validateBinding(snapshot)
             if (snapshot.has("storyStorageVersion")) require(snapshot.getInt("storyStorageVersion")==1)

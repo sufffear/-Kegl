@@ -4,7 +4,7 @@ package com.example.domain
  * Полная доменная модель мира «Шанталь» для Android (Jetpack Compose),
  * синхронизированная 1-в-1 с веб-версией:
  * - Система накопления опыта взросления (XP): каждый поход (+10/+15 XP) и поглаживание (+3 XP)
- *   продвигают шкалу взросления под портретом и стадии (Стадия I..III -> Акт II на 1000+ XP / 100+ походах).
+ *   сохраняются отдельно; возраст определяется приключениями с границами 10/50/100.
  * - Система жилья «10 предметов = новый уровень Домика» (Уровни I → II → III → IV, 30 предметов в лавке + трофеи из походов).
  * - 4 слота снаряжения в поход: Одежда (OUTFIT), Инструмент (TOOL), Оружие (WEAPON) и Узелок (BUNDLE).
  * - 6 черт характера по 100-балльной шкале с активными перками.
@@ -580,12 +580,13 @@ data class ChantalMaturityProgress(
     val xpToNextStage: Int
 )
 
+@Suppress("UNUSED_PARAMETER") // Legacy XP parameter is retained for call-site compatibility, never for age.
 fun resolveChantalStageStatus(
     totalJourneys: Int,
     forceTransformPreview: Boolean = false,
     maturityXp: Int = totalJourneys * 10
 ): ChantalStageStatus {
-    val effectiveJourneys = maxOf(totalJourneys, maturityXp / 10)
+    val effectiveJourneys = totalJourneys.coerceAtLeast(0)
     val isTransformed = forceTransformPreview || effectiveJourneys >= 100
     if (isTransformed) {
         val masteryRank = ((effectiveJourneys - 100).coerceAtLeast(0) / 50) + 1
@@ -602,7 +603,7 @@ fun resolveChantalStageStatus(
         )
     }
     return when {
-        effectiveJourneys <= 10 -> ChantalStageStatus(
+        effectiveJourneys < 10 -> ChantalStageStatus(
             stageNumber = 1,
             isTransformed = false,
             titleRu = "Стадия I · Спасённый лисёнок",
@@ -611,7 +612,7 @@ fun resolveChantalStageStatus(
             nextStageTargetJourneys = 10,
             nextMilestoneHintRu = "До следующей вехи взросления: ${(10 - effectiveJourneys).coerceAtLeast(1)} из 10 походов"
         )
-        effectiveJourneys <= 50 -> ChantalStageStatus(
+        effectiveJourneys < 50 -> ChantalStageStatus(
             stageNumber = 2,
             isTransformed = false,
             titleRu = "Стадия II · Любопытный лисёнок",

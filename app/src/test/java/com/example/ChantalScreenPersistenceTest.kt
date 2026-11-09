@@ -191,6 +191,7 @@ class ChantalScreenPersistenceTest {
         compose.onNodeWithTag("btn_complete_active_journey").performScrollTo().assertIsEnabled().performClick()
         compose.waitForIdle()
 
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("btn_story_choice_0").fetchSemanticsNodes().isNotEmpty() }
         // Pending story episode choice -> opens reward popup and saves progress
         compose.onNodeWithTag("btn_story_choice_0").performScrollTo().performClick()
         compose.waitForIdle()

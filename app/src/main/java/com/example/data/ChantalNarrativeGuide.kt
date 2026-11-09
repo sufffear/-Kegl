@@ -168,9 +168,15 @@ object ChantalNarrativeGuide {
 
     fun stage(totalJourneys: Int, maturityXp: Int) = resolveChantalStageStatus(totalJourneys.coerceAtLeast(0), false, maturityXp.coerceAtLeast(0)).stageNumber
 
-    fun ageInstructions(totalJourneys: Int, maturityXp: Int): String = if (totalJourneys.coerceAtLeast(0) < 30) {
-        "ТЕКУЩАЯ ШАНТАЛЬ: совсем маленький лисёнок, первые десятки путешествий. Мысли простые, эмоции сильные и детские. Подтверждено походов: ${totalJourneys.coerceAtLeast(0)}. ОБЪЁМ: 350–600 слов."
-    } else {
-        "ТЕКУЩАЯ ШАНТАЛЬ: постепенно взрослеет и становится сообразительнее. Подтверждено походов: ${totalJourneys.coerceAtLeast(0)}; игровая стадия: ${stage(totalJourneys, maturityXp)}. Без выдуманной биографии. ОБЪЁМ: 350–600 слов."
+    fun ageInstructions(totalJourneys: Int, maturityXp: Int): String {
+        val count=totalJourneys.coerceAtLeast(0)
+        val age=com.example.domain.ChantalCharacterState.fromAdventures(count).age
+        val voice=when(age) {
+            com.example.domain.ChantalAge.INFANT -> "совсем маленький лисёнок, первые шаги; мысли простые, эмоции детские"
+            com.example.domain.ChantalAge.CUB -> "маленький лисёнок, любопытная и непосредственная"
+            com.example.domain.ChantalAge.ADULT_FOX -> "взрослая лиса, самостоятельная путешественница"
+            com.example.domain.ChantalAge.HUMAN -> "девушка после превращения; не описывай свои лапы, хвост или шерсть"
+        }
+        return "ТЕКУЩАЯ ШАНТАЛЬ: $voice. Подтверждено приключений: $count. Без выдуманной биографии. ОБЪЁМ: 350–600 слов."
     }
 }

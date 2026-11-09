@@ -25,7 +25,7 @@ object ChantalStoryGeneration {
         require(context.toString().length <= 40_000) { "World context too large" }
         val input = JSONObject().put("narrativeGuideVersion", ChantalNarrativeGuide.VERSION).put("regionRu", base.regionTitleRu).put("npcRu", base.npcNameRu)
             .put("stageNumber", ChantalNarrativeGuide.stage(totalJourneys, maturityXp))
-            .put("narrativeAgeMode", if (totalJourneys < 30) "very_young" else "growing")
+            .put("narrativeAgeMode", com.example.domain.ChantalCharacterState.fromAdventures(totalJourneys.coerceAtLeast(0)).age.name)
             .put("completedJourneys", totalJourneys.coerceAtLeast(0)).put("maturityXp", maturityXp.coerceAtLeast(0))
             .put("confirmedTrailNotesRu", JSONArray(base.trailNotesRu)).put("personalDetailsRu", base.personalDetailsRu).put("storyDirection", ChantalLivingWorld.direction(memory, base.npcNameRu, base.journeyNumber)).put("world", context).put("traits", JSONObject().put("curiosity", character.curiosity)
                 .put("tenderness", character.tenderness).put("playfulness", character.playfulness)
