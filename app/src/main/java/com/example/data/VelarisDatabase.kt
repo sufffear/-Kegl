@@ -30,9 +30,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ChantalAggregateEntity::class,
         ChantalConfirmationEntity::class,
         ChantalJournalEventEntity::class,
-        ChantalRestoreMarkerEntity::class
+        ChantalRestoreMarkerEntity::class,
+        TrainingConfiguration::class,
+        ExtraTrainingCycle::class,
+        WorkoutExecutionParameters::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 abstract class VelarisDatabase : RoomDatabase() {
@@ -205,6 +208,14 @@ abstract class VelarisDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `workout_execution_parameters` (`runId` TEXT NOT NULL, `parametersJson` TEXT NOT NULL, `totalMs` INTEGER NOT NULL, `holdMs` INTEGER NOT NULL, PRIMARY KEY(`runId`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `training_configurations` (`key` TEXT NOT NULL, `contractionSec` INTEGER NOT NULL, `relaxationSec` INTEGER NOT NULL, `repetitions` INTEGER NOT NULL, PRIMARY KEY(`key`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `extra_training_cycle` (`id` INTEGER NOT NULL, `round` INTEGER NOT NULL, `mask` INTEGER NOT NULL, `celebrationUntilEpochMs` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+            }
+        }
+
         fun getInstance(context: Context): VelarisDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -212,7 +223,7 @@ abstract class VelarisDatabase : RoomDatabase() {
                     VelarisDatabase::class.java,
                     "velaris_local.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     .build()
                     .also { INSTANCE = it }
             }

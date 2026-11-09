@@ -41,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -321,7 +322,7 @@ internal fun ChantalRewardPopupDialog(
 }
 
 @Composable
-internal fun ChantalModalMenuDialog(
+internal fun ChantalSectionPage(
     subTab: String,
     onSelectSubTab: (String) -> Unit,
     onDismiss: () -> Unit,
@@ -381,132 +382,7 @@ internal fun ChantalModalMenuDialog(
         com.example.data.ChantalLanternAdventure.consequences(
             com.example.data.ChantalWorldMemory.reconcile(saved, journal), journalList)
     }
-    var showSettingsSections by remember { mutableStateOf(false) }
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 20.dp)
-                .border(1.5.dp, HobbitGold, RoundedCornerShape(26.dp))
-                .testTag("chantal_modal_menu"),
-            shape = RoundedCornerShape(26.dp),
-            colors = CardDefaults.cardColors(containerColor = HobbitCardBg)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp)
-                    .animateContentSize(animationSpec = tween(220)),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Шапка модального меню
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (subTab == "ai") "Настройки Шанталь" else "🦊 Книга Странствий Шанталь",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontFamily = FontFamily.SansSerif,
-                            fontWeight = FontWeight.Bold,
-                            color = HobbitCream
-                        )
-                        Text(
-                            text = if (subTab == "ai") "Подключение и характер" else "Шесть игровых разделов",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.SansSerif,
-                            fontWeight = FontWeight.Medium,
-                            color = HobbitGold
-                        )
-                    }
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = HobbitElevatedBg,
-                        modifier = Modifier
-                            .clickable { onDismiss() }
-                            .testTag("btn_close_chantal_modal")
-                    ) {
-                        Text(
-                            text = "✕ Закрыть",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontFamily = FontFamily.SansSerif,
-                            fontWeight = FontWeight.Bold,
-                            color = HobbitCream,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                        )
-                    }
-                }
-
-                // Сетка 6 разделов (2 колонки x 3 ряда)
-                val unlockedRegionsCount = DEFAULT_CHANTAL_MAP_REGIONS.count { totalJourneys >= it.minJourneysRequired }
-                val menuItems = listOf(
-                    Triple("den", "🏠 Домик Шанталь", "Ур. $denTierNumber ($itemsInCurrentStep/10)"),
-                    Triple("map", "🗺️ Карта троп", "$unlockedRegionsCount/${DEFAULT_CHANTAL_MAP_REGIONS.size} лок."),
-                    Triple("bag", "🎒 Сумка находок", "${inventoryList.size} предм."),
-                    Triple("shop", "🛒 Лесная лавка", "$coins 🪙"),
-                    Triple("journal", "📖 Летопись странствий", "${journalList.size} гл."),
-                    Triple("ai", "⚙️ Настройки ИИ и Лора", selectedAiProvider)
-                )
-
-                if (subTab == "ai") TextButton(onClick = { showSettingsSections = !showSettingsSections }) {
-                    Text(if (showSettingsSections) "Скрыть разделы" else "Другие разделы")
-                }
-                if (subTab != "ai" || showSettingsSections) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    menuItems.chunked(2).forEach { rowItems ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            rowItems.forEach { (id, title, badge) ->
-                                val isCurrent = subTab == id
-                                Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = if (isCurrent) HobbitElevatedBg else HobbitBg,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .then(
-                                            if (isCurrent) {
-                                                Modifier.border(1.5.dp, HobbitGold, RoundedCornerShape(14.dp))
-                                            } else {
-                                                Modifier
-                                            }
-                                        )
-                                        .clickable { onSelectSubTab(id) }
-                                        .testTag("modal_nav_$id")
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                        verticalArrangement = Arrangement.spacedBy(3.dp)
-                                    ) {
-                                        Text(
-                                            text = title,
-                                            style = MaterialTheme.typography.labelLarge,
-                                            fontFamily = FontFamily.SansSerif,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isCurrent) HobbitGold else HobbitCream,
-                                            maxLines = 1
-                                        )
-                                        Text(
-                                            text = badge,
-                                            style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
-                                            fontFamily = FontFamily.SansSerif,
-                                            fontWeight = FontWeight.Medium,
-                                            color = HobbitMuted
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Содержимое выбранного раздела внутри модального окна
+    Column(Modifier.fillMaxWidth().testTag("chantal_section_$subTab"), verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 when (subTab) {
                     "den" -> {
                         Surface(
@@ -628,8 +504,6 @@ internal fun ChantalModalMenuDialog(
                         )
                     }
                 }
-            }
-        }
     }
 }
 
@@ -712,6 +586,48 @@ internal fun ChantalBagSectionCard(
     onCraftRoadAmulet: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var crafting by remember { mutableStateOf(false) }
+    val selectedItem = remember(selectedBagItemId) { inventoryList.find { it.id == selectedBagItemId } }
+    selectedItem?.let { item ->
+        key(item.id) {
+            val present = inventoryList.any { it.id == item.id }
+            val witPrice = (item.sellPriceCoins * (100 + perks.witMerchantSellBonusPct)) / 100
+            val actions = when (item.category) {
+                ChantalLootCategory.ROYAL_CLUE -> listOf(ChantalItemAction("inspect", "Изучить (+1 Любопытство)",
+                    present && inventoryList.any { it.id == item.id && !it.inspectedBonusClaimed },
+                    success = "Улика изучена. Любопытство ↑", perform = { onInspectClue(item) }))
+                ChantalLootCategory.DEN_TROPHY -> emptyList()
+                ChantalLootCategory.HERB -> listOf(
+                    ChantalItemAction("brew", "🌿 Заварить", present,
+                        "Заварить траву? Она исчезнет из сумки. Настроение +15 (до 100), усталость снимется.",
+                        "Трава заварена. Настроение улучшилось, усталость снята.", { onBrewHerb(item) }),
+                    ChantalItemAction("sell", "Продать · +$witPrice М", present,
+                        "Продать «${item.titleRu}» за $witPrice М? Предмет исчезнет из сумки.",
+                        "Предмет продан: +$witPrice М.", { onSellLootItem(item, witPrice) }))
+                ChantalLootCategory.TRINKET -> listOf(
+                    ChantalItemAction("gift", "🎁 Подарить знакомому", present,
+                        success = "Выбери получателя подарка.", perform = { onSelectBagItem(null); onGiftTrinket(item) }),
+                    ChantalItemAction("sell", "Продать · +$witPrice М", present,
+                        "Продать «${item.titleRu}» за $witPrice М? Предмет исчезнет из сумки.",
+                        "Предмет продан: +$witPrice М.", { onSellLootItem(item, witPrice) }))
+            }
+            ChantalItemDetailsDialog("${item.emoji} ${item.titleRu}", item.descriptionRu,
+                when {
+                    !present -> "Предмет использован."
+                    item.category == ChantalLootCategory.DEN_TROPHY -> "Стоит в Домике · +1 к интерьеру. Продавать нельзя."
+                    item.category == ChantalLootCategory.ROYAL_CLUE && item.inspectedBonusClaimed -> "Уже изучено. Повторного бонуса нет."
+                    else -> "Найдено: ${item.foundAtRegionRu} · ${item.foundDateIso}"
+                }, actions, onDismiss = { onSelectBagItem(null) })
+        }
+    }
+    if (crafting) ChantalItemDetailsDialog("⚗️ Оберег Попутного Ветра",
+        "Нужна одна трава и одна находка. Если находки нет, используются две травы.",
+        actions = listOf(ChantalItemAction("craft", "Смастерить оберег",
+            inventoryList.count { it.category == ChantalLootCategory.HERB } > 0 &&
+                (inventoryList.any { it.category == ChantalLootCategory.TRINKET } || inventoryList.count { it.category == ChantalLootCategory.HERB } >= 2),
+            "Потратить два предмета на оберег? Они исчезнут из сумки.",
+            "Оберег создан: +100% защиты и +50% монет в походе.", onCraftRoadAmulet)),
+        onDismiss = { crafting = false })
     val herbs = inventoryList.filter { it.category == ChantalLootCategory.HERB }
     val trinkets = inventoryList.filter { it.category == ChantalLootCategory.TRINKET }
 
@@ -784,137 +700,6 @@ internal fun ChantalBagSectionCard(
                 }
             }
 
-            AnimatedVisibility(
-                visible = selectedBagItemId != null && inventoryList.any { it.id == selectedBagItemId },
-                enter = fadeIn(tween(180)) + expandVertically(tween(220)),
-                exit = fadeOut(tween(140)) + shrinkVertically(tween(180))
-            ) {
-                inventoryList.find { it.id == selectedBagItemId }?.let { item ->
-                    val witPrice = (item.sellPriceCoins * (100 + perks.witMerchantSellBonusPct)) / 100
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = HobbitElevatedBg,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(1.5.dp, HobbitGold, RoundedCornerShape(16.dp))
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "${item.emoji} ${item.titleRu}",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontFamily = FontFamily.SansSerif,
-                                    fontWeight = FontWeight.Bold,
-                                    color = HobbitCream,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Text(
-                                    text = "✕",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontFamily = FontFamily.SansSerif,
-                                    fontWeight = FontWeight.Bold,
-                                    color = HobbitMuted,
-                                    modifier = Modifier.clickable { onSelectBagItem(null) }
-                                )
-                            }
-                            Text(
-                                text = "«${item.descriptionRu}»",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontFamily = FontFamily.SansSerif,
-                                fontWeight = FontWeight.Normal,
-                                lineHeight = 20.sp,
-                                color = HobbitCream
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                when (item.category) {
-                                    ChantalLootCategory.ROYAL_CLUE -> {
-                                        Button(
-                                            onClick = { onInspectClue(item) },
-                                            colors = ButtonDefaults.buttonColors(containerColor = HobbitCardBg)
-                                        ) {
-                                            Text(
-                                                text = if (item.inspectedBonusClaimed) "✓ Изучено" else "Изучить (+1 Любопытство)",
-                                                style = MaterialTheme.typography.labelLarge,
-                                                fontFamily = FontFamily.SansSerif,
-                                                fontWeight = FontWeight.Bold,
-                                                color = HobbitCream
-                                            )
-                                        }
-                                    }
-                                    ChantalLootCategory.DEN_TROPHY -> {
-                                        Text(
-                                            text = "✓ Стоит в Домике (+1 из 10 к интерьеру)",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontFamily = FontFamily.SansSerif,
-                                            fontWeight = FontWeight.Bold,
-                                            color = HobbitEmerald
-                                        )
-                                    }
-                                    ChantalLootCategory.HERB -> {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Button(
-                                                onClick = { onBrewHerb(item) },
-                                                colors = ButtonDefaults.buttonColors(containerColor = LocalVelarisPalette.current.selectedContainer)
-                                            ) {
-                                                Text(
-                                                    "🌿 Заварить",
-                                                    style = MaterialTheme.typography.labelLarge,
-                                                    fontFamily = FontFamily.SansSerif,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color.White
-                                                )
-                                            }
-                                            OutlinedButton(onClick = { onSellLootItem(item, witPrice) }) {
-                                                Text(
-                                                    "Продать · +$witPrice М",
-                                                    style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
-                                                    fontFamily = FontFamily.SansSerif,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = HobbitGold
-                                                )
-                                            }
-                                        }
-                                    }
-                                    ChantalLootCategory.TRINKET -> {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Button(
-                                                onClick = { onGiftTrinket(item) },
-                                                colors = ButtonDefaults.buttonColors(containerColor = HobbitCardBg)
-                                            ) {
-                                                Text(
-                                                    "🎁 Подарить знакомому",
-                                                    style = MaterialTheme.typography.labelLarge,
-                                                    fontFamily = FontFamily.SansSerif,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = HobbitCream
-                                                )
-                                            }
-                                            OutlinedButton(onClick = { onSellLootItem(item, witPrice) }) {
-                                                Text(
-                                                    "Продать · +$witPrice М",
-                                                    style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
-                                                    fontFamily = FontFamily.SansSerif,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = HobbitGold
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
 
             Surface(
                 shape = RoundedCornerShape(14.dp),
@@ -930,7 +715,7 @@ internal fun ChantalBagSectionCard(
                         color = HobbitEmerald
                     )
                     Button(
-                        onClick = onCraftRoadAmulet,
+                        onClick = { crafting = true },
                         enabled = herbs.isNotEmpty() && (trinkets.isNotEmpty() || herbs.size >= 2),
                         colors = ButtonDefaults.buttonColors(containerColor = LocalVelarisPalette.current.selectedContainer),
                         modifier = Modifier.fillMaxWidth()
@@ -965,6 +750,30 @@ internal fun ChantalShopSectionCard(
     onBuyShopItem: (ChantalShopItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    selectedShopEntryId?.let { id ->
+        key(id) {
+            DEFAULT_CHANTAL_MERCHANT_OFFERS.find { it.id == id }?.let { offer ->
+                val claimed = id in claimedMerchantOfferIds
+                ChantalItemDetailsDialog("${offer.emoji} ${offer.titleRu}", offer.effectRu,
+                    if (claimed) "Куплено ✓" else "Цена: ${offer.discountPriceCoins} М · У тебя: $coins М" +
+                        if (coins < offer.discountPriceCoins) " · Не хватает монет" else "",
+                    listOf(ChantalItemAction("buy", "Купить · ${offer.discountPriceCoins} М", !claimed && coins >= offer.discountPriceCoins,
+                        "Купить «${offer.titleRu}» за ${offer.discountPriceCoins} М?",
+                        "Покупка получена. Списано ${offer.discountPriceCoins} М.", { onBuyMerchantOffer(id) })),
+                    onDismiss = { onSelectShopEntryId(null) })
+            }
+            DEFAULT_CHANTAL_SHOP_ITEMS.find { it.id == id }?.let { item ->
+                val owned = id in ownedShopItemIds && item.category != ChantalShopCategory.CONSUMABLE
+                ChantalItemDetailsDialog("${item.emoji} ${item.titleRu}", "${item.descriptionRu}\n\n${item.gameplayEffectRu}",
+                    if (owned) "Куплено ✓" else "Цена: ${item.priceCoins} М · У тебя: $coins М" +
+                        if (coins < item.priceCoins) " · Не хватает монет" else "",
+                    listOf(ChantalItemAction("buy", "Купить · ${item.priceCoins} М", !owned && coins >= item.priceCoins,
+                        "Купить «${item.titleRu}» за ${item.priceCoins} М?",
+                        "Покупка получена. Списано ${item.priceCoins} М.", { onBuyShopItem(item) })),
+                    onDismiss = { onSelectShopEntryId(null) })
+            }
+        }
+    }
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = HobbitBg,
@@ -1047,6 +856,7 @@ internal fun ChantalShopSectionCard(
                                     Modifier
                                 }
                             )
+                            .testTag("shop_offer_${offer.id}")
                             .clickable {
                                 onSelectShopEntryId(if (isSelected) null else offer.id)
                             }
@@ -1178,6 +988,7 @@ internal fun ChantalShopSectionCard(
                                             Modifier
                                         }
                                     )
+                                    .testTag("shop_item_${item.id}")
                                     .clickable {
                                         onSelectShopEntryId(if (isSel) null else item.id)
                                     }
@@ -1210,133 +1021,6 @@ internal fun ChantalShopSectionCard(
                 }
             }
 
-            AnimatedVisibility(
-                visible = selectedShopEntryId != null,
-                enter = fadeIn(tween(180)) + expandVertically(tween(220)),
-                exit = fadeOut(tween(140)) + shrinkVertically(tween(180))
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DEFAULT_CHANTAL_MERCHANT_OFFERS.find { it.id == selectedShopEntryId }?.let { offer ->
-                        val isClaimed = offer.id in claimedMerchantOfferIds
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = HobbitElevatedBg,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.5.dp, HobbitGold, RoundedCornerShape(16.dp))
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = "${offer.emoji} ${offer.titleRu}",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontFamily = FontFamily.SansSerif,
-                                    fontWeight = FontWeight.Bold,
-                                    color = HobbitCream
-                                )
-                                Text(
-                                    text = offer.effectRu,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontFamily = FontFamily.SansSerif,
-                                    fontWeight = FontWeight.Medium,
-                                    color = HobbitEmerald
-                                )
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    Button(
-                                        onClick = { onBuyMerchantOffer(offer.id) },
-                                        enabled = !isClaimed && coins >= offer.discountPriceCoins,
-                                        colors = ButtonDefaults.buttonColors(containerColor = HobbitCardBg)
-                                    ) {
-                                        Text(
-                                            text = if (isClaimed) "Куплено ✓" else "Купить · ${offer.discountPriceCoins} 🪙",
-                                            style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
-                                            fontFamily = FontFamily.SansSerif,
-                                            fontWeight = FontWeight.Bold,
-                                            color = HobbitCream
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    DEFAULT_CHANTAL_SHOP_ITEMS.find { it.id == selectedShopEntryId }?.let { item ->
-                        val owned = item.id in ownedShopItemIds
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = HobbitElevatedBg,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.5.dp, HobbitGold, RoundedCornerShape(16.dp))
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = "${item.emoji} ${item.titleRu}",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontFamily = FontFamily.SansSerif,
-                                        fontWeight = FontWeight.Bold,
-                                        color = HobbitCream,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Text(
-                                        text = "✕",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontFamily = FontFamily.SansSerif,
-                                        fontWeight = FontWeight.Bold,
-                                        color = HobbitMuted,
-                                        modifier = Modifier.clickable { onSelectShopEntryId(null) }
-                                    )
-                                }
-                                Text(
-                                    text = item.gameplayEffectRu,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.SansSerif,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = HobbitEmerald
-                                )
-                                Text(
-                                    text = "«${item.descriptionRu}»",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontFamily = FontFamily.SansSerif,
-                                    fontWeight = FontWeight.Normal,
-                                    lineHeight = 20.sp,
-                                    color = HobbitCream
-                                )
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    Button(
-                                        onClick = { onBuyShopItem(item) },
-                                        enabled = coins >= item.priceCoins && (!owned || item.category == ChantalShopCategory.CONSUMABLE),
-                                        colors = ButtonDefaults.buttonColors(containerColor = HobbitCardBg)
-                                    ) {
-                                        Text(
-                                            text = if (owned && item.category != ChantalShopCategory.CONSUMABLE) "Куплено ✓" else "Купить · ${item.priceCoins} 🪙",
-                                            style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
-                                            fontFamily = FontFamily.SansSerif,
-                                            fontWeight = FontWeight.Bold,
-                                            color = HobbitCream
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 }
@@ -1458,6 +1142,7 @@ internal fun BagDropSlotTile(
                     Modifier
                 }
             )
+            .testTag("bag_item_${item.id}")
             .clickable { onClick() }
     ) {
         Column(

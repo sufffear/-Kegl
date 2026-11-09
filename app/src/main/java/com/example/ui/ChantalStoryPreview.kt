@@ -46,16 +46,18 @@ internal fun ChantalStoryPreview(onDismiss: () -> Unit, generate: suspend () -> 
                     if (message.isNotBlank()) Text(message)
                 }
                 Button(onClick = {
-                    busy = true; message = "Шанталь вспоминает приключение…"
-                    scope.launch {
-                        try {
-                            when (val result = generate()) {
-                                is ChantalGenerationResult.Ready -> { episode = result.story.episode; isAuthoredSample = false; selected = null; message = "Пробный рассказ. В летопись не записан." }
-                                else -> message = "Рассказ не прошёл проверку или модель недоступна. Прогресс не менялся."
-                            }
-                        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-                          catch (error: Exception) { message = storyFailureMessage(error) }
-                        finally { busy = false }
+                    if (!busy) {
+                        busy = true; message = "Шанталь вспоминает приключение…"
+                        scope.launch {
+                            try {
+                                when (val result = generate()) {
+                                    is ChantalGenerationResult.Ready -> { episode = result.story.episode; isAuthoredSample = false; selected = null; message = "Пробный рассказ. В летопись не записан." }
+                                    else -> message = "Рассказ не прошёл проверку или модель недоступна. Прогресс не менялся."
+                                }
+                            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                              catch (error: Exception) { message = storyFailureMessage(error) }
+                            finally { busy = false }
+                        }
                     }
                 }, enabled = !busy, modifier = Modifier.fillMaxWidth().testTag("preview_generate")) {
                     Text(if (busy) "Создаём рассказ…" else if (isAuthoredSample) "Получить историю модели · один запрос" else "Другой рассказ · один запрос")

@@ -11,6 +11,37 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface VelarisDao {
+    @Query("SELECT * FROM training_configurations")
+    fun observeTrainingConfigurations(): Flow<List<TrainingConfiguration>>
+    @Query("SELECT * FROM training_configurations")
+    suspend fun getTrainingConfigurations(): List<TrainingConfiguration>
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveTrainingConfiguration(configuration: TrainingConfiguration)
+    @Query("DELETE FROM training_configurations WHERE `key` = :key")
+    suspend fun resetTrainingConfiguration(key: String)
+    @Query("DELETE FROM training_configurations")
+    suspend fun clearTrainingConfigurations()
+    @Query("SELECT * FROM extra_training_cycle WHERE id = 1")
+    fun observeExtraTrainingCycle(): Flow<ExtraTrainingCycle?>
+    @Query("SELECT * FROM extra_training_cycle WHERE id = 1")
+    suspend fun getExtraTrainingCycle(): ExtraTrainingCycle?
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveExtraTrainingCycle(cycle: ExtraTrainingCycle)
+    @Query("UPDATE extra_training_cycle SET mask = 0, celebrationUntilEpochMs = 0, round = round + 1 WHERE id = 1 AND round = :round AND mask = 7")
+    suspend fun finishExtraTrainingCelebration(round: Long)
+
+    @Query("SELECT * FROM plan_assignments")
+    fun observePlanAssignments(): Flow<List<PlanAssignmentEntity>>
+    @Query("SELECT * FROM plan_assignments")
+    suspend fun getAllPlanAssignments(): List<PlanAssignmentEntity>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertExecutionParameters(parameters: WorkoutExecutionParameters)
+    @Query("SELECT * FROM workout_execution_parameters")
+    suspend fun getExecutionParameters(): List<WorkoutExecutionParameters>
+    @Query("DELETE FROM workout_execution_parameters")
+    suspend fun clearExecutionParameters()
+
     // Only the explicitly versioned final-start operation calls these; definitions/settings survive.
     @Query("DELETE FROM workout_completions")
     suspend fun clearFinalStartCompletions()
@@ -100,12 +131,14 @@ interface VelarisDao {
     suspend fun persistRunCheckpoint(
         run: WorkoutRunEntity,
         completedAtEpochMs: Long? = null,
-        optionalDifficulty: String? = null
+        optionalDifficulty: String? = null,
+        execution: WorkoutExecutionParameters? = null
     ): Boolean {
         val existing = getRunById(run.id)
         if (existing?.status in listOf(RunStatus.COMPLETED.name, RunStatus.STOPPED.name)) return false
         if (existing != null && existing.confirmedActiveMs > run.confirmedActiveMs) return false
         if (existing == null) insertRun(run) else updateRun(run)
+        execution?.let {require(it.runId == run.id);insertExecutionParameters(it)}
         return if (completedAtEpochMs != null) {
             completeRunAtomically(run.id, completedAtEpochMs, optionalDifficulty)
         } else false
@@ -149,6 +182,17 @@ interface VelarisDao {
                 isFreeMode = run.isFreeMode
             )
         )
+        // Only successful, non-demo preset runs participate. The completion row is the
+        // durable receipt, so replayed callbacks cannot advance a later round either.
+        if (rowId != -1L && run.isFreeMode && !run.isDemo) {
+            val presetId = Regex("^free_(101|102|103)_.+$").matchEntire(run.slotId)?.groupValues?.get(1)?.toInt()
+            if (presetId != null) {
+                var cycle = getExtraTrainingCycle() ?: ExtraTrainingCycle()
+                if (cycle.mask == 7 && completedAtEpochMs >= cycle.celebrationUntilEpochMs)
+                    cycle = cycle.copy(round=cycle.round+1,mask=0,celebrationUntilEpochMs=0)
+                saveExtraTrainingCycle(cycle.complete(presetId, completedAtEpochMs))
+            }
+        }
         return rowId != -1L
     }
 
@@ -334,6 +378,9 @@ interface VelarisDao {
         progress: NovelReadingProgressEntity?,
         freeTemplates: List<FreeIntervalTemplateEntity> = emptyList(),
         customPrograms: List<CustomProgramEntity>? = null,
+        trainingConfigurations: List<TrainingConfiguration>? = null,
+        extraTrainingCycle: ExtraTrainingCycle? = null,
+        executionParameters: List<WorkoutExecutionParameters>? = null,
         beforeCommit: suspend () -> Unit = {}
     ) {
         deleteRealWorkoutCompletions()
@@ -363,6 +410,15 @@ interface VelarisDao {
         if (customPrograms != null) {
             deleteAllCustomPrograms()
             if (customPrograms.isNotEmpty()) upsertCustomPrograms(customPrograms)
+        }
+        trainingConfigurations?.let { configurations ->
+            clearTrainingConfigurations()
+            configurations.forEach { require(it.isValid); saveTrainingConfiguration(it) }
+        }
+        extraTrainingCycle?.let { saveExtraTrainingCycle(it) }
+        executionParameters?.let { rows ->
+            clearExecutionParameters()
+            rows.forEach {insertExecutionParameters(it)}
         }
         // Any exception in external stores also rolls back the Room transaction.
         beforeCommit()

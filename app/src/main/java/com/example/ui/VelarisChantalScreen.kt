@@ -16,6 +16,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -65,7 +68,9 @@ fun VelarisChantalScreen(
     onPlaySampleTone: (SignalType) -> Unit,
     modifier: Modifier = Modifier,
     earnedWorkoutEnergy: Int = completedWorkoutsCount * 10,
-    timeProvider: TimeProvider = SystemTimeProvider()
+    timeProvider: TimeProvider = SystemTimeProvider(),
+    onPageChanged: (String) -> Unit = {},
+    onChildBackChanged: (((() -> Unit)?) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val notificationPermission = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -92,7 +97,19 @@ fun VelarisChantalScreen(
     var storyEmotion by remember { mutableStateOf(com.example.data.ChantalHomePresence.fromSnapshot(saved).storyEmotion.name) }
     var forceTransformPreview by remember { mutableStateOf(saved.optBoolean("forceTransformPreview", false)) }
     var hasUsedPetThisCycle by remember { mutableStateOf(saved.optBoolean("hasUsedPetThisCycle", false)) }
-    var isBurgerMenuOpen by remember { mutableStateOf(false) }
+    var pages by rememberSaveable { mutableStateOf(listOf(ChantalPage.HOME.name)) }
+    val page = ChantalPage.valueOf(pages.last())
+    fun openPage(next: ChantalPage) {
+        pages = chantalPagesAfterOpen(pages, next)
+        onPageChanged(next.name)
+    }
+    fun backPage() { if (pages.size > 1) pages = pages.dropLast(1); onPageChanged(pages.last()) }
+    SideEffect { onPageChanged(page.name) }
+    BackHandler(enabled = pages.size > 1) { backPage() }
+    DisposableEffect(page) {
+        onChildBackChanged?.invoke(if (pages.size > 1) ({ backPage() }) else null)
+        onDispose { onChildBackChanged?.invoke(null) }
+    }
 
     // Подразделы в Домике («traits» / «housing» / «loadout» / «none»)
     var denAccordionTab by remember { mutableStateOf(saved.optString("denAccordionTab", "none")) }
@@ -441,375 +458,14 @@ fun VelarisChantalScreen(
         rewardPopupData = data.optJSONObject("rewardPopupData")?.let(ChantalProgressCodec::decodeChantalRewardPopupData)
         fillerTextInput = data.optString("fillerTextInput")
         pendingEpisode = null
+        openPage(ChantalPage.HOME)
         recentXpGainText = "+${result.xpEarned} XP (Поход 🧭)"
         val arrows = rewardPopupData?.traitArrowsText.orEmpty()
         if (showTraitArrows && arrows.isNotBlank()) activeArrowToast = arrows
         onPlaySampleTone(SignalType.SET_COMPLETED)
     }
 
-    // Пролог (первая встреча со спасённым рыжим лисёнком)
-    if (!hasCompletedPrologue) {
-        ChantalPrologueCard(
-            onCompletePrologue = {
-                onPlaySampleTone(SignalType.SET_COMPLETED)
-                hasCompletedPrologue = true
-            },
-            modifier = modifier
-        )
-        return
-    }
-
-    // Модальный Pop-up награды после похода
-    rewardPopupData?.let { reward ->
-        ChantalRewardPopupDialog(
-            reward = reward,
-            onDismiss = { rewardPopupData = null },
-            onOpenInBag = { lootId ->
-                selectedBagItemId = lootId
-                subTab = "bag"
-                rewardPopupData = null
-                isBurgerMenuOpen = true
-            }
-        )
-    }
-
-    giftItemId?.let { id ->
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { giftItemId = null },
-            title = { Text("Кому подарить находку?") },
-            text = { Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text("Подарок останется в истории знакомства. Одинаковую вещь одному знакомому дарим только один раз; монет за подарок нет.")
-                val names = journalList.filter { !it.chosenActionSummaryRu.isNullOrBlank() }.map { it.npcNameRu }.filter { it.isNotBlank() }.distinct()
-                if (names.isEmpty()) Text("Сначала познакомься с кем-нибудь в приключении. Находка останется в сумке.")
-                names.forEach { name ->
-                    androidx.compose.material3.TextButton(onClick = {
-                        runCatching { com.example.data.ChantalWorldInteractions.gift(JSONObject(worldInteractions), id, name, inventoryList, journalList) }
-                            .onSuccess {
-                                worldInteractions = it.toString()
-                                inventoryList.removeAll { item -> item.id == id }
-                                lastReactionBanner = "Подарок для $name записан в дневнике."
-                                giftItemId = null
-                                selectedBagItemId = null
-                            }.onFailure { lastReactionBanner = "Такую вещь уже дарили этому знакомому. Выбери другую."; giftItemId = null }
-                    }) { Text(name) }
-                }
-            } },
-            confirmButton = { androidx.compose.material3.TextButton(onClick = { giftItemId = null }) { Text("Отмена") } }
-        )
-    }
-
-    // Модальное меню с 6 игровыми разделами (открывается поверх экрана, НЕ сдвигая сцену с персонажем вниз)
-    if (isBurgerMenuOpen) {
-        ChantalModalMenuDialog(
-            subTab = subTab,
-            onSelectSubTab = { chosenTab ->
-                subTab = chosenTab
-            },
-            onDismiss = { isBurgerMenuOpen = false },
-            denTierNumber = denTierNumber,
-            itemsInCurrentStep = itemsInCurrentStep,
-            ownedDenCount = ownedDenCount,
-            foundDenTrophyCount = foundDenTrophyCount,
-            totalJourneys = totalJourneys,
-            preferredRegionId = preferredRegionId,
-            routeLocked = activeJourneyStartMs > 0L || pendingEpisode != null,
-            onChooseRoute = { preferredRegionId = it; isBurgerMenuOpen = false; denAccordionTab = "loadout" },
-            coins = coins,
-            selectedAiProvider = aiAccess.label(),
-            traits = traits,
-            perks = perks,
-            inventoryList = inventoryList,
-            newlyAddedBagItemIds = newlyAddedBagItemIds,
-            selectedBagItemId = selectedBagItemId,
-            onSelectBagItem = { id ->
-                selectedBagItemId = id
-                if (id != null) newlyAddedBagItemIds.remove(id)
-            },
-            onInspectClue = { item ->
-                val idx = inventoryList.indexOfFirst { it.id == item.id && it.category == ChantalLootCategory.ROYAL_CLUE }
-                if (idx >= 0 && !inventoryList[idx].inspectedBonusClaimed) {
-                    curiosity = (curiosity + 1).coerceAtMost(100)
-                    inventoryList[idx] = inventoryList[idx].copy(inspectedBonusClaimed = true)
-                    activeArrowToast = "Любопытство ↑"
-                }
-                selectedBagItemId = null
-            },
-            onBrewHerb = { item ->
-                val current = inventoryList.firstOrNull { it.id == item.id && it.category == ChantalLootCategory.HERB }
-                if (current != null && inventoryList.remove(current)) {
-                    isExhausted45 = false
-                    moodPct = (moodPct + 15).coerceAtMost(100)
-                }
-                selectedBagItemId = null
-            },
-            onGiftTrinket = { item -> giftItemId = item.id },
-            worldInteractions = JSONObject(worldInteractions),
-            onMagicPractice = { choice ->
-                val memory = progressRepository.load().optJSONObject("worldMemory") ?: com.example.data.ChantalWorldMemory.empty()
-                runCatching { com.example.data.ChantalMagicPractice.apply(JSONObject(worldInteractions), memory, choice) }
-                    .onSuccess { worldInteractions = it.toString() }
-            },
-            onCompareClues = { first, second ->
-                runCatching { com.example.data.ChantalWorldInteractions.compare(JSONObject(worldInteractions), first, second, inventoryList) }
-                    .onSuccess { worldInteractions = it.toString() }
-            },
-            onSellLootItem = { item, _ ->
-                val current = inventoryList.firstOrNull { it.id == item.id &&
-                    it.category in listOf(ChantalLootCategory.HERB, ChantalLootCategory.TRINKET) }
-                if (current != null && inventoryList.remove(current)) {
-                    coins += (current.sellPriceCoins * (100 + perks.witMerchantSellBonusPct)) / 100
-                }
-                selectedBagItemId = null
-            },
-            onCraftRoadAmulet = {
-                val herbs = inventoryList.filter { it.category == ChantalLootCategory.HERB }
-                val trinkets = inventoryList.filter { it.category == ChantalLootCategory.TRINKET }
-                val firstHerb = herbs.firstOrNull()
-                val secondItem = trinkets.firstOrNull() ?: herbs.getOrNull(1)
-                if (firstHerb != null && secondItem != null) {
-                    inventoryList.remove(firstHerb)
-                    inventoryList.remove(secondItem)
-                    hasActiveRoadAmulet = true
-                    isExhausted45 = false
-                    curiosity = (curiosity + 1).coerceAtMost(100)
-                    activeArrowToast = "Любопытство ↑"
-                    lastReactionBanner = "Создан Оберег Попутного Ветра (+100% защита и +50% монет)!"
-                }
-            },
-            selectedShopEntryId = selectedShopEntryId,
-            onSelectShopEntryId = { selectedShopEntryId = it },
-            shopCategoryTab = shopCategoryTab,
-            onSelectShopCategoryTab = { shopCategoryTab = it },
-            shopDenStepFilter = shopDenStepFilter,
-            onSelectShopDenStepFilter = { shopDenStepFilter = it },
-            ownedShopItemIds = ownedShopItemIds,
-            claimedMerchantOfferIds = claimedMerchantOfferIds,
-            onBuyMerchantOffer = { offerId ->
-                DEFAULT_CHANTAL_MERCHANT_OFFERS.find { it.id == offerId }?.let { offer ->
-                    val isClaimed = offer.id in claimedMerchantOfferIds
-                    if (!isClaimed && coins >= offer.discountPriceCoins) {
-                        coins -= offer.discountPriceCoins
-                        claimedMerchantOfferIds.add(offer.id)
-                        when (offer.rewardType) {
-                            "DEN_TROPHY" -> {
-                                val trophy = ChantalInventoryLootItem(
-                                    id = "merch_trophy_${System.currentTimeMillis()}",
-                                    titleRu = offer.titleRu,
-                                    shortTitleRu = offer.shortTitleRu,
-                                    emoji = offer.emoji,
-                                    category = ChantalLootCategory.DEN_TROPHY,
-                                    descriptionRu = offer.effectRu,
-                                    sellPriceCoins = 28,
-                                    foundAtRegionRu = "Лавка на колёсах",
-                                    foundDateIso = "Сегодня"
-                                )
-                                inventoryList.add(0, trophy)
-                                newlyAddedBagItemIds.add(trophy.id)
-                            }
-                            "ROYAL_CLUE" -> {
-                                curiosity = (curiosity + 2).coerceAtMost(100)
-                            }
-                            else -> {
-                                hasActiveRoadAmulet = true
-                            }
-                        }
-                        selectedShopEntryId = null
-                    }
-                }
-            },
-            onBuyShopItem = { item ->
-                val owned = item.id in ownedShopItemIds
-                if (coins >= item.priceCoins && (!owned || item.category == ChantalShopCategory.CONSUMABLE)) {
-                    coins -= item.priceCoins
-                    if (item.category == ChantalShopCategory.CONSUMABLE) {
-                        pantryProvisionCounts[item.id] = (pantryProvisionCounts[item.id] ?: 0) + 1
-                        equippedBundleItemId = item.id
-                        isExhausted45 = false
-                    } else if (!owned) {
-                        ownedShopItemIds.add(item.id)
-                        if (item.category == ChantalShopCategory.APPAREL) {
-                            gearDurabilityMap[item.id] = item.maxDurability
-                        }
-                    }
-                    selectedShopEntryId = null
-                }
-            },
-            journalList = journalList,
-            onSelectAiProvider = { selectedAiProvider = it },
-            selectedOpenRouterModel = selectedOpenRouterModel,
-            onSelectOpenRouterModel = { selectedOpenRouterModel = it },
-            customOpenRouterModelInput = customOpenRouterModelInput,
-            onCustomOpenRouterModelChange = { customOpenRouterModelInput = it },
-            selectedDifficulty = selectedDifficulty,
-            onSelectDifficulty = { selectedDifficulty = it },
-            customLoreNotes = customLoreNotes,
-            onCustomLoreNotesChange = { customLoreNotes = it },
-            showTraitArrows = showTraitArrows,
-            onToggleTraitArrows = { showTraitArrows = !showTraitArrows },
-            forceTransformPreview = forceTransformPreview,
-            onToggleTransformPreview = { forceTransformPreview = !forceTransformPreview }
-        )
-    }
-
-    val isJourneyActive = activeJourneyStartMs > 0L
-    val canPet = !hasUsedPetThisCycle && !isJourneyActive
-
-    // Компактный главный экран: Шапка -> Сцена персонажа -> Настроение и XP -> 4 кнопки -> Панель Похода (по клику) -> Текущее событие
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .testTag("velaris_chantal_screen"),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        if (showTraitArrows && activeArrowToast != null) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = HobbitElevatedBg,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.5.dp, HobbitGold, RoundedCornerShape(16.dp))
-            ) {
-                Text(
-                    text = "Изменение характера: $activeArrowToast",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = HobbitGold,
-                    fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier.padding(10.dp)
-                )
-            }
-        }
-
-        // 1. Компактная шапка
-        ChantalCompactHeader(
-            stageTitleRu = stageInfo.titleRu,
-            coins = coins,
-            currentEnergy = currentEnergy,
-            currentStreakDays = currentStreakDays,
-            isMenuOpen = isBurgerMenuOpen,
-            onToggleMenu = { isBurgerMenuOpen = !isBurgerMenuOpen }
-        )
-
-        // 2. Крупная центральная сцена с изображением Шанталь в домике
-        ChantalCentralDenScene(
-            stageInfo = stageInfo,
-            portraitResId = portraitResId,
-            denInteriorResId = denInteriorResId,
-            denTierNumber = denTierNumber,
-            itemsInCurrentStep = itemsInCurrentStep,
-            totalDenItemsCount = totalDenItemsCount,
-            isHeartPulseActive = isHeartPulseActive,
-            tendernessHealBonusPct = perks.tendernessMoodHealBonusPct,
-            activeGearList = activeGearList,
-            hasActiveRoadAmulet = hasActiveRoadAmulet,
-            isJourneyActive = isJourneyActive,
-            activeRegionTitleRu = activeRegionTitleRu
-        )
-
-        // 3. Панель уровня, XP и настроения (с компактными чипами Характера и Интерьера)
-        // 4. Четыре основные кнопки: Погладить, Поход, Сумка, История
-        ChantalQuickActionsRow(
-            canPet = canPet,
-            isJourneyActive = isJourneyActive,
-            isExpeditionPanelOpen = denAccordionTab == "loadout",
-            bagCount = inventoryList.size,
-            hasPendingStory = pendingEpisode != null,
-            onPetClick = {
-                onPlaySampleTone(SignalType.RELAXATION)
-                hasUsedPetThisCycle = true
-                petTapCount += 1
-                maturityXp += 3
-                recentXpGainText = "+3 XP (Ласка ❤️)"
-                moodPct = (moodPct + perks.tendernessMoodHealBonusPct).coerceAtMost(100)
-                petDialogueBubble = traits.buildPettingReaction(stageInfo.isTransformed, petTapCount)
-                isHeartPulseActive = true
-            },
-            onExpeditionClick = {
-                denAccordionTab = if (denAccordionTab == "loadout") "none" else "loadout"
-            },
-            onBagClick = {
-                subTab = "bag"
-                isBurgerMenuOpen = true
-            },
-            onStoryClick = {
-                if (pendingEpisode == null) {
-                    subTab = "journal"
-                    isBurgerMenuOpen = true
-                }
-            }
-        )
-
-        Column(Modifier.testTag("chantal_status_bar")) { ChantalAgeProgressPanel(totalJourneys,maturityXp) }
-        Text("Настроение: $moodPct% · $totalJourneys приключений",color=HobbitCream)
-        TextButton(onClick={denAccordionTab=if(denAccordionTab=="traits") "none" else "traits"},modifier=Modifier.testTag("btn_accordion_traits")) { Text("Характер") }
-        TextButton(onClick={denAccordionTab=if(denAccordionTab=="housing") "none" else "housing"},modifier=Modifier.testTag("btn_accordion_housing")) { Text("Интерьер · $itemsInCurrentStep из10") }
-
-        ChantalAnimatedCompanion(
-            state = com.example.domain.ChantalVisualState.resolve(isJourneyActive, pendingEpisode != null,
-                isHeartPulseActive, isExhausted45, denAccordionTab == "loadout"),
-            transformed = stageInfo.isTransformed,
-            motionAllowed = rememberCompanionMotionAllowed()
-        )
-
-        if (isJourneyActive && activeTrailNotes.isNotEmpty()) ChantalTrailNotesView(activeTrailNotes,
-            com.example.data.ChantalTrailLife.visibleCount(activeJourneyStartMs, trailNow))
-        else if (pendingEpisode?.trailNotesRu?.isNotEmpty() == true) ChantalTrailNotesView(pendingEpisode!!.trailNotesRu, 2)
-        if (!isJourneyActive) ChantalSharedHabits(favoriteSnack, sharedGreeting, { favoriteSnack=it }, { sharedGreeting=it })
-
-        if(!isJourneyActive) {
-            val presence=com.example.data.ChantalHomePresence.decode(JSONObject(homePresence)).copy(storyEmotion=com.example.domain.ChantalStoryEmotion.valueOf(storyEmotion))
-            ChantalHomePresenceView(presence,isHeartPulseActive,
-                com.example.data.ChantalHomePresence.rememberedLine(progressSnapshot,com.example.domain.ChantalCharacterState.fromAdventures(totalJourneys)),
-                onWish={status -> homePresence=com.example.data.ChantalHomePresence.encode(com.example.data.ChantalHomePresence.respond(presence,status)).toString()},
-                onJournal={subTab="journal";isBurgerMenuOpen=true})
-            journalList.firstOrNull { !it.chosenActionSummaryRu.isNullOrBlank() }?.let { episode ->
-                val a=JSONArray(feedbackJson)
-                val f=(0 until a.length()).map { a.getJSONObject(it) }.firstOrNull { it.getString("episodeId")==episode.id }
-                val old=f?.let { com.example.domain.ChantalStoryFeedback(episode.id,com.example.domain.ChantalStoryRating.valueOf(it.getString("rating")),
-                    com.example.domain.ChantalFeedbackScope.valueOf(it.getString("scope")),
-                    (0 until it.getJSONArray("reasons").length()).map { n -> com.example.domain.ChantalFeedbackReason.valueOf(it.getJSONArray("reasons").getString(n)) }.toSet(),it.optString("comment")) }
-                ChantalStoryFeedbackView(episode.id,old) { feedback ->
-                    feedbackMessage=if(runCatching { progressRepository.saveFeedback(feedback) }.isSuccess) {
-                        feedbackJson=progressRepository.load().optJSONArray("storyFeedback")?.toString() ?: "[]";"Оценка сохранена для следующих рассказов."
-                    } else "Оценку не удалось сохранить. Попробуй позже."
-                }
-                TextButton(onClick={
-                    feedbackMessage=if(runCatching { progressRepository.saveFeedback(null) }.isSuccess) { feedbackJson="[]";"Оценки сброшены. Истории сохранены." } else "Не удалось сбросить оценки."
-                }) { Text("Сбросить оценки и предпочтения") }
-            }
-            if(feedbackMessage.isNotBlank()) Text(feedbackMessage,color=HobbitCream)
-        }
-
-        ChantalDenShelfView(shelfItems, shelfSelection) { id ->
-            shelfSelection = com.example.data.ChantalDenShelf.select(shelfSelection, id, shelfItems)
-        }
-
-        // 5. Отдельная игровая панель подготовки к походу и 4 слотов экипировки (открывается кнопкой «Поход»), а также раскрывающиеся панели Характера / Интерьера
-        ChantalExpeditionAndSubPanelsSection(
-            denAccordionTab = denAccordionTab,
-            onClosePanel = { denAccordionTab = "none" },
-            traits = traits,
-            perks = perks,
-            selectedTraitPopupName = selectedTraitPopupName,
-            onSelectTraitPopupName = { selectedTraitPopupName = it },
-            denTierNumber = denTierNumber,
-            itemsInCurrentStep = itemsInCurrentStep,
-            ownedDenCount = ownedDenCount,
-            foundDenTrophyCount = foundDenTrophyCount,
-            onOpenShopComfort = {
-                shopCategoryTab = "den_comfort"
-                subTab = "shop"
-                isBurgerMenuOpen = true
-            },
-            isJourneyActive = isJourneyActive,
-            activeJourneyStartMs = activeJourneyStartMs,
-            activeRegionTitleRu = activeRegionTitleRu,
-            activeNpcRu = activeNpcRu,
-            activeStayedInSameRegion = activeStayedInSameRegion,
-            activeAutonomousReasonRu = activeAutonomousReasonRu,
-            timeProvider = timeProvider,
-            hasPendingStory = pendingEpisode != null,
-            preferredRegionTitle = DEFAULT_CHANTAL_MAP_REGIONS.firstOrNull { it.id == preferredRegionId }?.titleRu,
-            onCompleteActiveJourney = complete@{
+    val completeJourney: () -> Unit = complete@{
                 if (!ChantalJourneyClock.ready(activeJourneyStartMs, timeProvider.currentWallTimeMs()) || pendingEpisode != null) return@complete
                 val nextNum = totalJourneys + 1
                 val isMilestone = !activeIsFiller && nextNum % 5 == 0
@@ -921,13 +577,342 @@ fun VelarisChantalScreen(
                     ).joinToString("; "))
                 activeJourneyStartMs = 0L
                 denAccordionTab = "none"
+            }
+
+    // UI restoration may outlive a confirmed episode; do not show a stale form/placeholder.
+    LaunchedEffect(page, pendingEpisode?.id, activeJourneyStartMs) {
+        if ((page == ChantalPage.STORY && pendingEpisode == null) ||
+            (page == ChantalPage.TRAIL && activeJourneyStartMs <= 0) ||
+            (page == ChantalPage.PREPARE && (pendingEpisode != null || activeJourneyStartMs > 0))) {
+            openPage(ChantalPage.HOME)
+        }
+    }
+
+    // Пролог (первая встреча со спасённым рыжим лисёнком)
+    if (!hasCompletedPrologue) {
+        ChantalPrologueCard(
+            onCompletePrologue = {
+                onPlaySampleTone(SignalType.SET_COMPLETED)
+                hasCompletedPrologue = true
             },
+            modifier = modifier
+        )
+        return
+    }
+
+    // Модальный Pop-up награды после похода
+    rewardPopupData?.let { reward ->
+        ChantalRewardPopupDialog(
+            reward = reward,
+            onDismiss = { rewardPopupData = null },
+            onOpenInBag = { lootId ->
+                selectedBagItemId = lootId
+                subTab = "bag"
+                rewardPopupData = null
+                openPage(when(subTab) { "bag" -> ChantalPage.BAG; "shop" -> ChantalPage.SHOP; "journal" -> ChantalPage.JOURNAL; "ai" -> ChantalPage.AI; else -> ChantalPage.HOME })
+            }
+        )
+    }
+
+    giftItemId?.let { id ->
+        androidx.compose.runtime.key("gift", id) {
+            val title = remember(id) { inventoryList.firstOrNull { it.id == id }?.titleRu ?: "Находка" }
+            val names = journalList.filter { !it.chosenActionSummaryRu.isNullOrBlank() }.map { it.npcNameRu }.filter { it.isNotBlank() }.distinct()
+            ChantalItemDetailsDialog("Кому подарить «$title»?",
+                "Подарок останется в истории знакомства. Одинаковую вещь одному знакомому дарим только один раз; монет за подарок нет.",
+                if (names.isEmpty()) "Сначала познакомься с кем-нибудь в приключении. Находка останется в сумке." else "Предмет исчезнет из сумки только после подтверждения.",
+                names.mapIndexed { index, name -> ChantalItemAction("gift_$index", "Подарить: $name",
+                    inventoryList.any { it.id == id }, "Передать «$title» персонажу $name?",
+                    "Подарок для $name записан в дневнике.") {
+                        val updated = com.example.data.ChantalWorldInteractions.gift(JSONObject(worldInteractions), id, name, inventoryList, journalList)
+                        worldInteractions = updated.toString()
+                        inventoryList.removeAll { it.id == id }
+                        lastReactionBanner = "Подарок для $name записан в дневнике."
+                        selectedBagItemId = null
+                    }
+                }, onDismiss = { giftItemId = null })
+        }
+    }
+
+    val isJourneyActive = activeJourneyStartMs > 0L
+    val canPet = !hasUsedPetThisCycle && !isJourneyActive
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("velaris_chantal_screen"),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        if (showTraitArrows && activeArrowToast != null && page in listOf(ChantalPage.HOME, ChantalPage.DEVELOPMENT)) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = HobbitElevatedBg,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.5.dp, HobbitGold, RoundedCornerShape(16.dp))
+            ) {
+                Text(
+                    text = "Изменение характера: $activeArrowToast",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = HobbitGold,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.padding(10.dp)
+                )
+            }
+        }
+
+        if (page != ChantalPage.HOME && onChildBackChanged == null) {
+            TextButton(onClick={ backPage() },modifier=Modifier.testTag("btn_chantal_back")) { Text("Назад · ${page.title}") }
+        }
+        if (page == ChantalPage.HOME) {
+            Text("Шанталь · ${stageInfo.titleRu}", style=MaterialTheme.typography.titleMedium, color=HobbitCream)
+            ChantalHero(portraitResId, denInteriorResId, totalDenItemsCount >= 10, stageInfo.isTransformed, canPet, {
+                if (!hasUsedPetThisCycle && !isJourneyActive) {
+
+                onPlaySampleTone(SignalType.RELAXATION)
+                hasUsedPetThisCycle = true
+                petTapCount += 1
+                maturityXp += 3
+                recentXpGainText = "+3 XP (Ласка ❤️)"
+                moodPct = (moodPct + perks.tendernessMoodHealBonusPct).coerceAtMost(100)
+                petDialogueBubble = traits.buildPettingReaction(stageInfo.isTransformed, petTapCount)
+                isHeartPulseActive = true
+
+                }
+            })
+            val action = chantalHomeAction(rewardPopupData != null, pendingEpisode != null, activeJourneyStartMs, trailNow)
+            Text(petDialogueBubble ?: lastReactionBanner ?: action.line, color=HobbitCream)
+            ChantalContextAction(action) {
+                when(action) {
+                    ChantalHomeAction.REWARD -> Unit // persisted reward dialog is already shown above
+                    ChantalHomeAction.STORY -> openPage(ChantalPage.STORY)
+                    ChantalHomeAction.RETURN -> { completeJourney(); if(pendingEpisode != null) openPage(ChantalPage.STORY) }
+                    ChantalHomeAction.TRAVELLING -> openPage(ChantalPage.TRAIL)
+                    ChantalHomeAction.PREPARE -> openPage(ChantalPage.PREPARE)
+                }
+            }
+            ChantalQuickLinks({ openPage(ChantalPage.BAG) },
+                { openPage(if(pendingEpisode != null) ChantalPage.STORY else ChantalPage.JOURNAL) },
+                { openPage(ChantalPage.INTERIOR) })
+            TextButton(onClick={openPage(ChantalPage.WORLD)},modifier=Modifier.testTag("btn_chantal_menu")) { Text("Мир Шанталь") }
+        }
+        if (page == ChantalPage.WORLD) ChantalWorldMenu(coins,currentEnergy,::openPage)
+    // Модальное меню с 6 игровыми разделами (открывается поверх экрана, НЕ сдвигая сцену с персонажем вниз)
+    if (page in setOf(ChantalPage.MAP, ChantalPage.BAG, ChantalPage.SHOP, ChantalPage.JOURNAL, ChantalPage.AI)) {
+        ChantalSectionPage(
+            subTab = when(page) { ChantalPage.MAP -> "map"; ChantalPage.BAG -> "bag"; ChantalPage.SHOP -> "shop"; ChantalPage.JOURNAL -> "journal"; else -> "ai" },
+            onSelectSubTab = { chosenTab ->
+                openPage(when(chosenTab) { "bag" -> ChantalPage.BAG; "map" -> ChantalPage.MAP; "shop" -> ChantalPage.SHOP; "journal" -> ChantalPage.JOURNAL; "ai" -> ChantalPage.AI; else -> ChantalPage.HOME })
+            },
+            onDismiss = { backPage() },
+            denTierNumber = denTierNumber,
+            itemsInCurrentStep = itemsInCurrentStep,
+            ownedDenCount = ownedDenCount,
+            foundDenTrophyCount = foundDenTrophyCount,
+            totalJourneys = totalJourneys,
+            preferredRegionId = preferredRegionId,
+            routeLocked = activeJourneyStartMs > 0L || pendingEpisode != null,
+            onChooseRoute = { preferredRegionId = it; openPage(ChantalPage.PREPARE) },
+            coins = coins,
+            selectedAiProvider = aiAccess.label(),
+            traits = traits,
+            perks = perks,
+            inventoryList = inventoryList,
+            newlyAddedBagItemIds = newlyAddedBagItemIds,
+            selectedBagItemId = selectedBagItemId,
+            onSelectBagItem = { id ->
+                selectedBagItemId = id
+                if (id != null) newlyAddedBagItemIds.remove(id)
+            },
+            onInspectClue = { item ->
+                val idx = inventoryList.indexOfFirst { it.id == item.id && it.category == ChantalLootCategory.ROYAL_CLUE }
+                if (idx >= 0 && !inventoryList[idx].inspectedBonusClaimed) {
+                    curiosity = (curiosity + 1).coerceAtMost(100)
+                    inventoryList[idx] = inventoryList[idx].copy(inspectedBonusClaimed = true)
+                    activeArrowToast = "Любопытство ↑"
+                }
+            },
+            onBrewHerb = { item ->
+                val current = inventoryList.firstOrNull { it.id == item.id && it.category == ChantalLootCategory.HERB }
+                if (current != null && inventoryList.remove(current)) {
+                    isExhausted45 = false
+                    moodPct = (moodPct + 15).coerceAtMost(100)
+                }
+            },
+            onGiftTrinket = { item -> giftItemId = item.id },
+            worldInteractions = JSONObject(worldInteractions),
+            onMagicPractice = { choice ->
+                val memory = progressRepository.load().optJSONObject("worldMemory") ?: com.example.data.ChantalWorldMemory.empty()
+                runCatching { com.example.data.ChantalMagicPractice.apply(JSONObject(worldInteractions), memory, choice) }
+                    .onSuccess { worldInteractions = it.toString() }
+            },
+            onCompareClues = { first, second ->
+                runCatching { com.example.data.ChantalWorldInteractions.compare(JSONObject(worldInteractions), first, second, inventoryList) }
+                    .onSuccess { worldInteractions = it.toString() }
+            },
+            onSellLootItem = { item, _ ->
+                val current = inventoryList.firstOrNull { it.id == item.id &&
+                    it.category in listOf(ChantalLootCategory.HERB, ChantalLootCategory.TRINKET) }
+                if (current != null && inventoryList.remove(current)) {
+                    coins += (current.sellPriceCoins * (100 + perks.witMerchantSellBonusPct)) / 100
+                }
+            },
+            onCraftRoadAmulet = {
+                val herbs = inventoryList.filter { it.category == ChantalLootCategory.HERB }
+                val trinkets = inventoryList.filter { it.category == ChantalLootCategory.TRINKET }
+                val firstHerb = herbs.firstOrNull()
+                val secondItem = trinkets.firstOrNull() ?: herbs.getOrNull(1)
+                if (firstHerb != null && secondItem != null) {
+                    inventoryList.remove(firstHerb)
+                    inventoryList.remove(secondItem)
+                    hasActiveRoadAmulet = true
+                    isExhausted45 = false
+                    curiosity = (curiosity + 1).coerceAtMost(100)
+                    activeArrowToast = "Любопытство ↑"
+                    lastReactionBanner = "Создан Оберег Попутного Ветра (+100% защита и +50% монет)!"
+                }
+            },
+            selectedShopEntryId = selectedShopEntryId,
+            onSelectShopEntryId = { selectedShopEntryId = it },
+            shopCategoryTab = shopCategoryTab,
+            onSelectShopCategoryTab = { shopCategoryTab = it },
+            shopDenStepFilter = shopDenStepFilter,
+            onSelectShopDenStepFilter = { shopDenStepFilter = it },
+            ownedShopItemIds = ownedShopItemIds,
+            claimedMerchantOfferIds = claimedMerchantOfferIds,
+            onBuyMerchantOffer = { offerId ->
+                DEFAULT_CHANTAL_MERCHANT_OFFERS.find { it.id == offerId }?.let { offer ->
+                    val isClaimed = offer.id in claimedMerchantOfferIds
+                    if (!isClaimed && coins >= offer.discountPriceCoins) {
+                        coins -= offer.discountPriceCoins
+                        claimedMerchantOfferIds.add(offer.id)
+                        when (offer.rewardType) {
+                            "DEN_TROPHY" -> {
+                                val trophy = ChantalInventoryLootItem(
+                                    id = "merch_trophy_${System.currentTimeMillis()}",
+                                    titleRu = offer.titleRu,
+                                    shortTitleRu = offer.shortTitleRu,
+                                    emoji = offer.emoji,
+                                    category = ChantalLootCategory.DEN_TROPHY,
+                                    descriptionRu = offer.effectRu,
+                                    sellPriceCoins = 28,
+                                    foundAtRegionRu = "Лавка на колёсах",
+                                    foundDateIso = "Сегодня"
+                                )
+                                inventoryList.add(0, trophy)
+                                newlyAddedBagItemIds.add(trophy.id)
+                            }
+                            "ROYAL_CLUE" -> {
+                                curiosity = (curiosity + 2).coerceAtMost(100)
+                            }
+                            else -> {
+                                hasActiveRoadAmulet = true
+                            }
+                        }
+                    }
+                }
+            },
+            onBuyShopItem = { item ->
+                val owned = item.id in ownedShopItemIds
+                if (coins >= item.priceCoins && (!owned || item.category == ChantalShopCategory.CONSUMABLE)) {
+                    coins -= item.priceCoins
+                    if (item.category == ChantalShopCategory.CONSUMABLE) {
+                        pantryProvisionCounts[item.id] = (pantryProvisionCounts[item.id] ?: 0) + 1
+                        equippedBundleItemId = item.id
+                        isExhausted45 = false
+                    } else if (!owned) {
+                        ownedShopItemIds.add(item.id)
+                        if (item.category == ChantalShopCategory.APPAREL) {
+                            gearDurabilityMap[item.id] = item.maxDurability
+                        }
+                    }
+                }
+            },
+            journalList = journalList,
+            onSelectAiProvider = { selectedAiProvider = it },
+            selectedOpenRouterModel = selectedOpenRouterModel,
+            onSelectOpenRouterModel = { selectedOpenRouterModel = it },
+            customOpenRouterModelInput = customOpenRouterModelInput,
+            onCustomOpenRouterModelChange = { customOpenRouterModelInput = it },
+            selectedDifficulty = selectedDifficulty,
+            onSelectDifficulty = { selectedDifficulty = it },
+            customLoreNotes = customLoreNotes,
+            onCustomLoreNotesChange = { customLoreNotes = it },
+            showTraitArrows = showTraitArrows,
+            onToggleTraitArrows = { showTraitArrows = !showTraitArrows },
+            forceTransformPreview = forceTransformPreview,
+            onToggleTransformPreview = { forceTransformPreview = !forceTransformPreview }
+        )
+    }
+
+
+        if (page == ChantalPage.JOURNAL) {
+            journalList.firstOrNull { !it.chosenActionSummaryRu.isNullOrBlank() }?.let { episode ->
+                val a=JSONArray(feedbackJson)
+                val f=(0 until a.length()).map { a.getJSONObject(it) }.firstOrNull { it.getString("episodeId")==episode.id }
+                val old=f?.let { com.example.domain.ChantalStoryFeedback(episode.id,com.example.domain.ChantalStoryRating.valueOf(it.getString("rating")),
+                    com.example.domain.ChantalFeedbackScope.valueOf(it.getString("scope")),
+                    (0 until it.getJSONArray("reasons").length()).map { n -> com.example.domain.ChantalFeedbackReason.valueOf(it.getJSONArray("reasons").getString(n)) }.toSet(),it.optString("comment")) }
+                ChantalStoryFeedbackView(episode.id,old) { feedback ->
+                    feedbackMessage=if(runCatching { progressRepository.saveFeedback(feedback) }.isSuccess) {
+                        feedbackJson=progressRepository.load().optJSONArray("storyFeedback")?.toString() ?: "[]";"Оценка сохранена для следующих рассказов."
+                    } else "Оценку не удалось сохранить. Попробуй позже."
+                }
+                TextButton(onClick={
+                    feedbackMessage=if(runCatching { progressRepository.saveFeedback(null) }.isSuccess) { feedbackJson="[]";"Оценки сброшены. Истории сохранены." } else "Не удалось сбросить оценки."
+                }) { Text("Сбросить оценки и предпочтения") }
+            }
+            if(feedbackMessage.isNotBlank()) Text(feedbackMessage,color=HobbitCream)
+
+        }
+        if (page == ChantalPage.DEVELOPMENT) {
+            Column(Modifier.testTag("chantal_status_bar")) { ChantalAgeProgressPanel(totalJourneys,maturityXp) }
+            Text("Настроение: $moodPct%",color=HobbitCream)
+        }
+        if (page == ChantalPage.TRAIL) {
+            if (activeTrailNotes.isNotEmpty()) ChantalTrailNotesView(activeTrailNotes,
+                com.example.data.ChantalTrailLife.visibleCount(activeJourneyStartMs, timeProvider.currentWallTimeMs()))
+        }
+        if (page == ChantalPage.INTERIOR) {
+        ChantalDenShelfView(shelfItems, shelfSelection) { id ->
+            shelfSelection = com.example.data.ChantalDenShelf.select(shelfSelection, id, shelfItems)
+        }
+
+        }
+        if (page in setOf(ChantalPage.PREPARE, ChantalPage.TRAIL, ChantalPage.DEVELOPMENT, ChantalPage.INTERIOR)) {
+        // 5. Отдельная игровая панель подготовки к походу и 4 слотов экипировки (открывается кнопкой «Поход»), а также раскрывающиеся панели Характера / Интерьера
+        ChantalExpeditionAndSubPanelsSection(
+            denAccordionTab = when(page) { ChantalPage.PREPARE -> "loadout"; ChantalPage.DEVELOPMENT -> "traits"; ChantalPage.INTERIOR -> "housing"; else -> "none" },
+            onClosePanel = { backPage() },
+            traits = traits,
+            perks = perks,
+            selectedTraitPopupName = selectedTraitPopupName,
+            onSelectTraitPopupName = { selectedTraitPopupName = it },
+            denTierNumber = denTierNumber,
+            itemsInCurrentStep = itemsInCurrentStep,
+            ownedDenCount = ownedDenCount,
+            foundDenTrophyCount = foundDenTrophyCount,
+            onOpenShopComfort = {
+                shopCategoryTab = "den_comfort"
+                subTab = "shop"
+                openPage(when(subTab) { "bag" -> ChantalPage.BAG; "shop" -> ChantalPage.SHOP; "journal" -> ChantalPage.JOURNAL; "ai" -> ChantalPage.AI; else -> ChantalPage.HOME })
+            },
+            isJourneyActive = isJourneyActive && page == ChantalPage.TRAIL,
+            activeJourneyStartMs = activeJourneyStartMs,
+            activeRegionTitleRu = activeRegionTitleRu,
+            activeNpcRu = activeNpcRu,
+            activeStayedInSameRegion = activeStayedInSameRegion,
+            activeAutonomousReasonRu = activeAutonomousReasonRu,
+            timeProvider = timeProvider,
+            hasPendingStory = pendingEpisode != null,
+            preferredRegionTitle = DEFAULT_CHANTAL_MAP_REGIONS.firstOrNull { it.id == preferredRegionId }?.titleRu,
+            onCompleteActiveJourney = { completeJourney(); if(pendingEpisode != null) openPage(ChantalPage.STORY) },
             hasActiveRoadAmulet = hasActiveRoadAmulet,
             loadoutProtectPct = loadoutProtectPct,
             loadoutCoinsBonusPct = loadoutCoinsBonusPct,
             onOpenBagForAmulet = {
                 subTab = "bag"
-                isBurgerMenuOpen = true
+                openPage(when(subTab) { "bag" -> ChantalPage.BAG; "shop" -> ChantalPage.SHOP; "journal" -> ChantalPage.JOURNAL; "ai" -> ChantalPage.AI; else -> ChantalPage.HOME })
             },
             equippedOutfitId = equippedOutfitId,
             equippedToolId = equippedToolId,
@@ -948,10 +933,9 @@ fun VelarisChantalScreen(
                     "WEAPON" -> equippedWeaponId = if (equippedWeaponId == inspectGear.id) null else inspectGear.id
                     else -> equippedBundleItemId = if (equippedBundleItemId == inspectGear.id) null else inspectGear.id
                 }
-                activeSlotInspectItemId = null
             },
             onBuyAndEquipGear = { inspectGear ->
-                if (coins >= inspectGear.priceCoins) {
+                if (coins >= inspectGear.priceCoins && (inspectGear.category == ChantalShopCategory.CONSUMABLE || inspectGear.id !in ownedShopItemIds)) {
                     coins -= inspectGear.priceCoins
                     if (inspectGear.category == ChantalShopCategory.CONSUMABLE) {
                         pantryProvisionCounts[inspectGear.id] = (pantryProvisionCounts[inspectGear.id] ?: 0) + 1
@@ -966,7 +950,6 @@ fun VelarisChantalScreen(
                             else -> {}
                         }
                     }
-                    activeSlotInspectItemId = null
                 }
             },
             fillerTextInput = fillerTextInput,
@@ -1002,6 +985,7 @@ fun VelarisChantalScreen(
                     fillerTextInput = ""
                     activeTrailNotes = com.example.data.ChantalTrailLife.notes(totalJourneys)
                     activeJourneyStartMs = timeProvider.currentWallTimeMs()
+                    openPage(ChantalPage.TRAIL)
                     if (android.os.Build.VERSION.SDK_INT >= 33) {
                         val prefs = context.getSharedPreferences("chantal_notifications", android.content.Context.MODE_PRIVATE)
                         if (!prefs.getBoolean("permissionAsked", false) && androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -1011,9 +995,12 @@ fun VelarisChantalScreen(
                     }
                 }
             },
-            onOpenWorkoutPlan = onOpenWorkoutPlan
+            onOpenWorkoutPlan = onOpenWorkoutPlan,
+            showRouteHeading = page == ChantalPage.PREPARE || page == ChantalPage.TRAIL
         )
 
+        }
+        if (page == ChantalPage.STORY && pendingEpisode != null) {
         val narrativeReady=pendingEpisode?.let { it.isFiller || narrativeHash==com.example.data.ChantalNarrativeSession.fingerprint(it) } ?: true
         pendingEpisode?.takeIf { !it.isFiller }?.let { base ->
             if(isPreparingNarrative) Text("Готовим рассказ…")
@@ -1021,7 +1008,7 @@ fun VelarisChantalScreen(
                 Text(if(narrativeSource=="local") "Локальный рассказ · без запроса к модели" else if(narrativeSource=="openrouter") "Рассказ Grok · OpenRouter" else "Рассказ Gemini")
                 OutlinedButton(onClick={
                     val selected=aiAccess.provider()
-                    if(!aiAccess.credential().hasKey()) { subTab="ai";isBurgerMenuOpen=true }
+                    if(!aiAccess.credential().hasKey()) { subTab="ai";openPage(ChantalPage.AI) }
                     else if(!aiAccess.claimRequest()) generationMessage="Между запросами нужна минута. Сохранённый рассказ доступен сейчас."
                     else {
                         isGenerating=true;generationMessage=""
@@ -1094,14 +1081,15 @@ fun VelarisChantalScreen(
                 if (committed.isSuccess && committed.getOrThrow().applied) showCommittedJourney(committed.getOrThrow())
                 else if (committed.isFailure) generationMessage = "Не удалось сохранить ответ. Перезапусти приложение и повтори после загрузки прогресса."
             },
-            petDialogueBubble = petDialogueBubble,
+            petDialogueBubble = null,
             lastReactionBanner = lastReactionBanner,
-            latestJournalEpisode = journalList.firstOrNull(),
+            latestJournalEpisode = null,
             dominantTraitNameRu = perks.dominantTraitNameRu,
             onOpenFullJournal = {
                 subTab = "journal"
-                isBurgerMenuOpen = true
+                openPage(when(subTab) { "bag" -> ChantalPage.BAG; "shop" -> ChantalPage.SHOP; "journal" -> ChantalPage.JOURNAL; "ai" -> ChantalPage.AI; else -> ChantalPage.HOME })
             }
         )
+        }
     }
 }

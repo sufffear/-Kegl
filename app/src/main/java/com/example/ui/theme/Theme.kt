@@ -36,7 +36,7 @@ fun VelarisTheme(
 ) {
     val targetPalette = remember(themeId) { paletteForTheme(themeId) }
     val animatorsEnabled = remember {
-        runCatching { ValueAnimator.areAnimatorsEnabled() }.getOrDefault(true)
+        runCatching { (android.os.Build.VERSION.SDK_INT < 26 || ValueAnimator.areAnimatorsEnabled()) }.getOrDefault(true)
     }
 
     val backgroundTop = animatePaletteColor(targetPalette.backgroundTop, animatorsEnabled)

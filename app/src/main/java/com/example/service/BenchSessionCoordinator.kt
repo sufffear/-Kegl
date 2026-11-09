@@ -105,6 +105,53 @@ object BenchSessionCoordinator {
     private val _freeTemplates = MutableStateFlow<List<FreeIntervalTemplateEntity>>(emptyList())
     val freeTemplates: StateFlow<List<FreeIntervalTemplateEntity>> = _freeTemplates.asStateFlow()
 
+    private val _trainingConfigurations = MutableStateFlow<List<com.example.data.TrainingConfiguration>>(emptyList())
+    val trainingConfigurations = _trainingConfigurations.asStateFlow()
+    private val _extraTrainingCycle = MutableStateFlow(com.example.data.ExtraTrainingCycle())
+    val extraTrainingCycle = _extraTrainingCycle.asStateFlow()
+    private val _trainingStateReady = MutableStateFlow(false)
+    val trainingStateReady = _trainingStateReady.asStateFlow()
+    private var activeCustomProgramSnapshot: com.example.domain.CustomWorkoutProgram? = null
+    private var trainingDao: com.example.data.VelarisDao? = null
+
+    fun saveTrainingConfiguration(configuration: com.example.data.TrainingConfiguration, onResult: (Boolean) -> Unit) {
+        coordinatorScope.launch {
+            val success = runCatching {
+                require(configuration.isValid)
+                require(configuration.key.startsWith("mandatory:") || configuration.key in setOf("extra:101","extra:102","extra:103"))
+                requireNotNull(trainingDao).saveTrainingConfiguration(configuration)
+                _trainingConfigurations.value = requireNotNull(trainingDao).getTrainingConfigurations()
+                refreshConfiguredDailySlots()
+            }.isSuccess
+            kotlinx.coroutines.withContext(Dispatchers.Main) { onResult(success) }
+        }
+    }
+
+    fun resetTrainingConfiguration(key: String, onResult: (Boolean) -> Unit) {
+        coordinatorScope.launch {
+            val success = runCatching {
+                requireNotNull(trainingDao).resetTrainingConfiguration(key)
+                _trainingConfigurations.value = requireNotNull(trainingDao).getTrainingConfigurations()
+                refreshConfiguredDailySlots()
+            }.isSuccess
+            kotlinx.coroutines.withContext(Dispatchers.Main) { onResult(success) }
+        }
+    }
+
+    private suspend fun refreshConfiguredDailySlots() {
+        _dailySlots.value = persistenceRepository?.getOrCreateDailySlots(activeDateKey(),activePlanId(),isCurrentModeDemo()).orEmpty()
+    }
+
+    @Volatile private var trainingFactories: Map<String,com.example.data.TrainingConfiguration> = emptyMap()
+    private fun updateTrainingFactories(assignments: List<com.example.data.PlanAssignmentEntity>) {
+        trainingFactories = assignments.associate { a ->
+            val key="mandatory:${a.id}"
+            key to com.example.data.TrainingConfiguration(key,(a.contractionMs/1000).toInt(),(a.relaxationMs/1000).toInt(),a.repetitions)
+        }
+    }
+    fun trainingDefaultConfiguration(item: com.example.data.DailySlotEntity): com.example.data.TrainingConfiguration =
+        trainingFactories[com.example.data.TrainingConfiguration.from(item).key] ?: com.example.data.TrainingConfiguration.from(item)
+
     private val _customPrograms = MutableStateFlow<List<com.example.domain.CustomWorkoutProgram>>(emptyList())
     val customPrograms: StateFlow<List<com.example.domain.CustomWorkoutProgram>> = _customPrograms.asStateFlow()
 
@@ -175,6 +222,26 @@ object BenchSessionCoordinator {
             val db = VelarisDatabase.getInstance(appCtx)
             val repo = WorkoutPersistenceRepository(db.velarisDao(), timeProvider)
             persistenceRepository = repo
+            trainingDao = db.velarisDao()
+            coordinatorScope.launch { db.velarisDao().observePlanAssignments().collect { updateTrainingFactories(it) } }
+            coordinatorScope.launch {
+                db.velarisDao().observeTrainingConfigurations().collect { configurations ->
+                    _trainingConfigurations.value = configurations
+                    refreshConfiguredDailySlots()
+                }
+            }
+            coordinatorScope.launch {
+                db.velarisDao().observeExtraTrainingCycle().collect { _extraTrainingCycle.value = it ?: com.example.data.ExtraTrainingCycle() }
+            }
+            coordinatorScope.launch {
+                db.velarisDao().observeExtraTrainingCycle().collect { cycle ->
+                    if(cycle?.mask == 7) {
+                        // Max 3 seconds even after wall-clock changes; a killed celebration recovers here.
+                        kotlinx.coroutines.delay((cycle.celebrationUntilEpochMs-timeProvider.currentWallTimeMs()).coerceIn(0L,3000L))
+                        db.velarisDao().finishExtraTrainingCelebration(cycle.round)
+                    }
+                }
+            }
             coordinatorScope.launch { db.velarisDao().observeWorkoutEnergy().collect { _workoutEnergy.value = it } }
 
             val storyRepo = StoryRepository(appCtx, db.velarisDao(), timeProvider)
@@ -225,12 +292,16 @@ object BenchSessionCoordinator {
         storyRepo: StoryRepository
     ) {
         try {
+            _trainingConfigurations.value = requireNotNull(trainingDao).getTrainingConfigurations()
+            _extraTrainingCycle.value = requireNotNull(trainingDao).getExtraTrainingCycle() ?: com.example.data.ExtraTrainingCycle()
             val isDemo = isCurrentModeDemo()
             val slots = repo.getOrCreateDailySlots(
                 localDate = activeDateKey(),
                 planId = activePlanId(),
                 isDemo = isDemo
             )
+            updateTrainingFactories(requireNotNull(trainingDao).getAllPlanAssignments())
+            _trainingStateReady.value = true
             _dailySlots.value = slots
             _demoCompletionsCount.value = repo.countDemoCompletions()
             _realCompletionsCount.value = repo.countRealCompletions()
@@ -246,6 +317,12 @@ object BenchSessionCoordinator {
             // Инициализируем 5 слотов свободного режима
             repo.ensureFreeTemplatesSeeded()
             _freeTemplates.value = repo.getAllFreeTemplates()
+            // Seed legacy starter programs once, never resurrect a deliberately emptied library.
+            val libraryPrefs=requireNotNull(appContext).getSharedPreferences("velaris_training_library",Context.MODE_PRIVATE)
+            if(!libraryPrefs.getBoolean("factory_seeded_v1",false)) {
+                repo.seedCustomProgramsIfEmpty()
+                check(libraryPrefs.edit().putBoolean("factory_seeded_v1",true).commit())
+            }
             _customPrograms.value = repo.getAllCustomPrograms()
 
             val firstTargetSlot = slots.firstOrNull { !it.isCompleted }?.slot ?: slots.firstOrNull()?.slot
@@ -740,13 +817,14 @@ object BenchSessionCoordinator {
     private fun persistCheckpointAsync(snapshot: PhaseEngineSnapshot, trigger: CheckpointTrigger) {
         val repo = persistenceRepository ?: return
         val previous = checkpointJob
+        val programSnapshot = activeCustomProgramSnapshot?.takeIf { snapshot.isCustomProgram && it.id == snapshot.protocol.id }
         checkpointJob = coordinatorScope.launch {
             previous?.join()
             try {
                 if (trigger == CheckpointTrigger.COMPLETE) {
                     val prevStreak = _weeklyOverview.value.currentStreakDays
                     _lastCompletedSlotDifficulty.value = null
-                    val inserted = repo.completeRunAtomically(snapshot)
+                    val inserted = repo.completeRunAtomically(snapshot,program=programSnapshot)
                     if (inserted) {
                         appendLog(
                             "DB_COMMIT",
@@ -787,7 +865,7 @@ object BenchSessionCoordinator {
                         }
                     }
                 } else {
-                    repo.saveRunCheckpoint(snapshot)
+                    repo.saveRunCheckpoint(snapshot,programSnapshot)
                 }
                 _databaseErrorMessage.value = null
             } catch (e: Exception) {
@@ -879,7 +957,8 @@ object BenchSessionCoordinator {
     @Synchronized
     fun selectDailySlot(slotWithCompletion: DailySlotWithCompletion) {
         val repo = persistenceRepository ?: return
-        val proto = repo.slotToProtocolConfig(slotWithCompletion.slot)
+        val latest = _dailySlots.value.firstOrNull { it.slot.id == slotWithCompletion.slot.id } ?: slotWithCompletion
+        val proto = repo.slotToProtocolConfig(latest.slot)
         if (phaseEngine.selectProtocolIfIdle(proto)) {
             _engineSnapshot.value = phaseEngine.currentSnapshot()
             appendLog("SLOT", "Выбран слот плана: ${slotWithCompletion.slot.titleRu}")
@@ -941,12 +1020,16 @@ object BenchSessionCoordinator {
 
     // --- Продвинутый конструктор тренировок (управление и запуск) ---
 
-    fun saveCustomProgram(program: com.example.domain.CustomWorkoutProgram) {
+    fun saveCustomProgram(program: com.example.domain.CustomWorkoutProgram, onResult: ((Boolean)->Unit)? = null) {
         val repo = persistenceRepository ?: return
         coordinatorScope.launch {
-            repo.saveCustomProgram(program)
-            _customPrograms.value = repo.getAllCustomPrograms()
-            appendLog("PROGRAM", "Сохранена программа конструктора: «${program.title}» (${program.blocks.size} блоков)")
+            val success = runCatching {
+                repo.saveCustomProgram(program)
+                _customPrograms.value = repo.getAllCustomPrograms()
+                appendLog("PROGRAM", "Сохранена программа конструктора: «${program.title}» (${program.blocks.size} блоков)")
+            }.isSuccess
+            if(!success) _databaseErrorMessage.value = "Не удалось сохранить программу. Проверь параметры и повтори."
+            kotlinx.coroutines.withContext(Dispatchers.Main) {onResult?.invoke(success)}
         }
     }
 
@@ -1007,6 +1090,7 @@ object BenchSessionCoordinator {
         val isDemoRun = false
         _lastCompletedSlotDifficulty.value = null
 
+        activeCustomProgramSnapshot = program.copy(blocks=program.blocks.toList())
         val started = phaseEngine.startCustomProgram(
             program = program,
             runId = runId,
@@ -1039,7 +1123,13 @@ object BenchSessionCoordinator {
     }
 
     @Synchronized
-    fun startFreeSession(template: FreeIntervalTemplateEntity): Boolean {
+    fun startFreeSession(requestedTemplate: FreeIntervalTemplateEntity): Boolean {
+        if (requestedTemplate.slotIndex in 101..103 &&
+            (!_trainingStateReady.value || _extraTrainingCycle.value.isLocked(requestedTemplate.slotIndex) || checkpointJob?.isActive == true)) return false
+        val template = if(requestedTemplate.slotIndex in 101..103) {
+            val factory = com.example.data.ExtraWorkoutPresets.all.first { it.slotIndex == requestedTemplate.slotIndex }
+            _trainingConfigurations.value.firstOrNull { it.key == "extra:${requestedTemplate.slotIndex}" }?.applyTo(factory) ?: factory
+        } else requestedTemplate
         if (phaseEngine.currentSnapshot().isActiveOrPaused) {
             appendLog(
                 "GUARD",

@@ -189,3 +189,15 @@ data class CustomWorkoutProgram(
 
     fun expandAllSteps(): List<ExpandedPhaseStep> = blocks.flatMap { it.expandToExecutionSteps() }
 }
+
+/** Validate before persistence/execution without expanding an untrusted sequence. */
+fun CustomWorkoutProgram.validationError(): String? = when {
+    title.isBlank() -> "Укажи название программы"
+    blocks.isEmpty() -> "Добавь хотя бы один блок"
+    blocks.any { block ->
+        if(block.type == WorkoutBlockType.CUSTOM_SEQUENCE)
+            block.customSteps.isEmpty() || block.sequenceCycles !in 1..50 || block.customSteps.any {it.durationSec !in 1..120}
+        else block.contractionSec !in 1..120 || block.relaxationSec !in 1..120 || block.repetitions !in 1..300
+    } -> "Проверь длительности и повторы блоков"
+    else -> null
+}

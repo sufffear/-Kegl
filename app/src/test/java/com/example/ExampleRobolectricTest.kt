@@ -57,12 +57,18 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify story3_3 versionCode 11, applicationId and optional network manifest`() {
+    fun `verify current candidate version, applicationId and optional network manifest`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         assertEquals("Velaris", context.getString(R.string.app_name))
         assertEquals("com.velaris.app", BuildConfig.APPLICATION_ID)
-        assertEquals("0.19.0-rc1", BuildConfig.VERSION_NAME)
-        assertEquals(23, BuildConfig.VERSION_CODE)
+        assertEquals("0.19.0-rc4", BuildConfig.VERSION_NAME)
+        assertEquals(26, BuildConfig.VERSION_CODE)
+        val heroDensity=android.util.TypedValue()
+        context.resources.getValue(R.drawable.chantal_training_hero,heroDensity,true)
+        assertEquals(android.util.TypedValue.DENSITY_NONE,heroDensity.density)
+        assertTrue(BuildConfig::class.java.declaredFields.none {
+            it.name in setOf("GEMINI_API_KEY", "OPENROUTER_API_KEY", "XAI_API_KEY")
+        })
 
         @Suppress("DEPRECATION")
         val packageInfo = context.packageManager.getPackageInfo(
@@ -84,11 +90,13 @@ class ExampleRobolectricTest {
     fun `verify v1_4 3-tab navigation, clean Home without versionCode clutter, and Diagnostics in Settings`() {
         composeTestRule.waitForIdle()
 
-        // 1. В нижней навигации разделы: Главная, Тренировки, Шанталь, Настройки
+        // 1. Четыре раздела; настройки доступны через общую верхнюю панель.
         composeTestRule.onNodeWithTag("nav_home").assertExists()
         composeTestRule.onNodeWithTag("nav_plan").assertExists()
         composeTestRule.onNodeWithTag("nav_chantal").assertExists()
-        composeTestRule.onNodeWithTag("nav_settings").assertExists()
+        composeTestRule.onNodeWithTag("nav_statistics").assertExists()
+        composeTestRule.onNodeWithTag("nav_settings").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("open_settings").assertExists()
         composeTestRule.onNodeWithTag("nav_reader").assertDoesNotExist()
         composeTestRule.onNodeWithTag("nav_workout").assertDoesNotExist()
 
@@ -98,12 +106,14 @@ class ExampleRobolectricTest {
         composeTestRule.onNodeWithTag("home_story_card").assertDoesNotExist()
         composeTestRule.onNodeWithTag("btn_open_reader").assertDoesNotExist()
         composeTestRule.onNodeWithTag("home_workout_card").assertExists()
-        composeTestRule.onNodeWithTag("weekly_overview_card").assertExists()
+        composeTestRule.onNodeWithTag("weekly_overview_card").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("home_streak_summary").assertExists()
 
         // 2. Переход в Тренировку: проверяем 3 горизонтальные вкладки (Утро, Обед, Вечер) и 3 тренировки внутри Утра
         composeTestRule.onNodeWithTag("nav_plan").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("daily_plan_persistence_card").assertExists()
+        composeTestRule.onNodeWithTag("training_hero").assertExists()
+        composeTestRule.onNodeWithTag("training_period_summary").assertExists()
         composeTestRule.onNodeWithTag("plan_group_tab_MORNING").assertExists()
         composeTestRule.onNodeWithTag("plan_group_tab_NOON").assertExists()
         composeTestRule.onNodeWithTag("plan_group_tab_EVENING").assertExists()
@@ -112,13 +122,12 @@ class ExampleRobolectricTest {
         composeTestRule.onNodeWithTag("daily_slot_real_v2_morning_endurance").assertExists()
 
         // 4. Переход в Настройки (вкладки категорий + спойлеры: Оформление, Звук, Образцы, Данные, Диагностика)
-        composeTestRule.onNodeWithTag("nav_settings").performClick()
+        composeTestRule.onNodeWithTag("open_settings").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("settings_category_tabs_row").assertExists()
-        composeTestRule.onNodeWithTag("theme_selector_card").assertExists()
+        composeTestRule.onNodeWithTag("settings_category_backup").assertExists()
 
         // Раскрываем спойлер «Оформление» и проверяем все 5 тем
-        composeTestRule.onNodeWithTag("theme_selector_header").performClick()
+        composeTestRule.onNodeWithTag("settings_category_appearance").performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("theme_option_theme_dawn").assertExists()
         composeTestRule.onNodeWithTag("theme_option_theme_sky").assertExists()
@@ -127,7 +136,8 @@ class ExampleRobolectricTest {
         composeTestRule.onNodeWithTag("theme_option_theme_sakura").assertExists()
 
         // Раскрываем спойлер «Звук, профили и вибрация» и проверяем мягкие и звонкие профили + кнопки сравнения Сжать/Отдых
-        composeTestRule.onNodeWithTag("sound_settings_header")
+        composeTestRule.onNodeWithTag("toolbar_back").performClick()
+        composeTestRule.onNodeWithTag("settings_category_sound")
             .performScrollTo()
             .performClick()
         composeTestRule.waitForIdle()
@@ -141,14 +151,16 @@ class ExampleRobolectricTest {
         composeTestRule.onNodeWithTag("sound_pack_preview_relax_velvet_bowl", useUnmergedTree = true).assertExists()
 
         // Раскрываем спойлер «Прослушать образцы команд»
-        composeTestRule.onNodeWithTag("sound_samples_header")
+        composeTestRule.onNodeWithTag("toolbar_back").performClick()
+        composeTestRule.onNodeWithTag("settings_category_samples")
             .performScrollTo()
             .performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("btn_sample_contraction").assertExists()
 
         // Раскрываем спойлер «Резервные копии и данные»
-        composeTestRule.onNodeWithTag("data_settings_header")
+        composeTestRule.onNodeWithTag("toolbar_back").performClick()
+        composeTestRule.onNodeWithTag("settings_category_backup")
             .performScrollTo()
             .performClick()
         composeTestRule.waitForIdle()
@@ -158,6 +170,9 @@ class ExampleRobolectricTest {
         composeTestRule.onNodeWithTag("btn_restore_backup")
             .performScrollTo()
             .assertExists()
+
+        composeTestRule.onNodeWithTag("toolbar_back").performClick()
+        composeTestRule.onNodeWithTag("settings_category_about").performScrollTo().performClick()
 
         // Технические сведения находятся строго в «Настройки → О приложении → Диагностика»
         composeTestRule.onNodeWithTag("btn_open_diagnostics")
@@ -964,6 +979,8 @@ class ExampleRobolectricTest {
         composeTestRule.waitForIdle()
 
         // Переключаемся на вкладку «Мои интервалы»
+        composeTestRule.onNodeWithTag("btn_other_workouts").performScrollTo().performClick()
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("plan_tab_free").performScrollTo().performClick()
         composeTestRule.waitForIdle()
 
@@ -1016,6 +1033,8 @@ class ExampleRobolectricTest {
         // Запускаем свободный подход из «Тренировки → Мои интервалы»
         composeTestRule.onNodeWithTag("nav_plan").performClick()
         composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("btn_other_workouts").performScrollTo().performClick()
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("plan_tab_free").performScrollTo().performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("btn_start_free_0")
@@ -1030,10 +1049,17 @@ class ExampleRobolectricTest {
         assertNotNull(initialRunId)
 
         // Переходим на экран Настроек -> должна появиться компактная плашка текущей тренировки над нижней навигацией
-        composeTestRule.onNodeWithTag("nav_settings").performClick()
+        composeTestRule.onNodeWithTag("open_settings").performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("active_session_return_banner").assertExists()
         composeTestRule.onNodeWithTag("btn_return_to_workout").assertExists()
+
+        for (section in listOf("nav_statistics", "nav_chantal")) {
+            composeTestRule.onNodeWithTag(section).performClick()
+            composeTestRule.waitForIdle()
+            composeTestRule.onNodeWithTag("active_session_return_banner").assertExists()
+            assertEquals(initialRunId, com.example.service.BenchSessionCoordinator.engineSnapshot.value.runId)
+        }
 
         // Переходим на Главную -> плашка тоже видна, а runId не изменился (второй таймер не создан)
         composeTestRule.onNodeWithTag("nav_home").performClick()
@@ -1096,6 +1122,11 @@ class ExampleRobolectricTest {
 
     @Test
     fun `stability chain calendar computes 28-day heatmap, streak freeze bridge, pure hold seconds, and switches UI mode`() = runBlocking {
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("nav_statistics").performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag("btn_stats_details").performScrollTo().performClick()
         composeTestRule.waitForIdle()
 
         // Проверяем элементы мотивации, витрину жетонов, дельту недель и 60-сек блиц на Главной

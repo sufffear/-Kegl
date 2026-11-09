@@ -29,7 +29,13 @@ internal fun ChantalDenShelfView(items: List<ChantalShelfItem>, selected: List<S
             TextButton(onClick = { arranging = true }, modifier = Modifier.testTag("shelf_arrange")) { Text("Расставить вещи", color = HobbitGold) }
         }
     }
-    if (arranging || inspected != null) Dialog(
+    inspected?.let { id ->
+        items.firstOrNull { it.id == id }?.let { item ->
+            ChantalItemDetailsDialog("${item.emoji} ${item.title}", item.memory, availability = "Шанталь: «${item.reaction}»", closeTag = "shelf_close",
+                onDismiss = { inspected = null })
+        }
+    }
+    if (arranging) Dialog(
         onDismissRequest = { arranging = false; inspected = null }, properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(color = HobbitCardBg, shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth().fillMaxHeight(0.85f).padding(16.dp)) {

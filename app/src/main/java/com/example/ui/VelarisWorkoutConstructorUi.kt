@@ -1,5 +1,9 @@
 package com.example.ui
 
+import com.example.domain.validationError
+
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +21,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -210,6 +215,7 @@ fun WorkoutConstructorTabContent(
         EditProgramDialog(
             program = prog,
             palette = palette,
+            trainingLayout = true,
             onDismiss = { editingProgram = null },
             onSave = { saved ->
                 onSaveProgram(saved)
@@ -528,7 +534,8 @@ fun EditProgramDialog(
     program: CustomWorkoutProgram,
     palette: VelarisPalette,
     onDismiss: () -> Unit,
-    onSave: (CustomWorkoutProgram) -> Unit
+    onSave: (CustomWorkoutProgram) -> Unit,
+    trainingLayout: Boolean = false
 ) {
     var title by remember { mutableStateOf(program.title) }
     var description by remember { mutableStateOf(program.description) }
@@ -544,6 +551,8 @@ fun EditProgramDialog(
     }
 
     AlertDialog(
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = !trainingLayout),
+        modifier = if(trainingLayout) Modifier.padding(16.dp).widthIn(max=560.dp).fillMaxWidth() else Modifier,
         onDismissRequest = onDismiss,
         containerColor = palette.surface,
         titleContentColor = palette.textPrimary,
@@ -559,7 +568,8 @@ fun EditProgramDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = 4.dp)
+                    .then(if(trainingLayout) Modifier.heightIn(max=(androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp*.55f).dp).verticalScroll(rememberScrollState()) else Modifier),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 OutlinedTextField(
@@ -708,7 +718,7 @@ fun EditProgramDialog(
                     )
                     onSave(finalProg)
                 },
-                enabled = blocks.isNotEmpty(),
+                enabled = program.copy(title=title.ifBlank {"Моя программа"},blocks=blocks).validationError()==null,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = palette.primaryAccent,
                     contentColor = palette.onPrimaryAccent

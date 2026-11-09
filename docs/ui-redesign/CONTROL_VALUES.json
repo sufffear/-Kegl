@@ -1,0 +1,68 @@
+{
+  "purpose": "UI redesign audit only; NOT an importable save or device backup",
+  "code_head": "bc045f0f0d58f9c683240fb1fd9c057e994e607a",
+  "installed_version": {
+    "status": "USER_REPORTED_NOT_DEVICE_VERIFIED",
+    "value": "0.19.0-rc1"
+  },
+  "device_backup": {
+    "status": "NOT_RUN",
+    "path": null,
+    "sha256": null
+  },
+  "historical_screenshot_observations": {
+    "provenance": "Drive folder 1QLHeO2giQzebHNlkTJfYgE_2k4QOfL3t; uploaded before RC1; not current live data",
+    "training": {
+      "source": "Screenshot_20261109_073329_Velaris.jpg",
+      "real_sessions_all_time_displayed": 8,
+      "real_sessions_last_7_days_displayed": 8,
+      "current_streak_days_displayed": 2,
+      "pure_hold_seconds_displayed": 1100,
+      "completed_sessions_by_local_date_displayed": {
+        "2026-11-07": 5,
+        "2026-11-08": 3,
+        "2026-11-09": 0
+      },
+      "today_planned_completed_displayed": 0,
+      "today_planned_assigned_displayed": 9,
+      "freeze_shield_display": "1/3"
+    },
+    "chantal": {
+      "source": "Screenshot_20261109_072718_Velaris.jpg",
+      "stage_displayed": "I",
+      "completed_adventures_displayed": 2,
+      "xp_displayed": 29,
+      "coins_displayed": 42,
+      "available_energy_displayed": 20,
+      "inventory_count_displayed": 2,
+      "den_level_displayed": 1,
+      "interior_purchases_displayed": 0,
+      "mood_percent_displayed": 100,
+      "remaining_adventures_to_next_age_displayed": 8
+    }
+  },
+  "device_before_after_control_required": {
+    "status": "NOT_RUN_NO_DEVICE",
+    "training": {
+      "real_session_ids_and_count": null,
+      "demo_and_free_counts": null,
+      "streak_and_pure_hold_seconds": null,
+      "local_dates_and_frozen_dates": null,
+      "plan_assignments_and_interval_templates": null,
+      "active_workout_checkpoint": null
+    },
+    "chantal": {
+      "age_xp_traits_emotion": null,
+      "coins_earned_bonus_spent_energy": null,
+      "inventory_ids_loadout_owned_shop_ids": null,
+      "active_journey_pending_episode_reward": null,
+      "canonical_story_journal_decision_receipts": null,
+      "legacy_habits_home_flags_and_feedback": null,
+      "final_start_marker_present": null
+    },
+    "settings": {
+      "theme_and_audio": null,
+      "provider_and_masked_key_presence_only": null
+    }
+  }
+}

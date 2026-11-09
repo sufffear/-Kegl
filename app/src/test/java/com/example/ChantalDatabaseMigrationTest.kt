@@ -32,7 +32,7 @@ class ChantalDatabaseMigrationTest {
             old.version = 5
         }
         val db = Room.databaseBuilder(context, VelarisDatabase::class.java, name)
-            .addMigrations(VelarisDatabase.MIGRATION_5_6).allowMainThreadQueries().build()
+            .addMigrations(VelarisDatabase.MIGRATION_5_6,VelarisDatabase.MIGRATION_6_7).allowMainThreadQueries().build()
         try {
             assertNull(db.chantalDao().aggregate())
             db.openHelper.readableDatabase.query("SELECT title FROM custom_programs WHERE id = 'retained'").use { cursor ->

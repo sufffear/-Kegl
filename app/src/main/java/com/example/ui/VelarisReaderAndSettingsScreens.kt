@@ -1191,6 +1191,8 @@ fun VelarisSettingsScreen(
     onDismissBackupBanners: () -> Unit = {},
     onOpenDiagnostics: () -> Unit,
     onReturnToWorkout: () -> Unit,
+    settingsCategory: String? = null,
+    onOpenSettingsCategory: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val palette = LocalVelarisPalette.current
@@ -1365,57 +1367,18 @@ fun VelarisSettingsScreen(
             .testTag("settings_screen"),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // 0. Верхние горизонтальные вкладки-фильтры настроек (Все | Вид и звук | Данные)
-        var selectedSettingsTab by rememberSaveable { mutableStateOf("all") }
-        var isThemeExpanded by rememberSaveable { mutableStateOf(false) }
-        var isSoundExpanded by rememberSaveable { mutableStateOf(false) }
-        var isSamplesExpanded by rememberSaveable { mutableStateOf(false) }
-        var isDataExpanded by rememberSaveable { mutableStateOf(false) }
-
-        val showAppearanceAndSound = selectedSettingsTab == "all" || selectedSettingsTab == "style_sound"
-        val showDataAndSystem = selectedSettingsTab == "all" || selectedSettingsTab == "data_system"
-        val effectiveDataExpanded = isDataExpanded || backupOperationBanner != null || backupErrorMessage != null
-
-        Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = palette.surface,
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, palette.outline.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
-                .testTag("settings_category_tabs_row")
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                SettingsCategoryTabChip(
-                    title = "Все",
-                    selected = selectedSettingsTab == "all",
-                    onClick = { selectedSettingsTab = "all" },
-                    testTag = "settings_tab_all",
-                    modifier = Modifier.weight(1f)
-                )
-                SettingsCategoryTabChip(
-                    title = "Вид и звук",
-                    selected = selectedSettingsTab == "style_sound",
-                    onClick = { selectedSettingsTab = "style_sound" },
-                    testTag = "settings_tab_style_sound",
-                    modifier = Modifier.weight(1f)
-                )
-                SettingsCategoryTabChip(
-                    title = "Данные и инфо",
-                    selected = selectedSettingsTab == "data_system",
-                    onClick = { selectedSettingsTab = "data_system" },
-                    testTag = "settings_tab_data_system",
-                    modifier = Modifier.weight(1f)
-                )
+        if (settingsCategory == null) {
+            VelarisSettingsCategories(onOpenSettingsCategory)
+            if (backupOperationBanner != null || backupErrorMessage != null) {
+                Text(backupErrorMessage ?: backupOperationBanner.orEmpty(), color = palette.textPrimary)
+                OutlinedButton(onClick = { onOpenSettingsCategory("backup") }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Открыть резервные копии")
+                }
             }
+            return@Column
         }
-
-        if (showAppearanceAndSound) {
-            // 1. Спойлер «Оформление» (по нажатию раскрывается список из 5 светлых тем)
+        if (settingsCategory == "appearance") {
+            // Оформление: все существующие темы доступны сразу.
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1428,7 +1391,6 @@ fun VelarisSettingsScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { isThemeExpanded = !isThemeExpanded }
                             .padding(horizontal = 14.dp, vertical = 12.dp)
                             .testTag("theme_selector_header"),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1492,16 +1454,11 @@ fun VelarisSettingsScreen(
                                     .clip(CircleShape)
                                     .background(currentPreview.primaryAccent)
                             )
-                            Icon(
-                                imageVector = if (isThemeExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                contentDescription = if (isThemeExpanded) "Свернуть оформление" else "Раскрыть оформление",
-                                tint = palette.textSecondary,
-                                modifier = Modifier.size(20.dp)
-                            )
+
                         }
                     }
 
-                    AnimatedVisibility(visible = isThemeExpanded) {
+
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1589,11 +1546,13 @@ fun VelarisSettingsScreen(
                                 }
                             }
                         }
-                    }
+
                 }
             }
 
-            // 2. Спойлер «Параметры звука, профили и вибрация»
+        }
+        if (settingsCategory == "sound") {
+            // Звук, профили и вибрация.
             val soundSummaryRu = buildString {
                 append(if (settings.soundEnabled) settings.soundPack.titleRu else "Без звука")
                 append(" · ${(settings.signalVolume * 100).toInt()}%")
@@ -1609,16 +1568,14 @@ fun VelarisSettingsScreen(
                 colors = CardDefaults.cardColors(containerColor = palette.surface)
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    SettingsSpoilerHeader(
+                    SettingsSectionHeader(
                         icon = Icons.Default.VolumeUp,
                         title = "Звук, профили и вибрация",
                         subtitle = soundSummaryRu,
-                        expanded = isSoundExpanded,
-                        onToggle = { isSoundExpanded = !isSoundExpanded },
                         testTag = "sound_settings_header"
                     )
 
-                    AnimatedVisibility(visible = isSoundExpanded) {
+
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1995,11 +1952,13 @@ fun VelarisSettingsScreen(
                                 )
                             }
                         }
-                    }
+
                 }
             }
 
-            // 3. Спойлер «Прослушать образцы команд»
+        }
+        if (settingsCategory == "samples") {
+            // Образцы команд.
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2009,16 +1968,14 @@ fun VelarisSettingsScreen(
                 colors = CardDefaults.cardColors(containerColor = palette.surface)
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    SettingsSpoilerHeader(
+                    SettingsSectionHeader(
                         icon = Icons.Default.MusicNote,
                         title = "Прослушать образцы команд",
                         subtitle = "Тест сигналов удержания, отдыха, метронома и финала",
-                        expanded = isSamplesExpanded,
-                        onToggle = { isSamplesExpanded = !isSamplesExpanded },
                         testTag = "sound_samples_header"
                     )
 
-                    AnimatedVisibility(visible = isSamplesExpanded) {
+
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -2071,13 +2028,13 @@ fun VelarisSettingsScreen(
                                 }
                             }
                         }
-                    }
+
                 }
             }
         }
 
-        if (showDataAndSystem) {
-            // 4. Спойлер «Резервные копии и данные»
+        if (settingsCategory == "backup") {
+            // Резервные копии и данные.
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2087,16 +2044,14 @@ fun VelarisSettingsScreen(
                 colors = CardDefaults.cardColors(containerColor = palette.surface)
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    SettingsSpoilerHeader(
+                    SettingsSectionHeader(
                         icon = Icons.Default.SettingsBackupRestore,
                         title = "Резервные копии и данные",
                         subtitle = "Экспорт истории, шаблонов и восстановление из ZIP",
-                        expanded = effectiveDataExpanded,
-                        onToggle = { isDataExpanded = !effectiveDataExpanded },
                         testTag = "data_settings_header"
                     )
 
-                    AnimatedVisibility(visible = effectiveDataExpanded) {
+
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -2273,10 +2228,12 @@ fun VelarisSettingsScreen(
                                 }
                             }
                         }
-                    }
+
                 }
             }
 
+        }
+        if (settingsCategory == "about") {
             // 5. Карточка «О приложении и Диагностика»
             Card(
                 modifier = Modifier
@@ -2301,7 +2258,7 @@ fun VelarisSettingsScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Инженерный стенд, журнал сигналов и проверка службы",
+                            text = "Сведения о версии и проверка работы приложения",
                             style = MaterialTheme.typography.labelSmall,
                             color = palette.textSecondary
                         )
@@ -2338,104 +2295,15 @@ fun VelarisSettingsScreen(
 }
 
 @Composable
-private fun SettingsCategoryTabChip(
-    title: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    testTag: String,
-    modifier: Modifier = Modifier
-) {
+private fun SettingsSectionHeader(icon: ImageVector, title: String, subtitle: String, testTag: String) {
     val palette = LocalVelarisPalette.current
-    val bgColor = if (selected) palette.primaryAccent else Color.Transparent
-    val contentColor = if (selected) palette.onPrimaryAccent else palette.textSecondary
-
-    Box(
-        modifier = modifier
-            .heightIn(min = 38.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(bgColor)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 6.dp)
-            .testTag(testTag),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelMedium,
-            color = contentColor,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-private fun SettingsSpoilerHeader(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    testTag: String
-) {
-    val palette = LocalVelarisPalette.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onToggle)
-            .padding(horizontal = 14.dp, vertical = 12.dp)
-            .testTag(testTag),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(palette.primaryAccent.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = palette.primaryAccent,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = palette.textPrimary,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = palette.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+    Row(Modifier.fillMaxWidth().padding(14.dp).testTag(testTag), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = palette.primaryAccent)
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = palette.textPrimary)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = palette.textSecondary)
         }
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        Icon(
-            imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-            contentDescription = if (expanded) "Свернуть" else "Развернуть",
-            tint = palette.textSecondary,
-            modifier = Modifier.size(20.dp)
-        )
     }
 }
 

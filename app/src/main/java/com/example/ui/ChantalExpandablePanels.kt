@@ -102,14 +102,15 @@ internal fun ChantalExpeditionAndSubPanelsSection(
     hasPendingStory: Boolean,
     preferredRegionTitle: String?,
     onOpenWorkoutPlan: () -> Unit,
+    showRouteHeading: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text("Маршрут: ${preferredRegionTitle ?: "выбирает Шанталь"}", color = HobbitCream)
-        if (hasPendingStory) Text("Сначала прочитай историю предыдущего похода", color = HobbitMuted)
+        if (showRouteHeading) Text("Маршрут: ${preferredRegionTitle ?: "выбирает Шанталь"}", color = HobbitCream)
+        if (showRouteHeading && hasPendingStory) Text("Сначала прочитай историю предыдущего похода", color = HobbitMuted)
         // 1. ОТДЕЛЬНАЯ ИГРОВАЯ ПАНЕЛЬ ПОХОДА И 4 СЛОТОВ ЭКИПИРОВКИ (открывается кнопкой «Поход» или при активном походе)
         AnimatedVisibility(
             visible = denAccordionTab == "loadout" || isJourneyActive,
@@ -666,6 +667,7 @@ internal fun ChantalExpeditionPrepContent(
                                             Modifier
                                         }
                                     )
+                                    .testTag("gear_item_${gear.id}")
                                     .clickable {
                                         onSelectSlotInspectItemId(if (isSelectedInspect) null else gear.id)
                                     }
@@ -697,68 +699,19 @@ internal fun ChantalExpeditionPrepContent(
                     }
 
                     slotItems.find { it.id == activeSlotInspectItemId }?.let { inspectGear ->
-                        val isOwned = if (inspectGear.category == ChantalShopCategory.CONSUMABLE) {
-                            (pantryProvisionCounts[inspectGear.id] ?: 0) > 0
-                        } else inspectGear.id in ownedShopItemIds
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = HobbitElevatedBg,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = "${inspectGear.emoji} ${inspectGear.titleRu}",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontFamily = FontFamily.SansSerif,
-                                    fontWeight = FontWeight.Bold,
-                                    color = HobbitCream
-                                )
-                                Text(
-                                    text = inspectGear.gameplayEffectRu,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.SansSerif,
-                                    fontWeight = FontWeight.Medium,
-                                    color = HobbitEmerald
-                                )
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    if (isOwned) {
-                                        Button(
-                                            onClick = { onToggleEquipGear(activeLoadoutSlotPicker, inspectGear) },
-                                            colors = ButtonDefaults.buttonColors(containerColor = LocalVelarisPalette.current.selectedContainer),
-                                            shape = RoundedCornerShape(10.dp)
-                                        ) {
-                                            Text(
-                                                "Взять / Снять",
-                                                style = MaterialTheme.typography.labelLarge,
-                                                fontFamily = FontFamily.SansSerif,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color.White
-                                            )
-                                        }
-                                    } else {
-                                        Button(
-                                            onClick = { onBuyAndEquipGear(inspectGear) },
-                                            enabled = coins >= inspectGear.priceCoins,
-                                            colors = ButtonDefaults.buttonColors(containerColor = HobbitCardBg),
-                                            shape = RoundedCornerShape(10.dp)
-                                        ) {
-                                            Text(
-                                                "Купить · ${inspectGear.priceCoins} 🪙",
-                                                style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
-                                                fontFamily = FontFamily.SansSerif,
-                                                fontWeight = FontWeight.Bold,
-                                                color = HobbitCream
-                                            )
-                                        }
-                                    }
-                                }
-                            }
+                        androidx.compose.runtime.key(inspectGear.id) {
+                            val isOwned = if (inspectGear.category == ChantalShopCategory.CONSUMABLE)
+                                (pantryProvisionCounts[inspectGear.id] ?: 0) > 0 else inspectGear.id in ownedShopItemIds
+                            ChantalItemDetailsDialog("${inspectGear.emoji} ${inspectGear.titleRu}",
+                                "${inspectGear.descriptionRu}\n\n${inspectGear.gameplayEffectRu}",
+                                if (isOwned) "Есть в снаряжении" else "Цена: ${inspectGear.priceCoins} М · У тебя: $coins М" +
+                                    if (coins < inspectGear.priceCoins) " · Не хватает монет" else "",
+                                listOf(if (isOwned) ChantalItemAction("equip", "Взять / Снять",
+                                    success = "Снаряжение обновлено.", perform = { onToggleEquipGear(activeLoadoutSlotPicker, inspectGear) })
+                                else ChantalItemAction("buy_equip", "Купить и взять · ${inspectGear.priceCoins} М", coins >= inspectGear.priceCoins,
+                                    "Купить «${inspectGear.titleRu}» за ${inspectGear.priceCoins} М и взять в поход?",
+                                    "Покупка получена, снаряжение обновлено.", { onBuyAndEquipGear(inspectGear) })),
+                                onDismiss = { onSelectSlotInspectItemId(null) })
                         }
                     }
                 }

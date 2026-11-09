@@ -1,6 +1,7 @@
 package com.example.data
 
 import com.example.domain.CustomWorkoutProgram
+import com.example.domain.validationError
 import com.example.domain.DEFAULT_DEMO_PROTOCOLS
 import com.example.domain.DemoProtocolConfig
 import com.example.domain.PhaseEngineSnapshot
@@ -296,9 +297,10 @@ class WorkoutPersistenceRepository(
         val completionsBySlot = dao.getCompletionsForDate(localDate = localDate, isDemo = isDemo)
             .associateBy { it.slotId }
 
+        val configurations = dao.getTrainingConfigurations().associateBy { it.key }
         return slots.map { slot ->
             DailySlotWithCompletion(
-                slot = slot,
+                slot = configurations[TrainingConfiguration.from(slot).key]?.applyTo(slot) ?: slot,
                 completion = completionsBySlot[slot.id]
             )
         }
@@ -357,30 +359,22 @@ class WorkoutPersistenceRepository(
 
         val availableFreezeShields = (totalEarnedShields - effectiveFrozenDates.size).coerceIn(0, 3)
 
+        val executions = dao.getExecutionParameters().associateBy {it.runId}
         fun computeCompletionHoldSeconds(comp: WorkoutCompletionEntity): Int {
-            val slot = allSlotsMap[comp.slotId]
-            if (slot != null) {
-                return ((slot.contractionMs * slot.repetitions) / 1000L).toInt().coerceAtLeast(1)
-            }
+            executions[comp.runId]?.let {return (it.holdMs/1000L).toInt()}
             val run = allRunsMap[comp.runId]
-            if (run != null) {
-                return ((run.contractionMs * run.repetitions) / 1000L).toInt().coerceAtLeast(1)
-            }
-            return 100
+            if (run != null) return ((run.contractionMs * run.repetitions) / 1000L).toInt().coerceAtLeast(1)
+            val slot = allSlotsMap[comp.slotId]
+            return slot?.let { ((it.contractionMs * it.repetitions) / 1000L).toInt().coerceAtLeast(1) } ?: 100
         }
 
         fun computeCompletionTotalSeconds(comp: WorkoutCompletionEntity): Int {
-            val slot = allSlotsMap[comp.slotId]
-            if (slot != null) {
-                return (((slot.contractionMs + slot.relaxationMs) * slot.repetitions) / 1000L).toInt().coerceAtLeast(1)
-            }
+            executions[comp.runId]?.let {return (it.totalMs/1000L).toInt()}
             val run = allRunsMap[comp.runId]
-            if (run != null) {
-                val fromProto = (((run.contractionMs + run.relaxationMs) * run.repetitions) / 1000L).toInt()
-                val fromConfirmed = (run.confirmedActiveMs / 1000L).toInt()
-                return maxOf(fromProto, fromConfirmed, 1)
-            }
-            return 200
+            if (run != null) return maxOf(((run.contractionMs+run.relaxationMs)*run.repetitions/1000L).toInt(),
+                (run.confirmedActiveMs/1000L).toInt(),1)
+            val slot = allSlotsMap[comp.slotId]
+            return slot?.let { (((it.contractionMs+it.relaxationMs)*it.repetitions)/1000L).toInt().coerceAtLeast(1) } ?: 200
         }
 
         fun resolveCompletionTitleRu(comp: WorkoutCompletionEntity): String {
@@ -793,19 +787,24 @@ class WorkoutPersistenceRepository(
 
     // --- Продвинутый конструктор тренировок (программы из 4 типов блоков) ---
 
-    suspend fun getAllCustomPrograms(): List<CustomWorkoutProgram> {
-        val entities = dao.getAllCustomPrograms()
-        if (entities.isEmpty()) {
-            val defaults = CustomProgramJsonParser.createDefaultPrograms()
-            dao.upsertCustomPrograms(defaults.mapIndexed { idx, prog -> CustomProgramJsonParser.toEntity(prog, idx) })
-            return defaults
+    suspend fun seedCustomProgramsIfEmpty() {
+        if (dao.getAllCustomPrograms().isEmpty()) {
+            dao.upsertCustomPrograms(CustomProgramJsonParser.createDefaultPrograms().mapIndexed {idx,program ->
+                CustomProgramJsonParser.toEntity(program,idx)
+            })
         }
-        return entities.map { CustomProgramJsonParser.toDomain(it) }
     }
 
-    suspend fun saveCustomProgram(program: CustomWorkoutProgram, sortOrder: Int = 0) {
+    suspend fun getAllCustomPrograms(): List<CustomWorkoutProgram> =
+        dao.getAllCustomPrograms().map { CustomProgramJsonParser.toDomain(it) }
+
+
+    suspend fun saveCustomProgram(program: CustomWorkoutProgram, sortOrder: Int? = null) {
+        require(program.validationError()==null) { program.validationError().orEmpty() }
         val updated = program.copy(updatedAtEpochMs = timeProvider.currentWallTimeMs())
-        dao.upsertCustomProgram(CustomProgramJsonParser.toEntity(updated, sortOrder))
+        val order = sortOrder ?: dao.getCustomProgramById(program.id)?.sortOrder
+            ?: ((dao.getAllCustomPrograms().maxOfOrNull {it.sortOrder} ?: -1)+1)
+        dao.upsertCustomProgram(CustomProgramJsonParser.toEntity(updated, order))
     }
 
     suspend fun deleteCustomProgram(id: String) {
@@ -846,17 +845,34 @@ class WorkoutPersistenceRepository(
         )
     }
 
-    suspend fun saveRunCheckpoint(snapshot: PhaseEngineSnapshot) {
+    private fun executionParameters(snapshot: PhaseEngineSnapshot,program: CustomWorkoutProgram?): WorkoutExecutionParameters? {
+        val id=snapshot.runId ?: return null
+        // Never fabricate a constructor snapshot during recovery; retain the first committed one.
+        if(snapshot.isCustomProgram && program==null) return null
+        val json=if(program!=null) CustomProgramJsonParser.serializeBlocks(program.blocks)
+            else org.json.JSONObject().put("contractionMs",snapshot.protocol.contractionMs)
+                .put("relaxationMs",snapshot.protocol.relaxationMs).put("repetitions",snapshot.protocol.repetitions).toString()
+        val hold=program?.blocks?.sumOf { block ->
+            if(block.type==com.example.domain.WorkoutBlockType.CUSTOM_SEQUENCE)
+                block.customSteps.filter {it.phaseType==com.example.domain.PhaseType.CONTRACTION}.sumOf {it.durationMs}*block.sequenceCycles
+            else block.contractionSec*1000L*block.repetitions
+        } ?: (snapshot.protocol.contractionMs*snapshot.protocol.repetitions)
+        return WorkoutExecutionParameters(id,json,program?.totalDurationMs ?: snapshot.protocol.totalActiveDurationMs,hold)
+    }
+
+    suspend fun saveRunCheckpoint(snapshot: PhaseEngineSnapshot,program: CustomWorkoutProgram? = null) {
         val entity = checkpointEntity(snapshot) ?: return
-        dao.persistRunCheckpoint(entity)
+        dao.persistRunCheckpoint(entity,execution=executionParameters(snapshot,program))
     }
 
     suspend fun completeRunAtomically(
         snapshot: PhaseEngineSnapshot,
-        optionalDifficulty: String? = null
+        optionalDifficulty: String? = null,
+        program: CustomWorkoutProgram? = null
     ): Boolean {
+        if(snapshot.status != RunStatus.COMPLETED) return false
         val entity = checkpointEntity(snapshot) ?: return false
-        return dao.persistRunCheckpoint(entity, timeProvider.currentWallTimeMs(), optionalDifficulty)
+        return dao.persistRunCheckpoint(entity, timeProvider.currentWallTimeMs(), optionalDifficulty, executionParameters(snapshot,program))
     }
 
     suspend fun recoverInterruptedRunAfterProcessDeath(): WorkoutRunEntity? {

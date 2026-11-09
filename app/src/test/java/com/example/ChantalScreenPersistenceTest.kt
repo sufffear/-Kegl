@@ -143,11 +143,13 @@ class ChantalScreenPersistenceTest {
         compose.waitForIdle()
 
         // State 1: Compact Den with closed menu — verify scene, header, status bar, 4 quick actions, story card, and hidden expedition panel
-        compose.onNodeWithTag("chantal_compact_header").assertIsDisplayed()
+        compose.onNodeWithTag("chantal_context_action").assertExists()
         compose.onNodeWithTag("chantal_interactive_portrait").assertIsDisplayed()
-        compose.onNodeWithTag("chantal_status_bar").assertIsDisplayed()
-        compose.onNodeWithTag("chantal_quick_actions_row").assertIsDisplayed()
-        compose.onNodeWithTag("chantal_compact_story_card").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("chantal_status_bar").assertDoesNotExist()
+        compose.onNodeWithTag("btn_quick_bag").assertExists()
+        compose.onNodeWithTag("btn_quick_story").assertExists()
+        compose.onNodeWithTag("btn_quick_interior").assertExists()
+        compose.onNodeWithTag("chantal_compact_story_card").assertDoesNotExist()
         compose.onNodeWithTag("chantal_expedition_prep_panel").assertDoesNotExist()
         compose.runOnIdle {
             capturedRootView?.let { saveCurrentWindowsScreenshot(it, "1_chantal_den_closed_menu.png") }
@@ -160,27 +162,19 @@ class ChantalScreenPersistenceTest {
         // State 2: Open main modal menu — verify all 6 sections exist and portrait Y did not shift down
         compose.onNodeWithTag("btn_chantal_menu").performScrollTo().performClick()
         compose.waitForIdle()
-        compose.onNodeWithTag("chantal_modal_menu").assertIsDisplayed()
-        compose.onNodeWithTag("modal_nav_den").assertIsDisplayed()
-        compose.onNodeWithTag("modal_nav_map").assertIsDisplayed()
-        compose.onNodeWithTag("modal_nav_bag").assertIsDisplayed()
-        compose.onNodeWithTag("modal_nav_shop").assertIsDisplayed()
-        compose.onNodeWithTag("modal_nav_journal").assertIsDisplayed()
-        compose.onNodeWithTag("modal_nav_ai").assertIsDisplayed()
-        compose.runOnIdle {
-            capturedRootView?.let { saveCurrentWindowsScreenshot(it, "2_chantal_open_main_menu.png") }
+        compose.onNodeWithTag("chantal_modal_menu").assertDoesNotExist()
+        compose.onNodeWithTag("chantal_world_menu").assertExists()
+        for (tag in listOf("chantal_world_map", "chantal_world_shop", "chantal_world_development", "chantal_world_ai")) {
+            compose.onNodeWithTag(tag).performScrollTo().assertIsDisplayed()
         }
-
-        val portraitTopDuringMenu = compose.onNodeWithTag("chantal_interactive_portrait")
-            .fetchSemanticsNode().boundsInRoot.top
-        assertEquals(portraitTopBeforeMenu, portraitTopDuringMenu, 0.5f)
-
-        // Close modal menu
-        compose.onNodeWithTag("btn_close_chantal_modal").performClick()
+        compose.onNodeWithTag("chantal_interactive_portrait").assertDoesNotExist()
+        compose.onNodeWithTag("btn_chantal_back").performScrollTo().performClick()
         compose.waitForIdle()
+        val portraitTopAfterBack = compose.onNodeWithTag("chantal_interactive_portrait").performScrollTo().fetchSemanticsNode().boundsInRoot.top
+        assertEquals(portraitTopBeforeMenu, portraitTopAfterBack, 0.5f)
 
-        // State 3: Open Expedition preparation panel via the «Поход» button (btn_quick_expedition)
-        compose.onNodeWithTag("btn_quick_expedition").performScrollTo().performClick()
+        // State 3: Open Expedition preparation panel via the «Поход» button (chantal_context_action)
+        compose.onNodeWithTag("chantal_context_action").performScrollTo().performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("chantal_expedition_prep_panel").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("slot_card_OUTFIT").assertIsDisplayed()
@@ -228,7 +222,7 @@ class ChantalScreenPersistenceTest {
         compose.runOnIdle { earnedEnergy = earnThree("second") }
         compose.waitForIdle()
         if (compose.onAllNodesWithTag("btn_start_chantal_journey").fetchSemanticsNodes().isEmpty()) {
-            compose.onNodeWithTag("btn_quick_expedition").performScrollTo().performClick()
+            compose.onNodeWithTag("chantal_context_action").performScrollTo().performClick()
         }
         compose.onNodeWithTag("btn_start_chantal_journey").performScrollTo().assertIsEnabled().performClick()
         compose.waitForIdle()

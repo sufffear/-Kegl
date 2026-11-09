@@ -3,7 +3,6 @@ package com.example.ui
 import android.animation.ValueAnimator
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -23,6 +22,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -39,6 +39,8 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Pets
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -52,6 +54,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -60,23 +63,33 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -99,7 +112,7 @@ private val MAIN_NAV_DESTINATIONS = listOf(
     VelarisNavDestination.HOME,
     VelarisNavDestination.PLAN,
     VelarisNavDestination.CHANTAL,
-    VelarisNavDestination.SETTINGS
+    VelarisNavDestination.STATISTICS
 )
 
 private fun resolveRingColor(status: RunStatus, currentPhase: PhaseType, palette: com.example.ui.theme.VelarisPalette): Color = when (status) {
@@ -128,7 +141,7 @@ fun ActiveWorkoutTimerRing(
     modifier: Modifier = Modifier
 ) {
     val animatorsEnabled = remember {
-        runCatching { ValueAnimator.areAnimatorsEnabled() }.getOrDefault(true) &&
+        runCatching { (android.os.Build.VERSION.SDK_INT < 26 || ValueAnimator.areAnimatorsEnabled()) }.getOrDefault(true) &&
             !android.os.Build.FINGERPRINT.equals("robolectric", ignoreCase = true)
     }
 
@@ -289,6 +302,12 @@ fun TechCheckScreen(
     val isWakeLockHeld by viewModel.isWakeLockHeld.collectAsStateWithLifecycle()
     val isServiceForeground by viewModel.isServiceForeground.collectAsStateWithLifecycle()
     val dailySlots by viewModel.dailySlots.collectAsStateWithLifecycle()
+    val trainingStateReady by viewModel.trainingStateReady.collectAsStateWithLifecycle()
+    val trainingConfigurations by viewModel.trainingConfigurations.collectAsStateWithLifecycle()
+    val extraTrainingCycle by viewModel.extraTrainingCycle.collectAsStateWithLifecycle()
+    val configuredExtras = com.example.data.ExtraWorkoutPresets.all.map { template ->
+        trainingConfigurations.firstOrNull { it.key == "extra:${template.slotIndex}" }?.applyTo(template) ?: template
+    }
     val freeTemplates by viewModel.freeTemplates.collectAsStateWithLifecycle()
     val customPrograms by viewModel.customPrograms.collectAsStateWithLifecycle()
     val isZeroSlotDemoMode by viewModel.isZeroSlotDemoMode.collectAsStateWithLifecycle()
@@ -297,6 +316,13 @@ fun TechCheckScreen(
     val workoutEnergy by viewModel.workoutEnergy.collectAsStateWithLifecycle()
     val realCompletionsCount by viewModel.realCompletionsCount.collectAsStateWithLifecycle()
     val weeklyOverview by viewModel.weeklyOverview.collectAsStateWithLifecycle()
+    val workoutJournal by viewModel.workoutJournal.collectAsStateWithLifecycle()
+    val statisticsDate by viewModel.statisticsDate.collectAsStateWithLifecycle()
+    val journalDate by viewModel.journalDate.collectAsStateWithLifecycle()
+    val journalEntryId by viewModel.journalEntryId.collectAsStateWithLifecycle()
+    LaunchedEffect(currentDestination, weeklyOverview.totalRealCompletionsAllTime, snapshot.runId, snapshot.status) {
+        if (currentDestination in listOf(VelarisNavDestination.WORKOUT_JOURNAL, VelarisNavDestination.WORKOUT_SESSION)) viewModel.refreshWorkoutJournal()
+    }
     val storyState by viewModel.storyState.collectAsStateWithLifecycle()
     val pendingRestorePreview by viewModel.pendingRestorePreview.collectAsStateWithLifecycle()
     val backupOperationBanner by viewModel.backupOperationBanner.collectAsStateWithLifecycle()
@@ -306,18 +332,39 @@ fun TechCheckScreen(
     val databaseErrorMessage by viewModel.databaseErrorMessage.collectAsStateWithLifecycle()
 
     val palette = LocalVelarisPalette.current
-    val animatorsEnabled = remember {
-        runCatching { ValueAnimator.areAnimatorsEnabled() }.getOrDefault(true)
+    val compactBottomNav = LocalConfiguration.current.screenWidthDp < 480 && LocalDensity.current.fontScale > 1.3f
+    val isTrainingScreen = currentDestination == VelarisNavDestination.PLAN
+    var trainingDetailsId by rememberSaveable { mutableStateOf<String?>(null) }
+    var constructorEntry by rememberSaveable { mutableIntStateOf(0) }
+    val trainingContext = androidx.compose.ui.platform.LocalContext.current
+    val trainingWindow = remember(trainingContext) {
+        generateSequence(trainingContext) { (it as? android.content.ContextWrapper)?.baseContext }
+            .filterIsInstance<android.app.Activity>().firstOrNull()?.window
     }
-
-    // Системная кнопка «Назад» предсказуемо возвращает пользователя без потери активного подхода
-    BackHandler(enabled = currentDestination != VelarisNavDestination.HOME) {
-        if (currentDestination == VelarisNavDestination.DIAGNOSTICS) {
-            viewModel.navigateTo(VelarisNavDestination.SETTINGS)
-        } else {
-            viewModel.navigateTo(VelarisNavDestination.HOME)
-        }
+    val trainingSystemBars = trainingWindow?.let { androidx.core.view.WindowCompat.getInsetsController(it,it.decorView) }
+    androidx.compose.runtime.SideEffect { if(isTrainingScreen) trainingSystemBars?.isAppearanceLightStatusBars = false }
+    androidx.compose.runtime.DisposableEffect(isTrainingScreen) {
+        onDispose { if(isTrainingScreen) trainingSystemBars?.isAppearanceLightStatusBars = palette.surface.luminance() > .179f }
     }
+    val routeState = rememberSaveableStateHolder()
+    var chantalChildBack by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var chantalPageName by rememberSaveable { mutableStateOf(ChantalPage.HOME.name) }
+    val chantalScrollStates = ChantalPage.entries.associateWith { child ->
+        androidx.compose.runtime.key("chantal_scroll_${child.name}") { rememberScrollState() }
+    }
+    fun openPage(destination: VelarisNavDestination) = viewModel.navigateTo(destination)
+    fun backPage() = viewModel.navigateBack()
+    fun openTrainingConstructor() {
+        routeState.removeState("${VelarisNavDestination.OTHER_WORKOUTS.id}:$constructorEntry")
+        constructorEntry++; openPage(VelarisNavDestination.OTHER_WORKOUTS)
+    }
+    fun openTrainingDetails(id: String) {
+        routeState.removeState("${VelarisNavDestination.TRAINING_DETAILS.id}:$id")
+        trainingDetailsId=id
+        openPage(VelarisNavDestination.TRAINING_DETAILS)
+    }
+    // Native dialog Back handlers take precedence over route navigation.
+    BackHandler(enabled = viewModel.canNavigateBack) { backPage() }
 
     // Единый диалог подтверждения остановки (открывается поверх любого экрана, если запрошена остановка)
     if (snapshot.isStopDialogVisible) {
@@ -332,8 +379,23 @@ fun TechCheckScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets.safeDrawing,
+        contentWindowInsets = if(isTrainingScreen) WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal) else WindowInsets.safeDrawing,
         containerColor = if (isReaderScreen) palette.readerSurface else palette.backgroundTop,
+        topBar = {
+            if (!isReaderScreen && !isTrainingScreen) Column(Modifier.background(palette.surface).statusBarsPadding()) {
+                VelarisMountainHeader(
+                    subtitleRu = if (currentDestination == VelarisNavDestination.CHANTAL)
+                        runCatching { ChantalPage.valueOf(chantalPageName).title }.getOrDefault(currentDestination.titleRu)
+                        else currentDestination.titleRu,
+                    isDemoActive = !settings.isRealProgramEnabled,
+                    onBack = if (currentDestination == VelarisNavDestination.CHANTAL) chantalChildBack
+                        else if (!currentDestination.isMainSection) ({ backPage() }) else null,
+                    onOpenSettings = if (!currentDestination.id.startsWith("settings") &&
+                        currentDestination != VelarisNavDestination.DIAGNOSTICS)
+                        ({ openPage(VelarisNavDestination.SETTINGS) }) else null
+                )
+            }
+        },
         bottomBar = {
             Column(
                 modifier = Modifier
@@ -351,7 +413,7 @@ fun TechCheckScreen(
                         snapshot = snapshot,
                         onPauseWorkout = { viewModel.pauseDemo() },
                         onResumeWorkout = { viewModel.resumeDemo() },
-                        onReturnToWorkout = { viewModel.navigateTo(VelarisNavDestination.WORKOUT) }
+                        onReturnToWorkout = { openPage(VelarisNavDestination.WORKOUT) }
                     )
                 }
 
@@ -362,33 +424,32 @@ fun TechCheckScreen(
                     modifier = Modifier.fantasyFrame(palette.outline).testTag("velaris_bottom_nav")
                 ) {
                     MAIN_NAV_DESTINATIONS.forEach { dest ->
-                        val selected = currentDestination == dest ||
-                            (dest == VelarisNavDestination.SETTINGS && currentDestination == VelarisNavDestination.DIAGNOSTICS) ||
-                            (dest == VelarisNavDestination.PLAN && currentDestination == VelarisNavDestination.WORKOUT)
+                        val selected = viewModel.mainDestination == dest
                         NavigationBarItem(
                             selected = selected,
-                            onClick = { viewModel.navigateTo(dest) },
+                            onClick = { openPage(dest) },
                             icon = {
                                 Icon(
                                     imageVector = when (dest) {
                                         VelarisNavDestination.HOME -> Icons.Default.Home
                                         VelarisNavDestination.PLAN -> Icons.Default.CalendarMonth
-                                        VelarisNavDestination.READER -> Icons.AutoMirrored.Filled.MenuBook
-                                        VelarisNavDestination.SETTINGS -> Icons.Default.Settings
+                                        VelarisNavDestination.CHANTAL -> Icons.Default.Pets
+                                        VelarisNavDestination.STATISTICS -> Icons.Default.BarChart
                                         else -> Icons.Default.Home
                                     },
-                                    contentDescription = dest.titleRu
+                                    contentDescription = null
                                 )
                             },
-                            label = {
+                            label = if (compactBottomNav) null else { {
                                 Text(
                                     text = dest.titleRu,
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                                     maxLines = 1,
+                                    softWrap = false,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                            },
+                            } },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = palette.onPrimaryAccent,
                                 selectedTextColor = palette.primaryAccent,
@@ -396,7 +457,7 @@ fun TechCheckScreen(
                                 unselectedIconColor = palette.textSecondary,
                                 unselectedTextColor = palette.textSecondary
                             ),
-                            modifier = Modifier.testTag("nav_${dest.id}")
+                            modifier = Modifier.testTag("nav_${dest.id}").semantics { contentDescription = dest.titleRu }
                         )
                     }
                 }
@@ -420,178 +481,238 @@ fun TechCheckScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .then(bgModifier)
+                .then(if(isTrainingScreen || currentDestination == VelarisNavDestination.TRAINING_DETAILS) Modifier.background(com.example.ui.theme.ReferencePlum.Background) else bgModifier)
                 .padding(innerPadding),
             contentAlignment = Alignment.TopCenter
         ) {
-            Crossfade(
-                targetState = currentDestination,
-                animationSpec = tween(durationMillis = if (animatorsEnabled) 180 else 0),
-                label = "velaris_nav_crossfade"
-            ) { destination ->
-                val scrollState = rememberScrollState()
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .widthIn(max = 600.dp)
-                        .verticalScroll(scrollState)
-                        .navigationBarsPadding(),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    // Спокойный горный силуэт показывается на основных экранах, но НЕ на экране чтения книги
-                    if (destination != VelarisNavDestination.READER) {
-                        VelarisMountainHeader(
-                            subtitleRu = destination.titleRu,
-                            isDemoActive = !settings.isRealProgramEnabled
-                        )
-                    } else {
-                        Spacer(modifier = Modifier.height(6.dp))
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 0.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        if (databaseErrorMessage != null) {
-                            DatabaseWarningBanner(message = databaseErrorMessage!!)
-                        }
-
-                        when (destination) {
-                            VelarisNavDestination.HOME,
-                            VelarisNavDestination.READER -> {
-                                VelarisHomeScreen(
-                                    snapshot = snapshot,
-                                    settings = settings,
-                                    dailySlots = dailySlots,
-                                    freeTemplates = freeTemplates,
-                                    weeklyOverview = weeklyOverview,
-                                    storyState = storyState,
-                                    onOpenWorkout = { viewModel.navigateTo(VelarisNavDestination.WORKOUT) },
-                                    onStartNextSlot = { slot -> viewModel.startSlotAndOpenWorkout(slot) },
-                                    onStartFreeTemplate = { template -> viewModel.startFreeWorkoutAndOpenWorkout(template) },
-                                    onOpenPlan = { viewModel.navigateTo(VelarisNavDestination.PLAN) },
-                                    onOpenReader = { viewModel.navigateTo(VelarisNavDestination.HOME) },
-                                    onSelectOverviewDay = { dateStr -> viewModel.selectWeeklyOverviewDate(dateStr) },
-                                    onToggleFreezeDate = { dateStr -> viewModel.toggleFreezeDate(dateStr) },
-                                    onStartStreakRescueBlitz = { viewModel.startStreakRescueBlitzAndOpenWorkout() },
-                                    celebratedMilestone = celebratedMilestone,
-                                    onTriggerMilestoneSalute = { m -> viewModel.triggerMilestoneSalute(m) },
-                                    onDismissMilestoneSalute = { viewModel.dismissMilestoneSalute() }
-                                )
+            // Dispose the outgoing page before measuring the next one. Simultaneous
+            // Crossfade pages can remeasure a scrolled viewport while its state is saved.
+            val destination = currentDestination
+            routeState.SaveableStateProvider(when(destination) {
+                VelarisNavDestination.OTHER_WORKOUTS -> "${destination.id}:$constructorEntry"
+                VelarisNavDestination.TRAINING_DETAILS -> "${destination.id}:$trainingDetailsId"
+                else -> destination.id
+            }) {
+                    val defaultScrollState = rememberScrollState()
+                    val scrollState = if (destination == VelarisNavDestination.CHANTAL)
+                        chantalScrollStates[runCatching { ChantalPage.valueOf(chantalPageName) }.getOrDefault(ChantalPage.HOME)] ?: defaultScrollState
+                        else defaultScrollState
+                    VelarisScreen(scrollState, Modifier.testTag("route_${destination.id}"),
+                        horizontalPadding = if (destination in listOf(VelarisNavDestination.STATISTICS,VelarisNavDestination.PLAN)) 0.dp else VelarisSpacing.Content,
+                        verticalPadding = if(destination == VelarisNavDestination.PLAN) 0.dp else VelarisSpacing.Content,
+                        maxContentWidth = if(destination == VelarisNavDestination.PLAN) androidx.compose.ui.unit.Dp.Infinity else VelarisSpacing.MaxContentWidth) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 0.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            if (databaseErrorMessage != null) {
+                                DatabaseWarningBanner(message = databaseErrorMessage!!)
                             }
 
-                            VelarisNavDestination.PLAN -> {
-                                VelarisPlanScreen(
-                                    snapshot = snapshot,
-                                    settings = settings,
-                                    dailySlots = dailySlots,
-                                    freeTemplates = freeTemplates,
-                                    customPrograms = customPrograms,
-                                    onStartSlot = { slot -> viewModel.startSlotAndOpenWorkout(slot) },
-                                    onSelectSlot = { slot -> viewModel.selectDailySlot(slot) },
-                                    onStartFreeTemplate = { template -> viewModel.startFreeWorkoutAndOpenWorkout(template) },
-                                    onSaveFreeTemplate = { template -> viewModel.saveFreeTemplate(template) },
-                                    onStartCustomProgram = { prog -> viewModel.startCustomProgramAndOpenWorkout(prog) },
-                                    onSaveCustomProgram = { prog -> viewModel.saveCustomProgram(prog) },
-                                    onDeleteCustomProgram = { id -> viewModel.deleteCustomProgram(id) },
-                                    onDuplicateCustomProgram = { prog -> viewModel.duplicateCustomProgram(prog) },
-                                    onReorderCustomPrograms = { list -> viewModel.reorderCustomPrograms(list) },
-                                    onReturnToWorkout = { viewModel.navigateTo(VelarisNavDestination.WORKOUT) }
-                                )
-                            }
+                            when (destination) {
+                                VelarisNavDestination.HOME,
+                                VelarisNavDestination.READER -> {
+                                    VelarisHomeScreen(
+                                        snapshot = snapshot,
+                                        dailySlots = dailySlots,
+                                        weeklyOverview = weeklyOverview,
+                                        onOpenWorkout = { openPage(VelarisNavDestination.WORKOUT) },
+                                        onStartNextSlot = { viewModel.startSlotAndOpenWorkout(it) },
+                                        onOpenPlan = { openPage(VelarisNavDestination.PLAN) },
+                                        onPause = { viewModel.pauseDemo() },
+                                        onResume = { viewModel.resumeDemo() },
+                                        dataError = databaseErrorMessage,
+                                        onRetry = { viewModel.refreshHardwareStatus() }
+                                    )
+                                }
 
-                            VelarisNavDestination.CHANTAL -> {
-                                androidx.compose.runtime.key(chantalReturnToken) {
-                                VelarisChantalScreen(
-                                    completedWorkoutsCount = realCompletionsCount,
-                                    earnedWorkoutEnergy = workoutEnergy,
-                                    currentStreakDays = weeklyOverview.currentStreakDays,
-                                    onOpenWorkoutPlan = { viewModel.navigateTo(VelarisNavDestination.PLAN) },
-                                    onPlaySampleTone = { sig -> viewModel.playSample(sig) }
-                                )
+                                VelarisNavDestination.STATISTICS -> {
+                                    VelarisStatisticsScreen(weeklyOverview,
+                                        onDay = { viewModel.openStatisticsDay(it) },
+                                        onJournal = { viewModel.openWorkoutJournal() },
+                                        onDetails = { openPage(VelarisNavDestination.STATISTICS_DETAILS) })
+                                }
+                                VelarisNavDestination.STATISTICS_DAY -> {
+                                    val date = statisticsDate ?: weeklyOverview.selectedDate
+                                    VelarisStatisticsDay(weeklyOverview, date, { viewModel.openWorkoutJournal(date) })
+                                }
+                                VelarisNavDestination.WORKOUT_JOURNAL -> {
+                                    VelarisWorkoutJournal(workoutJournal, journalDate, { viewModel.openWorkoutJournal() },
+                                        { viewModel.openWorkoutEntry(it) }, { viewModel.refreshWorkoutJournal() })
+                                }
+                                VelarisNavDestination.WORKOUT_SESSION -> {
+                                    VelarisWorkoutSession(workoutJournal, journalEntryId, weeklyOverview, { viewModel.refreshWorkoutJournal() })
+                                }
+                                VelarisNavDestination.STATISTICS_DETAILS -> {
+                                    WeeklyOverviewCard(
+                                        overview = weeklyOverview,
+                                        isWorkoutActiveOrPaused = snapshot.isActiveOrPaused,
+                                        onSelectDay = { viewModel.selectWeeklyOverviewDate(it) },
+                                        onToggleFreezeDate = { viewModel.toggleFreezeDate(it) },
+                                        onStartStreakRescueBlitz = { viewModel.startStreakRescueBlitzAndOpenWorkout() },
+                                        celebratedMilestone = celebratedMilestone,
+                                        onTriggerMilestoneSalute = { viewModel.triggerMilestoneSalute(it) },
+                                        onDismissMilestoneSalute = { viewModel.dismissMilestoneSalute() }
+                                    )
+                                }
+
+                                VelarisNavDestination.PLAN -> {
+                                    VelarisTrainingOverview(snapshot, dailySlots,
+                                        onStartSlot = { viewModel.startSlotAndOpenWorkout(it) },
+                                        onOpenDetails = { openTrainingDetails(it.slot.id) },
+                                        onOpenConstructor = { openTrainingConstructor() },
+                                        onSaveProgram = { viewModel.saveCustomProgram(it) },
+                                        onOpenSettings = { openPage(VelarisNavDestination.SETTINGS) },
+                                        isDemo = !settings.isRealProgramEnabled,
+                                        extraTemplates=configuredExtras,extraCycle=extraTrainingCycle,extrasReady=trainingStateReady,customPrograms=customPrograms,
+                                        onOpenExtra={openTrainingDetails("extra:${it.slotIndex}")},
+                                        onStartExtra={viewModel.startFreeWorkoutAndOpenWorkout(it)},
+                                        onOpenProgram={openTrainingDetails("program:${it.id}")},
+                                        onStartProgram={viewModel.startCustomProgramAndOpenWorkout(it)})
+                                }
+                                VelarisNavDestination.TRAINING_DETAILS -> {
+                                    val extra = configuredExtras.firstOrNull { "extra:${it.slotIndex}" == trainingDetailsId }
+                                    val slot = dailySlots.firstOrNull { it.slot.id==trainingDetailsId }
+                                    if(trainingDetailsId?.startsWith("program:")==true) {
+                                        TrainingProgramDetails(customPrograms.firstOrNull {"program:${it.id}"==trainingDetailsId},snapshot.isActiveOrPaused,
+                                            onSave={viewModel.saveCustomProgram(it)},onDelete={viewModel.deleteCustomProgram(it)},
+                                            onStart={viewModel.startCustomProgramAndOpenWorkout(it)})
+                                    } else if(extra!=null || slot!=null) {
+                                        val configuration=if(extra!=null) com.example.data.TrainingConfiguration.from(extra)
+                                            else com.example.data.TrainingConfiguration.from(slot!!.slot)
+                                        val defaults=if(extra!=null) com.example.data.TrainingConfiguration.from(com.example.data.ExtraWorkoutPresets.all.first {it.slotIndex==extra.slotIndex})
+                                            else viewModel.trainingDefaultConfiguration(slot!!.slot)
+                                        TrainingSettingsDetails(if(extra!=null) when(extra.slotIndex) {101->"Быстрые сокращения";102->"Силовые сокращения";else->"Длительные удержания"} else slot!!.slot.titleRu,
+                                            configuration,defaults,snapshot.isActiveOrPaused || !trainingStateReady,
+                                            if(extra!=null) extraTrainingCycle.isLocked(extra.slotIndex) else slot!!.isCompleted,
+                                            onSave={value,result->viewModel.saveTrainingConfiguration(value,result)},
+                                            onReset={key,result->viewModel.resetTrainingConfiguration(key,result)},
+                                            onStart={if(extra!=null) viewModel.startFreeWorkoutAndOpenWorkout(extra) else viewModel.startSlotAndOpenWorkout(slot!!)})
+                                    } else TrainingExerciseDetails(null,snapshot.isActiveOrPaused,{})
+                                }
+
+                                VelarisNavDestination.PLAN_DAY,
+                                VelarisNavDestination.OTHER_WORKOUTS -> {
+                                    VelarisPlanScreen(
+                                        snapshot = snapshot,
+                                        settings = settings,
+                                        dailySlots = dailySlots,
+                                        freeTemplates = freeTemplates,
+                                        customPrograms = customPrograms,
+                                        onStartSlot = { slot -> viewModel.startSlotAndOpenWorkout(slot) },
+                                        onSelectSlot = { slot -> viewModel.selectDailySlot(slot) },
+                                        onStartFreeTemplate = { template -> viewModel.startFreeWorkoutAndOpenWorkout(template) },
+                                        onSaveFreeTemplate = { template -> viewModel.saveFreeTemplate(template) },
+                                        onStartCustomProgram = { prog -> viewModel.startCustomProgramAndOpenWorkout(prog) },
+                                        onSaveCustomProgram = { prog -> viewModel.saveCustomProgram(prog) {ok->if(ok) openPage(VelarisNavDestination.PLAN)} },
+                                        onDeleteCustomProgram = { id -> viewModel.deleteCustomProgram(id) },
+                                        onDuplicateCustomProgram = { prog -> viewModel.duplicateCustomProgram(prog) },
+                                        onReorderCustomPrograms = { list -> viewModel.reorderCustomPrograms(list) },
+                                        onReturnToWorkout = { openPage(VelarisNavDestination.WORKOUT) },
+                                        otherModesOnly = destination == VelarisNavDestination.OTHER_WORKOUTS,
+                                        initialMode = if(destination == VelarisNavDestination.OTHER_WORKOUTS) "constructor" else null
+                                    )
+                                }
+
+                                VelarisNavDestination.CHANTAL -> {
+                                    androidx.compose.runtime.key(chantalReturnToken) {
+                                    VelarisChantalScreen(
+                                        completedWorkoutsCount = realCompletionsCount,
+                                        earnedWorkoutEnergy = workoutEnergy,
+                                        currentStreakDays = weeklyOverview.currentStreakDays,
+                                        onOpenWorkoutPlan = { openPage(VelarisNavDestination.PLAN) },
+                                        onPlaySampleTone = { sig -> viewModel.playSample(sig) },
+                                    onPageChanged = { chantalPageName = it },
+                                    onChildBackChanged = { chantalChildBack = it }
+                                    )
+                                    }
+                                }
+
+                                VelarisNavDestination.WORKOUT -> {
+                                    VelarisActiveWorkoutScreen(
+                                        snapshot = snapshot,
+                                        hardwareStatus = hardwareStatus,
+                                        soundEnabled = settings.soundEnabled,
+                                        lastCompletedDifficulty = lastCompletedDifficulty,
+                                        onStart = { viewModel.startDemo() },
+                                        onPause = { viewModel.pauseDemo() },
+                                        onResume = { viewModel.resumeDemo() },
+                                        onRequestStop = { viewModel.requestStopDemo() },
+                                        onReset = { viewModel.resetDemo() },
+                                        onRateDifficulty = { diff -> viewModel.rateLastCompletedSlotDifficulty(diff) },
+                                        onNavigateToPlan = { openPage(VelarisNavDestination.PLAN) },
+                                        onNavigateToReader = { openPage(VelarisNavDestination.HOME) }
+                                    )
+                                }
+
+                                VelarisNavDestination.SETTINGS, VelarisNavDestination.SETTINGS_APPEARANCE,
+                                VelarisNavDestination.SETTINGS_SOUND, VelarisNavDestination.SETTINGS_SAMPLES,
+                                VelarisNavDestination.SETTINGS_BACKUP, VelarisNavDestination.SETTINGS_ABOUT -> {
+                                    VelarisSettingsScreen(
+                                        settingsCategory = destination.id.removePrefix("settings_").takeIf { destination != VelarisNavDestination.SETTINGS },
+                                        onOpenSettingsCategory = { category -> openPage(VelarisNavDestination.entries.first { it.id == "settings_$category" }) },
+                                        settings = settings,
+                                        snapshot = snapshot,
+                                        storyState = storyState,
+                                        pendingRestorePreview = pendingRestorePreview,
+                                        backupOperationBanner = backupOperationBanner,
+                                        backupErrorMessage = backupErrorMessage,
+                                        availableProtocols = viewModel.availableProtocols,
+                                        onThemeChange = { viewModel.setThemeId(it) },
+                                        onSoundPackChange = { viewModel.setSoundPack(it) },
+                                        onMetronomeTickStyleChange = { viewModel.setMetronomeTickStyle(it) },
+                                        onSoundEnabledChange = { viewModel.setSoundEnabled(it) },
+                                        onVibrationEnabledChange = { viewModel.setVibrationEnabled(it) },
+                                        onMetronomeEnabledChange = { viewModel.setMetronomeEnabled(it) },
+                                        onDuckOtherAppsChange = { viewModel.setDuckOtherApps(it) },
+                                        onSignalVolumeChange = { viewModel.setSignalVolume(it) },
+                                        onMetronomeVolumeChange = { viewModel.setMetronomeVolume(it) },
+                                        onPlaySample = { viewModel.playSample(it) },
+                                        onReaderModeChange = { viewModel.setReaderMode(it) },
+                                        onReaderFontSizeChange = { viewModel.setReaderFontSize(it) },
+                                        onReaderLineSpacingChange = { viewModel.setReaderLineSpacing(it) },
+                                        onSelectProtocol = { viewModel.selectProtocol(it) },
+                                        onImportMarkdownUri = { uri -> viewModel.importMarkdownFromUri(uri) },
+                                        onRemoveImportedBook = { viewModel.removeImportedBook() },
+                                        onCreateBackupUri = { uri -> viewModel.createBackupToUri(uri) },
+                                        onInspectBackupUri = { uri -> viewModel.inspectBackupFromUri(uri) },
+                                        onConfirmRestore = { viewModel.confirmPendingRestore() },
+                                        onCancelRestore = { viewModel.cancelPendingRestore() },
+                                        onDismissBackupBanners = { viewModel.dismissBackupBanners() },
+                                        onOpenDiagnostics = { openPage(VelarisNavDestination.DIAGNOSTICS) },
+                                        onReturnToWorkout = { openPage(VelarisNavDestination.WORKOUT) }
+                                    )
+                                }
+
+                                VelarisNavDestination.DIAGNOSTICS -> {
+                                    VelarisDiagnosticsScreen(
+                                        buildInfo = buildInfo,
+                                        snapshot = snapshot,
+                                        hardwareStatus = hardwareStatus,
+                                        audioDiagnostics = audioDiagnostics,
+                                        eventLog = eventLog,
+                                        isWakeLockHeld = isWakeLockHeld,
+                                        isServiceForeground = isServiceForeground,
+                                        isZeroSlotDemoMode = isZeroSlotDemoMode,
+                                        demoCompletionsCount = demoCompletionsCount,
+                                        realCompletionsCount = realCompletionsCount,
+                                        onZeroSlotDemoModeChange = { viewModel.setZeroSlotDemoMode(it) },
+                                        onImportNeutralTestMarkdown = { viewModel.importNeutralTestMarkdown() },
+                                        onRefreshHardware = { viewModel.refreshHardwareStatus() },
+                                        onClearAudioDiagnostics = { viewModel.clearAudioDiagnostics() },
+                                        onClearEventLog = { viewModel.clearEventLog() },
+                                        onBackToSettings = { openPage(VelarisNavDestination.SETTINGS) }
+                                    )
                                 }
                             }
 
-                            VelarisNavDestination.WORKOUT -> {
-                                VelarisActiveWorkoutScreen(
-                                    snapshot = snapshot,
-                                    hardwareStatus = hardwareStatus,
-                                    soundEnabled = settings.soundEnabled,
-                                    lastCompletedDifficulty = lastCompletedDifficulty,
-                                    onStart = { viewModel.startDemo() },
-                                    onPause = { viewModel.pauseDemo() },
-                                    onResume = { viewModel.resumeDemo() },
-                                    onRequestStop = { viewModel.requestStopDemo() },
-                                    onReset = { viewModel.resetDemo() },
-                                    onRateDifficulty = { diff -> viewModel.rateLastCompletedSlotDifficulty(diff) },
-                                    onNavigateToPlan = { viewModel.navigateTo(VelarisNavDestination.PLAN) },
-                                    onNavigateToReader = { viewModel.navigateTo(VelarisNavDestination.HOME) }
-                                )
-                            }
-
-                            VelarisNavDestination.SETTINGS -> {
-                                VelarisSettingsScreen(
-                                    settings = settings,
-                                    snapshot = snapshot,
-                                    storyState = storyState,
-                                    pendingRestorePreview = pendingRestorePreview,
-                                    backupOperationBanner = backupOperationBanner,
-                                    backupErrorMessage = backupErrorMessage,
-                                    availableProtocols = viewModel.availableProtocols,
-                                    onThemeChange = { viewModel.setThemeId(it) },
-                                    onSoundPackChange = { viewModel.setSoundPack(it) },
-                                    onMetronomeTickStyleChange = { viewModel.setMetronomeTickStyle(it) },
-                                    onSoundEnabledChange = { viewModel.setSoundEnabled(it) },
-                                    onVibrationEnabledChange = { viewModel.setVibrationEnabled(it) },
-                                    onMetronomeEnabledChange = { viewModel.setMetronomeEnabled(it) },
-                                    onDuckOtherAppsChange = { viewModel.setDuckOtherApps(it) },
-                                    onSignalVolumeChange = { viewModel.setSignalVolume(it) },
-                                    onMetronomeVolumeChange = { viewModel.setMetronomeVolume(it) },
-                                    onPlaySample = { viewModel.playSample(it) },
-                                    onReaderModeChange = { viewModel.setReaderMode(it) },
-                                    onReaderFontSizeChange = { viewModel.setReaderFontSize(it) },
-                                    onReaderLineSpacingChange = { viewModel.setReaderLineSpacing(it) },
-                                    onSelectProtocol = { viewModel.selectProtocol(it) },
-                                    onImportMarkdownUri = { uri -> viewModel.importMarkdownFromUri(uri) },
-                                    onRemoveImportedBook = { viewModel.removeImportedBook() },
-                                    onCreateBackupUri = { uri -> viewModel.createBackupToUri(uri) },
-                                    onInspectBackupUri = { uri -> viewModel.inspectBackupFromUri(uri) },
-                                    onConfirmRestore = { viewModel.confirmPendingRestore() },
-                                    onCancelRestore = { viewModel.cancelPendingRestore() },
-                                    onDismissBackupBanners = { viewModel.dismissBackupBanners() },
-                                    onOpenDiagnostics = { viewModel.navigateTo(VelarisNavDestination.DIAGNOSTICS) },
-                                    onReturnToWorkout = { viewModel.navigateTo(VelarisNavDestination.WORKOUT) }
-                                )
-                            }
-
-                            VelarisNavDestination.DIAGNOSTICS -> {
-                                VelarisDiagnosticsScreen(
-                                    buildInfo = buildInfo,
-                                    snapshot = snapshot,
-                                    hardwareStatus = hardwareStatus,
-                                    audioDiagnostics = audioDiagnostics,
-                                    eventLog = eventLog,
-                                    isWakeLockHeld = isWakeLockHeld,
-                                    isServiceForeground = isServiceForeground,
-                                    isZeroSlotDemoMode = isZeroSlotDemoMode,
-                                    demoCompletionsCount = demoCompletionsCount,
-                                    realCompletionsCount = realCompletionsCount,
-                                    onZeroSlotDemoModeChange = { viewModel.setZeroSlotDemoMode(it) },
-                                    onImportNeutralTestMarkdown = { viewModel.importNeutralTestMarkdown() },
-                                    onRefreshHardware = { viewModel.refreshHardwareStatus() },
-                                    onClearAudioDiagnostics = { viewModel.clearAudioDiagnostics() },
-                                    onClearEventLog = { viewModel.clearEventLog() },
-                                    onBackToSettings = { viewModel.navigateTo(VelarisNavDestination.SETTINGS) }
-                                )
-                            }
+                            Spacer(modifier = Modifier.height(18.dp))
                         }
-
-                        Spacer(modifier = Modifier.height(18.dp))
                     }
-                }
             }
+            ExtraCycleFireworks(extraTrainingCycle)
         }
     }
 }
@@ -611,7 +732,7 @@ fun CompactActiveWorkoutBar(
 ) {
     val palette = LocalVelarisPalette.current
     val animatorsEnabled = remember {
-        runCatching { ValueAnimator.areAnimatorsEnabled() }.getOrDefault(true) &&
+        runCatching { (android.os.Build.VERSION.SDK_INT < 26 || ValueAnimator.areAnimatorsEnabled()) }.getOrDefault(true) &&
             !android.os.Build.FINGERPRINT.equals("robolectric", ignoreCase = true)
     }
     var frameNowMs by remember(snapshot.runId, snapshot.status, snapshot.snapshotElapsedRealtimeMs) {
@@ -772,13 +893,15 @@ fun CompactActiveWorkoutBar(
 @Composable
 fun VelarisMountainHeader(
     subtitleRu: String,
-    isDemoActive: Boolean
+    isDemoActive: Boolean,
+    onBack: (() -> Unit)? = null,
+    onOpenSettings: (() -> Unit)? = null
 ) {
     val palette = LocalVelarisPalette.current
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(72.dp)
+            .heightIn(min = 72.dp)
             .background(
                 Brush.verticalGradient(
                     colors = listOf(palette.heroGradientStart, palette.heroGradientEnd)
@@ -787,7 +910,7 @@ fun VelarisMountainHeader(
     ) {
         Canvas(
             modifier = Modifier
-                .fillMaxSize()
+                .matchParentSize()
                 .semantics { contentDescription = "Декоративный горный пейзаж Velaris" }
         ) {
             val w = size.width
@@ -838,6 +961,10 @@ fun VelarisMountainHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (onBack != null) IconButton(onClick = onBack, modifier = Modifier
+                .size(VelarisSpacing.TouchTarget).testTag("toolbar_back")) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = palette.textPrimary)
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Velaris",
@@ -854,6 +981,10 @@ fun VelarisMountainHeader(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+            }
+            if (onOpenSettings != null) IconButton(onClick = onOpenSettings, modifier = Modifier
+                .size(VelarisSpacing.TouchTarget).testTag("open_settings")) {
+                Icon(Icons.Default.Settings, contentDescription = "Открыть настройки", tint = palette.textPrimary)
             }
         }
     }
@@ -899,6 +1030,7 @@ fun VelarisActiveWorkoutScreen(
 ) {
     val palette = LocalVelarisPalette.current
     val ringColor = resolveRingColor(snapshot.status, snapshot.currentPhase, palette)
+    var showDetails by rememberSaveable(snapshot.runId) { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -906,6 +1038,17 @@ fun VelarisActiveWorkoutScreen(
             .testTag("active_workout_screen"),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        if (snapshot.status == RunStatus.COMPLETED) {
+            WorkoutCompletionRewardCard(
+                snapshot = snapshot,
+                selectedDifficulty = lastCompletedDifficulty,
+                onSelectDifficulty = onRateDifficulty,
+                onNavigateToPlan = onNavigateToPlan,
+                onNavigateToReader = onNavigateToReader
+            )
+            return@Column
+        }
+
         // Компактный индикатор звука без вылезания за правый край
         CompactAudioStatusRow(
             hardwareStatus = hardwareStatus,
@@ -948,7 +1091,7 @@ fun VelarisActiveWorkoutScreen(
                         shape = RoundedCornerShape(12.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         modifier = Modifier
-                            .heightIn(min = 38.dp)
+                            .heightIn(min = 48.dp)
                             .testTag("btn_minimize_workout")
                     ) {
                         Icon(
@@ -958,7 +1101,7 @@ fun VelarisActiveWorkoutScreen(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "К тренировкам",
+                            text = "Свернуть",
                             style = MaterialTheme.typography.labelSmall,
                             maxLines = 1,
                             softWrap = false
@@ -1017,18 +1160,17 @@ fun VelarisActiveWorkoutScreen(
                     onRequestStop = onRequestStop,
                     onReset = onReset
                 )
+
+                TextButton(onClick = { showDetails = !showDetails }, modifier = Modifier.testTag("btn_workout_details")) {
+                    Text(if (showDetails) "Скрыть параметры" else "Параметры упражнения")
+                }
+                if (showDetails) Text(
+                    "Удержание ${snapshot.protocol.contractionMs / 1000} с · отдых ${snapshot.protocol.relaxationMs / 1000} с · ${snapshot.totalRepetitions} повторов",
+                    color = palette.textSecondary, modifier = Modifier.testTag("workout_protocol_details"))
             }
         }
 
-        if (snapshot.status == RunStatus.COMPLETED) {
-            WorkoutCompletionRewardCard(
-                snapshot = snapshot,
-                selectedDifficulty = lastCompletedDifficulty,
-                onSelectDifficulty = onRateDifficulty,
-                onNavigateToPlan = onNavigateToPlan,
-                onNavigateToReader = onNavigateToReader
-            )
-        }
+
     }
 }
 
@@ -1137,6 +1279,7 @@ private fun WorkoutCompletionRewardCard(
     onNavigateToReader: () -> Unit
 ) {
     val palette = LocalVelarisPalette.current
+    var ratingExpanded by rememberSaveable(snapshot.runId) { mutableStateOf(false) }
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -1175,15 +1318,19 @@ private fun WorkoutCompletionRewardCard(
                 }
             }
 
+            TextButton(onClick = { ratingExpanded = !ratingExpanded }, modifier = Modifier.testTag("btn_rate_workout")) {
+                Text(if (ratingExpanded) "Скрыть оценку" else selectedDifficulty?.let { "Нагрузка: ${it.labelRu} · изменить" } ?: "Оценить нагрузку · по желанию")
+            }
+            if (ratingExpanded) {
             Text(
                 text = "Как ощущалась нагрузка? (по желанию)",
                 style = MaterialTheme.typography.labelMedium,
                 color = palette.textSecondary
             )
 
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 WorkoutDifficulty.entries.forEach { diff ->
                     val isSelected = selectedDifficulty == diff
@@ -1196,7 +1343,7 @@ private fun WorkoutCompletionRewardCard(
                             contentColor = if (isSelected) palette.onPrimaryAccent else palette.textPrimary
                         ),
                         modifier = Modifier
-                            .weight(1f)
+                            .fillMaxWidth()
                             .heightIn(min = 48.dp)
                             .testTag("difficulty_btn_${diff.code.lowercase(Locale.ROOT)}")
                     ) {
@@ -1207,6 +1354,8 @@ private fun WorkoutCompletionRewardCard(
                         )
                     }
                 }
+            }
+
             }
 
             Button(
@@ -1320,7 +1469,7 @@ private fun WorkoutControlButtons(
                     ) {
                         Icon(Icons.Default.Stop, contentDescription = null, tint = palette.errorAccent)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Остановить", color = palette.errorAccent, fontWeight = FontWeight.SemiBold)
+                        Text("Стоп", color = palette.errorAccent, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

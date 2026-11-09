@@ -16,8 +16,8 @@ android {
     applicationId = "com.velaris.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 23
-    versionName = "0.19.0-rc1"
+    versionCode = 26
+    versionName = "0.19.0-rc4"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -56,6 +56,7 @@ android {
     }
   }
   compileOptions {
+    isCoreLibraryDesugaringEnabled = true
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
   }
@@ -86,6 +87,8 @@ secrets {
   propertiesFileName = ".env"
   defaultPropertiesFileName = ".env.example"
   ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
+  // Native AI credentials live in Android Keystore; never embed build-time keys.
+  ignoreList.addAll(listOf("GEMINI_API_KEY", "OPENROUTER_API_KEY", "XAI_API_KEY"))
 }
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
@@ -93,6 +96,7 @@ googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.W
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
 dependencies {
+  coreLibraryDesugaring(libs.desugar.jdk.libs)
   implementation("androidx.work:work-runtime-ktx:2.10.1")
   testImplementation("androidx.work:work-testing:2.10.1")
   implementation(platform(libs.androidx.compose.bom))

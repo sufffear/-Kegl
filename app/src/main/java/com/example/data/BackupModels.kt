@@ -113,7 +113,10 @@ data class BackupDatabaseSnapshot(
     val novelBlocks: List<NovelBlockEntity> = emptyList(),
     val novelReadingProgress: NovelReadingProgressEntity? = null,
     val freeTemplates: List<FreeIntervalTemplateEntity> = emptyList(),
-    val customPrograms: List<CustomProgramEntity>? = null
+    val customPrograms: List<CustomProgramEntity>? = null,
+    val trainingConfigurations: List<TrainingConfiguration>? = null,
+    val extraTrainingCycle: ExtraTrainingCycle? = null,
+    val executionParameters: List<WorkoutExecutionParameters>? = null
 ) {
     fun toJson(): String {
         val root = JSONObject()
@@ -292,6 +295,17 @@ data class BackupDatabaseSnapshot(
             }
         }
 
+        trainingConfigurations?.let { configurations ->
+            root.put("trainingConfigurations", JSONArray().apply { configurations.forEach { c ->
+                put(JSONObject().put("key",c.key).put("contractionSec",c.contractionSec)
+                    .put("relaxationSec",c.relaxationSec).put("repetitions",c.repetitions))
+            } })
+        }
+        extraTrainingCycle?.let { c -> root.put("extraTrainingCycle",JSONObject().put("round",c.round)
+            .put("mask",c.mask).put("celebrationUntilEpochMs",c.celebrationUntilEpochMs)) }
+        executionParameters?.let { rows ->root.put("executionParameters",JSONArray().apply {rows.forEach {e->
+            put(JSONObject().put("runId",e.runId).put("parametersJson",e.parametersJson).put("totalMs",e.totalMs).put("holdMs",e.holdMs))
+        }})}
         val ftArr = JSONArray()
         freeTemplates.forEach { t ->
             ftArr.put(JSONObject().apply {
@@ -561,6 +575,19 @@ data class BackupDatabaseSnapshot(
                 novelBlocks = blocks,
                 novelReadingProgress = progress,
                 freeTemplates = freeTemplates,
+                executionParameters = root.optJSONArray("executionParameters")?.let {array->(0 until array.length()).map {i->array.getJSONObject(i).let {e->
+                    WorkoutExecutionParameters(e.getString("runId"),e.getString("parametersJson"),e.getLong("totalMs"),e.getLong("holdMs"))
+                        .also {require(it.totalMs >= 0 && it.holdMs in 0..it.totalMs)}
+                }}},
+                trainingConfigurations = root.optJSONArray("trainingConfigurations")?.let { array ->
+                    (0 until array.length()).map { i -> array.getJSONObject(i).let { c ->
+                        TrainingConfiguration(c.getString("key"),c.getInt("contractionSec"),c.getInt("relaxationSec"),c.getInt("repetitions")).also { require(it.isValid) }
+                    } }
+                },
+                extraTrainingCycle = root.optJSONObject("extraTrainingCycle")?.let { c ->
+                    ExtraTrainingCycle(round=c.getLong("round"),mask=c.getInt("mask"),celebrationUntilEpochMs=c.getLong("celebrationUntilEpochMs"))
+                        .also { require(it.round >= 0 && it.mask in 0..7) }
+                },
                 customPrograms = root.optJSONArray("customPrograms")?.let { a ->
                     (0 until a.length()).map { index ->
                         val p = a.getJSONObject(index)

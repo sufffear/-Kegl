@@ -31,11 +31,11 @@ class WorkoutChantalAccessibilityTest {
                 Column(Modifier.verticalScroll(rememberScrollState())) { VelarisChantalScreen(0, 0, {}, {}) }
             }
         } }
-        for (tag in listOf("btn_pet_chantal", "btn_quick_expedition", "btn_quick_bag", "btn_quick_story")) {
+        for (tag in listOf("btn_pet_chantal", "chantal_context_action", "btn_quick_bag", "btn_quick_story")) {
             compose.onNodeWithTag(tag).performScrollTo().assertIsDisplayed()
         }
         compose.onNodeWithTag("btn_chantal_menu").performScrollTo().performClick()
-        compose.onNodeWithTag("modal_nav_map").performScrollTo().performClick()
+        compose.onNodeWithTag("chantal_world_map").performScrollTo().performClick()
         compose.onNodeWithTag("open_world_map").performScrollTo().assertIsDisplayed()
     }
 }

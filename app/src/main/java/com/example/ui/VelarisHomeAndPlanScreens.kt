@@ -107,483 +107,89 @@ private fun resolveWorkoutSubtitleRu(slot: DailySlotEntity): String {
 @Composable
 fun VelarisHomeScreen(
     snapshot: PhaseEngineSnapshot,
-    settings: BenchSignalSettings,
     dailySlots: List<DailySlotWithCompletion>,
-    freeTemplates: List<FreeIntervalTemplateEntity>,
     weeklyOverview: WeeklyOverviewState,
-    storyState: StoryReaderUiState = StoryReaderUiState(),
     onOpenWorkout: () -> Unit,
     onStartNextSlot: (DailySlotWithCompletion) -> Unit,
-    onStartFreeTemplate: (FreeIntervalTemplateEntity) -> Unit,
     onOpenPlan: () -> Unit,
-    onOpenReader: () -> Unit = {},
-    onSelectOverviewDay: (String) -> Unit,
-    onToggleFreezeDate: (String) -> Unit = {},
-    onStartStreakRescueBlitz: () -> Unit = {},
-    celebratedMilestone: StreakMilestoneInfo? = null,
-    onTriggerMilestoneSalute: (StreakMilestoneInfo) -> Unit = {},
-    onDismissMilestoneSalute: () -> Unit = {},
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    dataError: String? = null,
+    onRetry: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val palette = LocalVelarisPalette.current
-    val totalSlots = dailySlots.size
-    val completedSlots = dailySlots.count { it.isCompleted }
-    val nextAvailableSlot = dailySlots.firstOrNull { !it.isCompleted }
-    val firstConfiguredTemplate = freeTemplates.firstOrNull { it.isValid }
-
-    val groupedByPeriod = remember(dailySlots) {
-        dailySlots.groupBy { PlanGroup.fromCode(it.slot.groupCode) }
+    val next = dailySlots.firstOrNull { !it.isCompleted }
+    val nextGroup = next?.let { PlanGroup.fromCode(it.slot.groupCode) }
+    val actionText = when {
+        snapshot.isActiveOrPaused -> "Вернуться к тренировке"
+        dataError != null -> "Повторить загрузку"
+        next != null -> "Начать тренировку"
+        else -> "Открыть программу"
     }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .testTag("home_screen"),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // 1. Карточка «Активная сессия»
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(
-                    width = if (snapshot.isActiveOrPaused) 1.5.dp else 1.dp,
-                    color = if (snapshot.isActiveOrPaused) palette.primaryAccent.copy(alpha = 0.65f) else palette.primaryAccent.copy(alpha = 0.28f),
-                    shape = RoundedCornerShape(20.dp)
-                )
-                .testTag("home_workout_card"),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = palette.surface)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(palette.heroGradientStart, palette.heroGradientEnd)
-                        )
-                    )
-                    .padding(14.dp)
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // Шапка карточки
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(30.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(palette.primaryAccent.copy(alpha = 0.18f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.FitnessCenter,
-                                    contentDescription = null,
-                                    tint = palette.primaryAccent,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Активная сессия",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = palette.textPrimary,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        when {
-                            snapshot.isRunningOrPreparing -> {
-                                StatusPillBadge(
-                                    text = "В процессе",
-                                    accentColor = palette.primaryAccent
-                                )
-                            }
-                            snapshot.isActiveOrPaused -> {
-                                StatusPillBadge(
-                                    text = "На паузе",
-                                    accentColor = palette.phasePauseAccent
-                                )
-                            }
-                            totalSlots > 0 -> {
-                                StatusPillBadge(
-                                    text = "$completedSlots из $totalSlots за день",
-                                    accentColor = if (completedSlots == totalSlots) palette.successAccent else palette.secondaryAccent
-                                )
-                            }
-                        }
-                    }
-
-                    // Компактная полоска прогресса по периодам дня: Утро · Обед · Вечер
-                    if (totalSlots > 0) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            PlanGroup.entries.sortedBy { it.order }.forEach { group ->
-                                val items = groupedByPeriod[group].orEmpty()
-                                val doneCount = items.count { it.isCompleted }
-                                val isAllDone = items.isNotEmpty() && doneCount == items.size
-                                val isCurrentGroup = nextAvailableSlot?.let {
-                                    PlanGroup.fromCode(it.slot.groupCode) == group
-                                } ?: false
-
-                                val pillBg = when {
-                                    isAllDone -> palette.successAccent.copy(alpha = 0.20f)
-                                    isCurrentGroup -> palette.primaryAccent.copy(alpha = 0.18f)
-                                    else -> palette.surfaceElevated.copy(alpha = 0.65f)
-                                }
-                                val pillBorder = when {
-                                    isAllDone -> palette.successAccent.copy(alpha = 0.65f)
-                                    isCurrentGroup -> palette.primaryAccent.copy(alpha = 0.50f)
-                                    else -> palette.outline.copy(alpha = 0.25f)
-                                }
-                                val textColor = when {
-                                    isAllDone -> palette.successAccent
-                                    isCurrentGroup -> palette.primaryAccent
-                                    else -> palette.textSecondary
-                                }
-
-                                Row(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(pillBg)
-                                        .border(1.dp, pillBorder, RoundedCornerShape(10.dp))
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = group.titleRu,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = textColor,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                    Text(
-                                        text = if (isAllDone) "✓ ${doneCount}/${items.size}" else "${doneCount}/${items.size}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = textColor,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    when {
-                        snapshot.isActiveOrPaused -> {
-                            Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = palette.surfaceElevated.copy(alpha = 0.90f),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Text(
-                                        text = snapshot.protocol.titleRu,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = palette.textPrimary,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        WorkoutMetricMiniTile(
-                                            label = "Статус",
-                                            value = snapshot.headlineCommandRu,
-                                            accent = palette.primaryAccent,
-                                            modifier = Modifier.weight(1.2f)
-                                        )
-                                        WorkoutMetricMiniTile(
-                                            label = "Цикл",
-                                            value = "${snapshot.currentRepetition}/${snapshot.totalRepetitions}",
-                                            accent = palette.secondaryAccent,
-                                            modifier = Modifier.weight(0.9f)
-                                        )
-                                        WorkoutMetricMiniTile(
-                                            label = "Осталось",
-                                            value = formatSecondsMinSec(((snapshot.remainingActiveMs + 999L) / 1000L).toInt()),
-                                            accent = palette.textPrimary,
-                                            modifier = Modifier.weight(0.9f)
-                                        )
-                                    }
-                                }
-                            }
-
-                            Button(
-                                onClick = onOpenWorkout,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = palette.primaryAccent,
-                                    contentColor = palette.onPrimaryAccent
-                                ),
-                                shape = RoundedCornerShape(12.dp),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 44.dp)
-                                    .testTag("btn_home_primary_workout")
-                            ) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Вернуться к сессии",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1
-                                )
-                            }
-                        }
-
-                        totalSlots == 0 -> {
-                            Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = palette.surfaceElevated.copy(alpha = 0.82f),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("zero_slots_calm_message")
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Text(
-                                        text = "Сегодня без тренировок",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = palette.secondaryAccent,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "По расписанию назначен день отдыха.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = palette.textSecondary
-                                    )
-                                }
-                            }
-
-                            Button(
-                                onClick = {
-                                    if (firstConfiguredTemplate != null) {
-                                        onStartFreeTemplate(firstConfiguredTemplate)
-                                    } else {
-                                        onOpenPlan()
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = palette.primaryAccent,
-                                    contentColor = palette.onPrimaryAccent
-                                ),
-                                shape = RoundedCornerShape(12.dp),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 44.dp)
-                                    .testTag("btn_home_primary_workout")
-                            ) {
-                                Text(
-                                    text = if (firstConfiguredTemplate != null) {
-                                        "Начать «${firstConfiguredTemplate.name}»"
-                                    } else {
-                                        "Открыть тренировки"
-                                    },
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1
-                                )
-                            }
-                        }
-
-                        else -> {
-                            if (nextAvailableSlot != null) {
-                                val nextGroup = PlanGroup.fromCode(nextAvailableSlot.slot.groupCode)
-                                Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = palette.surfaceElevated.copy(alpha = 0.85f),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = "${nextGroup.titleRu} · ${nextAvailableSlot.slot.titleRu}",
-                                                style = MaterialTheme.typography.titleSmall,
-                                                color = palette.textPrimary,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            val totalSec = ((nextAvailableSlot.slot.contractionMs + nextAvailableSlot.slot.relaxationMs) * nextAvailableSlot.slot.repetitions / 1000L).toInt()
-                                            Text(
-                                                text = formatSecondsMinSec(totalSec),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = palette.secondaryAccent,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 1,
-                                                softWrap = false
-                                            )
-                                        }
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            WorkoutMetricMiniTile(
-                                                label = "Сжатие",
-                                                value = "${nextAvailableSlot.slot.contractionMs / 1000} сек",
-                                                accent = palette.primaryAccent,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            WorkoutMetricMiniTile(
-                                                label = "Отдых",
-                                                value = "${nextAvailableSlot.slot.relaxationMs / 1000} сек",
-                                                accent = palette.secondaryAccent,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            WorkoutMetricMiniTile(
-                                                label = "Сжиманий",
-                                                value = "${nextAvailableSlot.slot.repetitions}",
-                                                accent = palette.textPrimary,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                        }
-                                    }
-                                }
-                            } else {
-                                Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = palette.successAccent.copy(alpha = 0.14f),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .border(1.dp, palette.successAccent.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.CheckCircle,
-                                            contentDescription = null,
-                                            tint = palette.successAccent,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Column {
-                                            Text(
-                                                text = "Все тренировки на сегодня выполнены",
-                                                style = MaterialTheme.typography.titleSmall,
-                                                color = palette.successAccent,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = "Утро, Обед и Вечер полностью закрыты.",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = palette.textSecondary
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Button(
-                                    onClick = {
-                                        if (nextAvailableSlot != null) {
-                                            onStartNextSlot(nextAvailableSlot)
-                                        } else {
-                                            onOpenPlan()
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = palette.primaryAccent,
-                                        contentColor = palette.onPrimaryAccent
-                                    ),
-                                    shape = RoundedCornerShape(12.dp),
-                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-                                    modifier = Modifier
-                                        .weight(1.3f)
-                                        .heightIn(min = 44.dp)
-                                        .testTag("btn_home_primary_workout")
-                                ) {
-                                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = if (nextAvailableSlot != null) "Запустить" else "К расписанию",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                }
-
-                                OutlinedButton(
-                                    onClick = onOpenPlan,
-                                    shape = RoundedCornerShape(12.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .heightIn(min = 44.dp)
-                                        .testTag("btn_home_open_plan")
-                                ) {
-                                    Text(
-                                        text = "Все сессии",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = palette.textPrimary,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
+    val action: () -> Unit = when {
+        snapshot.isActiveOrPaused -> onOpenWorkout
+        dataError != null -> onRetry
+        next != null -> ({ onStartNextSlot(next) })
+        else -> onOpenPlan
+    }
+    Column(modifier.fillMaxWidth().testTag("home_screen"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Card(modifier = Modifier.fillMaxWidth().testTag("home_workout_card"),
+            shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = palette.surface)) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Активная сессия", style = MaterialTheme.typography.titleLarge, color = palette.textPrimary)
+                if (dailySlots.isNotEmpty() && !snapshot.isActiveOrPaused && dataError == null) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        PlanGroup.entries.sortedBy { it.order }.forEach { group ->
+                            val slots = dailySlots.filter { PlanGroup.fromCode(it.slot.groupCode) == group }
+                            Surface(modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp),
+                                color = if (group == nextGroup) palette.primaryAccent.copy(alpha = 0.18f) else palette.surfaceElevated) {
+                                Column(Modifier.padding(8.dp)) {
+                                    Text(group.titleRu, style = MaterialTheme.typography.labelLarge, color = palette.textPrimary)
+                                    Text(if (slots.isEmpty()) "Нет занятий" else "${slots.count { it.isCompleted }} из ${slots.size}",
+                                        style = MaterialTheme.typography.labelSmall, color = palette.textSecondary)
                                 }
                             }
                         }
                     }
                 }
+                when {
+                    snapshot.isActiveOrPaused -> {
+                        Text(snapshot.headlineCommandRu, style = MaterialTheme.typography.headlineSmall, color = palette.primaryAccent)
+                        Text(snapshot.protocol.titleRu, color = palette.textSecondary)
+                        Text("Осталось ${formatSecondsMinSec(((snapshot.remainingActiveMs + 999) / 1000).toInt())}", color = palette.textPrimary)
+                    }
+                    dataError != null -> Text("Не удалось загрузить программу. Сохранения не изменены.",
+                        color = palette.errorAccent, modifier = Modifier.testTag("home_data_error"))
+                    next != null -> {
+                        Text("${nextGroup!!.titleRu} · ${next.slot.titleRu}", style = MaterialTheme.typography.titleMedium, color = palette.textPrimary)
+                        Text("${formatSecondsMinSec(((next.slot.contractionMs + next.slot.relaxationMs) * next.slot.repetitions / 1000).toInt())} · следующий подход",
+                            color = palette.textSecondary)
+                    }
+                    dailySlots.isNotEmpty() -> Text("План на сегодня выполнен", color = palette.successAccent,
+                        modifier = Modifier.testTag("home_day_complete"))
+                    else -> Text("На сегодня нет назначенных занятий", color = palette.textSecondary,
+                        modifier = Modifier.testTag("zero_slots_calm_message"))
+                }
+                VelarisPrimaryAction(actionText, action, Modifier.testTag("btn_home_primary_workout"))
+                if (snapshot.isActiveOrPaused) {
+                    OutlinedButton(onClick = if (snapshot.isRunningOrPreparing) onPause else onResume,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("btn_home_pause_resume")) {
+                        Text(if (snapshot.isRunningOrPreparing) "Пауза" else "Продолжить")
+                    }
+                } else if (next != null && dataError == null) {
+                    TextButton(onClick = onOpenPlan, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("btn_home_open_plan")) {
+                        Text("Программа дня")
+                    }
+                }
             }
         }
-
-        // 2. Календарь «Цепочка стабильности», мотивация и Недельный/Месячный обзор
-        WeeklyOverviewCard(
-            overview = weeklyOverview,
-            isWorkoutActiveOrPaused = snapshot.isActiveOrPaused,
-            onSelectDay = onSelectOverviewDay,
-            onToggleFreezeDate = onToggleFreezeDate,
-            onStartStreakRescueBlitz = onStartStreakRescueBlitz,
-            celebratedMilestone = celebratedMilestone,
-            onTriggerMilestoneSalute = onTriggerMilestoneSalute,
-            onDismissMilestoneSalute = onDismissMilestoneSalute
-        )
+        Row(Modifier.fillMaxWidth().testTag("home_streak_summary").padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Серия дней", style = MaterialTheme.typography.bodyLarge, color = palette.textSecondary)
+            Text(if (weeklyOverview.currentStreakDays > 0) "${weeklyOverview.currentStreakDays} дн." else "Начало пути",
+                style = MaterialTheme.typography.titleMedium, color = palette.primaryAccent)
+        }
     }
 }
 
@@ -1857,11 +1463,13 @@ fun VelarisPlanScreen(
     onDuplicateCustomProgram: (com.example.domain.CustomWorkoutProgram) -> Unit = {},
     onReorderCustomPrograms: (List<com.example.domain.CustomWorkoutProgram>) -> Unit = {},
     onReturnToWorkout: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    otherModesOnly: Boolean = false,
+    initialMode: String? = null
 ) {
     val palette = LocalVelarisPalette.current
     val animatorsEnabled = remember {
-        runCatching { ValueAnimator.areAnimatorsEnabled() }.getOrDefault(true)
+        runCatching { (android.os.Build.VERSION.SDK_INT < 26 || ValueAnimator.areAnimatorsEnabled()) }.getOrDefault(true)
     }
 
     val groupedSlots = remember(dailySlots) {
@@ -1894,7 +1502,7 @@ fun VelarisPlanScreen(
         }
     }
 
-    var selectedMode by rememberSaveable { mutableStateOf("scheduled") }
+    var selectedMode by rememberSaveable(otherModesOnly, initialMode) { mutableStateOf(if (otherModesOnly) initialMode ?: "extras" else "scheduled") }
     var editingSlotIndex by rememberSaveable { mutableStateOf<Int?>(null) }
 
     val editingTemplate = remember(editingSlotIndex, freeTemplates) {
@@ -1910,7 +1518,48 @@ fun VelarisPlanScreen(
             .testTag("plan_screen"),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        if (selectedMode == "scheduled") {
+        if (otherModesOnly) {
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = palette.surface,
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, palette.outline.copy(alpha = 0.28f), RoundedCornerShape(14.dp))
+                .testTag("plan_mode_switcher")
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                CompactModeChip(
+                    title = "Пресеты",
+                    selected = selectedMode == "extras",
+                    onClick = { selectedMode = "extras" },
+                    testTag = "plan_tab_extras",
+                    modifier = Modifier.weight(1f)
+                )
+                CompactModeChip(
+                    title = "Интервалы",
+                    selected = selectedMode == "free",
+                    onClick = { selectedMode = "free" },
+                    testTag = "plan_tab_free",
+                    modifier = Modifier.weight(1f)
+                )
+                CompactModeChip(
+                    title = "Конструктор",
+                    selected = selectedMode == "constructor",
+                    onClick = { selectedMode = "constructor" },
+                    testTag = "plan_tab_constructor",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+        }
+        if (selectedMode == "extras") {
+            ExtraWorkoutsSection(snapshot.isActiveOrPaused, onStartFreeTemplate)
+        } else if (selectedMode == "scheduled") {
             val totalSlots = dailySlots.size
             val totalCompleted = dailySlots.count { it.isCompleted }
 
@@ -1944,7 +1593,7 @@ fun VelarisPlanScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "Три этапа в день по 3 тренировки",
+                                text = dailySlots.firstOrNull()?.slot?.localDate ?: "Нет назначенных занятий",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = palette.textSecondary,
                                 maxLines = 1,
@@ -2046,7 +1695,7 @@ fun VelarisPlanScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "${activeGroup.titleRu}: все 3 тренировки выполнены",
+                                        text = "${activeGroup.titleRu}: всё выполнено",
                                         style = MaterialTheme.typography.labelLarge,
                                         color = palette.successAccent,
                                         fontWeight = FontWeight.Bold,
@@ -2111,46 +1760,7 @@ fun VelarisPlanScreen(
             )
         }
 
-        if (selectedMode == "scheduled") ExtraWorkoutsSection(snapshot.isActiveOrPaused, onStartFreeTemplate)
 
-        // Компактный нижний переключатель дополнительных режимов (Расписание / Интервалы / Конструктор)
-        Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = palette.surface,
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, palette.outline.copy(alpha = 0.28f), RoundedCornerShape(14.dp))
-                .testTag("plan_mode_switcher")
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                CompactModeChip(
-                    title = "Расписание",
-                    selected = selectedMode == "scheduled",
-                    onClick = { selectedMode = "scheduled" },
-                    testTag = "plan_tab_scheduled",
-                    modifier = Modifier.weight(1f)
-                )
-                CompactModeChip(
-                    title = "Интервалы",
-                    selected = selectedMode == "free",
-                    onClick = { selectedMode = "free" },
-                    testTag = "plan_tab_free",
-                    modifier = Modifier.weight(1f)
-                )
-                CompactModeChip(
-                    title = "Конструктор",
-                    selected = selectedMode == "constructor",
-                    onClick = { selectedMode = "constructor" },
-                    testTag = "plan_tab_constructor",
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
     }
 }
 
@@ -2273,15 +1883,16 @@ private fun PeriodWorkoutCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("$stepNumber. ${slot.titleRu}", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = palette.textPrimary)
-                    Text("${slot.contractionMs / 1000} с удержание · ${slot.relaxationMs / 1000} с отдых · ${slot.repetitions} раз",
-                        fontSize = 14.sp, color = palette.textSecondary)
                 }
-                TextButton(onClick = { expanded = !expanded; onSelectSlot() }, enabled = !isSessionLocked) {
+                TextButton(onClick = { expanded = !expanded; onSelectSlot() }, enabled = !isSessionLocked,
+                    modifier = Modifier.testTag("btn_details_slot_${slot.assignmentId}")) {
                     Text(if (item.isCompleted) "✓" else if (expanded) "Скрыть" else "Открыть", modifier = Modifier.background(palette.surfaceVariant, RoundedCornerShape(16.dp)).padding(horizontal = 10.dp, vertical = 6.dp), color = palette.primaryAccent)
                 }
             }
             if (expanded) {
-                Text("${formatSecondsMinSec((((slot.contractionMs + slot.relaxationMs) * slot.repetitions) / 1000).toInt())} · ⚡ +10 за завершение",
+                Text("${slot.contractionMs / 1000} с удержание · ${slot.relaxationMs / 1000} с отдых · ${slot.repetitions} раз",
+                    fontSize = 14.sp, color = palette.textSecondary)
+                Text("${formatSecondsMinSec((((slot.contractionMs + slot.relaxationMs) * slot.repetitions) / 1000).toInt())} · параметры подхода",
                     fontSize = 15.sp, color = palette.textSecondary)
                 if (!item.isCompleted) Button(onClick = onStartSlot, enabled = !isSessionLocked,
                     modifier = Modifier.fillMaxWidth().testTag("btn_start_slot_${slot.assignmentId}")) { Text("Начать тренировку", fontSize = 16.sp) }
@@ -2332,7 +1943,7 @@ private fun CompactModeChip(
 
     Box(
         modifier = modifier
-            .heightIn(min = 38.dp)
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(bgColor)
             .clickable(onClick = onClick)
@@ -2345,8 +1956,8 @@ private fun CompactModeChip(
             style = MaterialTheme.typography.labelMedium,
             color = contentColor,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            maxLines = 1,
-            softWrap = false,
+            maxLines = 2,
+            textAlign = TextAlign.Center,
             overflow = TextOverflow.Ellipsis
         )
     }

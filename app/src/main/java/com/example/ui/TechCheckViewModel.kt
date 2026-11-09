@@ -3,6 +3,11 @@ package com.example.ui
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.createSavedStateHandle
+import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.ViewModelProvider
 import com.example.data.AppBuildInfoRepository
 import com.example.data.AudioDiagnosticEntry
@@ -31,38 +36,56 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Навигационные разделы приложения Velaris (Итерация v1.4 п. 3).
- * Нижняя навигация содержит ровно 4 раздела: Главная, Тренировки, Книга, Настройки.
- * Экран активной тренировки (`WORKOUT`) и вложенный экран диагностики (`DIAGNOSTICS`) открываются отдельно.
- */
-enum class VelarisNavDestination(
-    val id: String,
-    val titleRu: String
-) {
-    HOME("home", "Главная"),
-    PLAN("plan", "Тренировка"),
-    CHANTAL("chantal", "Шанталь"),
-    WORKOUT("workout", "Текущая тренировка"),
-    READER("reader", "Книга"),
-    SETTINGS("settings", "Настройки"),
-    DIAGNOSTICS("diagnostics", "Диагностика")
-}
-
-/**
  * ViewModel приложения Velaris (v0.4.0-v1.1).
  * Подключается к единому координатору BenchSessionCoordinator и управляет навигацией между экранами,
  * не создавая второго таймера при смене экранов.
  */
 class TechCheckViewModel(
     private val appContext: Context,
-    private val repository: AppBuildInfoRepository
+    private val repository: AppBuildInfoRepository,
+    private val savedState: SavedStateHandle = SavedStateHandle()
 ) : ViewModel() {
 
     private val _buildInfo = MutableStateFlow(repository.loadBuildInfo())
     val buildInfo: StateFlow<AppBuildInfo> = _buildInfo.asStateFlow()
 
-    private val _currentDestination = MutableStateFlow(VelarisNavDestination.HOME)
+    private var navigation = VelarisNavigation.restore(savedState.get<ArrayList<String>>("velaris_routes"))
+    private val _currentDestination = MutableStateFlow(navigation.current)
     val currentDestination: StateFlow<VelarisNavDestination> = _currentDestination.asStateFlow()
+
+    private val _workoutJournal = MutableStateFlow(com.example.data.WorkoutJournalState())
+    val workoutJournal: StateFlow<com.example.data.WorkoutJournalState> = _workoutJournal.asStateFlow()
+    val statisticsDate = savedState.getStateFlow<String?>("statistics_date", null)
+    val journalDate = savedState.getStateFlow<String?>("journal_date", null)
+    val journalEntryId = savedState.getStateFlow<String?>("journal_entry", null)
+    private var journalJob: kotlinx.coroutines.Job? = null
+
+    fun openStatisticsDay(date: String) {
+        savedState["statistics_date"] = date
+        selectWeeklyOverviewDate(date)
+        navigateTo(VelarisNavDestination.STATISTICS_DAY)
+    }
+    fun openWorkoutJournal(date: String? = null) {
+        savedState["journal_date"] = date
+        navigateTo(VelarisNavDestination.WORKOUT_JOURNAL)
+    }
+    fun openWorkoutEntry(id: String) {
+        savedState["journal_entry"] = id
+        navigateTo(VelarisNavDestination.WORKOUT_SESSION)
+    }
+    fun refreshWorkoutJournal() {
+        journalJob?.cancel()
+        _workoutJournal.value = _workoutJournal.value.copy(loading = true, error = false)
+        journalJob = viewModelScope.launch {
+            try {
+                val entries = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    com.example.data.WorkoutJournalRepository(com.example.data.VelarisDatabase.getInstance(appContext)).load()
+                }
+                _workoutJournal.value = com.example.data.WorkoutJournalState(entries)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { _workoutJournal.value = _workoutJournal.value.copy(loading = false, error = true) }
+        }
+    }
 
     val engineSnapshot: StateFlow<PhaseEngineSnapshot> = BenchSessionCoordinator.engineSnapshot
     val settings: StateFlow<BenchSignalSettings> = BenchSessionCoordinator.settings
@@ -71,6 +94,15 @@ class TechCheckViewModel(
     val eventLog: StateFlow<List<BenchEventLogEntry>> = BenchSessionCoordinator.eventLog
     val isWakeLockHeld: StateFlow<Boolean> = BenchSessionCoordinator.isWakeLockHeld
     val isServiceForeground: StateFlow<Boolean> = BenchSessionCoordinator.isServiceForeground
+
+    val trainingStateReady = BenchSessionCoordinator.trainingStateReady
+    val trainingConfigurations = BenchSessionCoordinator.trainingConfigurations
+    val extraTrainingCycle = BenchSessionCoordinator.extraTrainingCycle
+    fun saveTrainingConfiguration(value: com.example.data.TrainingConfiguration, onResult: (Boolean)->Unit) =
+        BenchSessionCoordinator.saveTrainingConfiguration(value,onResult)
+    fun resetTrainingConfiguration(key: String, onResult: (Boolean)->Unit) =
+        BenchSessionCoordinator.resetTrainingConfiguration(key,onResult)
+    fun trainingDefaultConfiguration(slot: com.example.data.DailySlotEntity) = BenchSessionCoordinator.trainingDefaultConfiguration(slot)
 
     val dailySlots: StateFlow<List<DailySlotWithCompletion>> = BenchSessionCoordinator.dailySlots
     val freeTemplates: StateFlow<List<com.example.data.FreeIntervalTemplateEntity>> = BenchSessionCoordinator.freeTemplates
@@ -102,8 +134,14 @@ class TechCheckViewModel(
         navigateTo(VelarisNavDestination.CHANTAL)
     }
 
-    fun navigateTo(destination: VelarisNavDestination) {
-        _currentDestination.value = destination
+    val mainDestination get() = navigation.mainSection
+    val canNavigateBack get() = navigation.canGoBack
+    fun navigateTo(destination: VelarisNavDestination) = updateNavigation(navigation.open(destination))
+    fun navigateBack() = updateNavigation(navigation.back())
+    private fun updateNavigation(next: VelarisNavigation) {
+        navigation = next
+        savedState["velaris_routes"] = ArrayList(next.routes.map { it.id })
+        _currentDestination.value = next.current
     }
 
     fun selectProtocol(protocol: DemoProtocolConfig) {
@@ -116,14 +154,14 @@ class TechCheckViewModel(
 
     fun startSlotAndOpenWorkout(slot: DailySlotWithCompletion) {
         BenchSessionCoordinator.selectDailySlot(slot)
-        _currentDestination.value = VelarisNavDestination.WORKOUT
+        navigateTo(VelarisNavDestination.WORKOUT)
         startDemo()
     }
 
     fun startFreeWorkoutAndOpenWorkout(template: com.example.data.FreeIntervalTemplateEntity) {
         val started = BenchSessionCoordinator.startFreeSession(template)
         if (started) {
-            _currentDestination.value = VelarisNavDestination.WORKOUT
+            navigateTo(VelarisNavDestination.WORKOUT)
             BenchTimerService.sendCommand(appContext, BenchTimerService.ACTION_START_FREE)
         }
     }
@@ -137,13 +175,13 @@ class TechCheckViewModel(
     fun startCustomProgramAndOpenWorkout(program: com.example.domain.CustomWorkoutProgram) {
         val started = BenchSessionCoordinator.startCustomProgramSession(program)
         if (started) {
-            _currentDestination.value = VelarisNavDestination.WORKOUT
+            navigateTo(VelarisNavDestination.WORKOUT)
             BenchTimerService.sendCommand(appContext, BenchTimerService.ACTION_START_FREE)
         }
     }
 
-    fun saveCustomProgram(program: com.example.domain.CustomWorkoutProgram) {
-        BenchSessionCoordinator.saveCustomProgram(program)
+    fun saveCustomProgram(program: com.example.domain.CustomWorkoutProgram, onResult: ((Boolean)->Unit)? = null) {
+        BenchSessionCoordinator.saveCustomProgram(program,onResult)
     }
 
     fun deleteCustomProgram(id: String) {
@@ -205,7 +243,7 @@ class TechCheckViewModel(
     fun startStreakRescueBlitzAndOpenWorkout() {
         val started = BenchSessionCoordinator.startStreakRescueBlitzSession()
         if (started) {
-            _currentDestination.value = VelarisNavDestination.WORKOUT
+            navigateTo(VelarisNavDestination.WORKOUT)
             BenchTimerService.sendCommand(appContext, BenchTimerService.ACTION_START_FREE)
         }
     }
@@ -369,6 +407,10 @@ class TechCheckViewModel(
         private val appContext: Context,
         private val repository: AppBuildInfoRepository
     ) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T =
+            TechCheckViewModel(appContext, repository, extras.createSavedStateHandle()) as T
+
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return TechCheckViewModel(appContext, repository) as T

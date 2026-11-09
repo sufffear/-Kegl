@@ -6,6 +6,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.luminance
+import androidx.core.view.WindowCompat
+import com.example.ui.theme.LocalVelarisPalette
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -27,7 +31,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val recovery = runCatching {
             com.example.data.RestoreStartupGate.ensureRecovered(this)
-            com.example.data.RestoreStartupGate.ensureFinalStart(this)
         }
         if (recovery.isFailure) {
             setContent { androidx.compose.material3.Text("Не удалось подготовить данные приложения. Перезапусти приложение; при повторной ошибке сохрани её для диагностики.") }
@@ -39,14 +42,8 @@ class MainActivity : ComponentActivity() {
             com.example.service.ChantalReturnScheduler.sync(this, saved.optLong("activeJourneyStartMs", 0))
         }
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.light(
-                scrim = Color.TRANSPARENT,
-                darkScrim = Color.TRANSPARENT
-            ),
-            navigationBarStyle = SystemBarStyle.light(
-                scrim = Color.TRANSPARENT,
-                darkScrim = Color.TRANSPARENT
-            )
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
         )
 
         val repository = AppBuildInfoRepository(applicationContext)
@@ -61,6 +58,13 @@ class MainActivity : ComponentActivity() {
             val settings by viewModel.settings.collectAsStateWithLifecycle()
 
             VelarisTheme(themeId = settings.themeId) {
+                val darkIcons = LocalVelarisPalette.current.surface.luminance() > 0.179f
+                SideEffect {
+                    WindowCompat.getInsetsController(window, window.decorView).apply {
+                        isAppearanceLightStatusBars = darkIcons
+                        isAppearanceLightNavigationBars = darkIcons
+                    }
+                }
                 TechCheckScreen(viewModel = viewModel)
             }
         }
