@@ -40,6 +40,7 @@ object ChantalReturnScheduler {
 
 class ChantalReturnWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
     override fun doWork(): Result {
+        if (runCatching { com.example.data.RestoreStartupGate.ensureRecovered(applicationContext) }.isFailure) return Result.retry()
         val start = inputData.getLong("start", 0)
         val snapshot = runCatching { ChantalProgressRepository(applicationContext).load() }.getOrElse { return Result.failure() }
         if (start <= 0 || snapshot.optLong("activeJourneyStartMs") != start) return Result.success()

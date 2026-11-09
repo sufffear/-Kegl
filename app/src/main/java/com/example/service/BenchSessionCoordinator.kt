@@ -156,6 +156,7 @@ object BenchSessionCoordinator {
     fun ensureInitialized(context: Context) {
         if (appContext == null) {
             val appCtx = context.applicationContext
+            com.example.data.RestoreStartupGate.ensureRecovered(appCtx)
             appContext = appCtx
             val audioEngine = AudioVibrationEngine(
                 context = appCtx,

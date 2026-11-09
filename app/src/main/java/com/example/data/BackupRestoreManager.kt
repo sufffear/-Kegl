@@ -25,6 +25,9 @@ import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
+import org.json.JSONObject
+import android.util.Base64
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -39,7 +42,7 @@ import java.util.zip.ZipOutputStream
  * - строгая валидация манифеста, контрольных сумм SHA-256 и структуры архива;
  * - защита от Zip Slip (path traversal) и атак распаковки (zip bomb);
  * - транзакция Room и компенсирующий откат настроек, Шанталь и книги при ошибках записи;
- *   аварийное завершение процесса между разными хранилищами требует отдельного журнала восстановления;
+ *   дисковый журнал и Room-маркер завершают восстановление после перезапуска процесса;
  * - запрет выполнения резервного копирования и восстановления во время активного подхода.
  */
 class BackupRestoreManager(
@@ -47,11 +50,13 @@ class BackupRestoreManager(
     private val dao: VelarisDao,
     private val preferencesRepository: PreferencesRepository,
     private val storyRepository: StoryRepository,
-    private val timeProvider: TimeProvider
+    private val timeProvider: TimeProvider,
+    private val database: VelarisDatabase = VelarisDatabase.getInstance(context)
 ) {
 
-    private val chantalRepository = ChantalProgressRepository(context)
+    private val chantalRepository = ChantalProgressRepository(context, database)
     private val targetBooksDir = File(context.applicationContext.filesDir, "imported_books")
+    private val recoveryJournal = RestoreRecoveryJournal(context.applicationContext.filesDir)
     private val stagingDir = File(context.applicationContext.cacheDir, "restore_staging")
 
     /**
@@ -64,6 +69,7 @@ class BackupRestoreManager(
         appVersionCode: Int = APP_VERSION_CODE
     ): Result<BackupManifest> = serialized {
         runCatching {
+            recoverPendingRestoreLocked()
             val nowEpochMs = timeProvider.currentWallTimeMs()
             val dateRu = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(nowEpochMs))
 
@@ -89,23 +95,7 @@ class BackupRestoreManager(
 
             // 2. Получаем настройки из DataStore
             val currentSettings = preferencesRepository.signalSettingsFlow.first()
-            val prefsSnapshot = BackupPreferencesSnapshot(
-                soundEnabled = currentSettings.soundEnabled,
-                vibrationEnabled = currentSettings.vibrationEnabled,
-                metronomeEnabled = currentSettings.metronomeEnabled,
-                signalVolume = currentSettings.signalVolume,
-                metronomeVolume = currentSettings.metronomeVolume,
-                soundPackId = currentSettings.soundPack.id,
-                metronomeTickStyleId = currentSettings.metronomeTickStyle.id,
-                themeId = currentSettings.themeId.id,
-                readerModeId = currentSettings.readerMode.id,
-                readerFontSizeId = currentSettings.readerFontSize.id,
-                readerLineSpacingId = currentSettings.readerLineSpacing.id,
-                isRealProgramEnabled = currentSettings.isRealProgramEnabled,
-                realProgramSource = currentSettings.realProgramSource,
-                duckOtherApps = currentSettings.duckOtherApps,
-                frozenDates = currentSettings.frozenDates
-            )
+            val prefsSnapshot = settingsSnapshot(currentSettings)
 
             // 3. Формируем снимок базы данных
             val dbSnapshot = BackupDatabaseSnapshot(
@@ -276,6 +266,8 @@ class BackupRestoreManager(
             )
         }
 
+        try { recoverPendingRestoreLocked() } catch (failure: Exception) { return@serialized Result.failure(failure) }
+
         // Подготавливаем каталог временной распаковки
         clearDirectory(stagingDir)
         if (!stagingDir.exists()) {
@@ -286,7 +278,7 @@ class BackupRestoreManager(
         var backupNovelFile: File? = null
         val originalTargetFile = File(targetBooksDir, StoryRepository.ACTIVE_SOURCE_FILE_NAME)
         var initialSettings: BenchSignalSettings? = null
-        var initialChantal: String? = null
+        val operationId = UUID.randomUUID().toString()
         var externalWriteStarted = false
         var bookWriteStarted = false
         val originalBookExisted = originalTargetFile.exists()
@@ -399,7 +391,7 @@ class BackupRestoreManager(
             }
 
             initialSettings = preferencesRepository.signalSettingsFlow.first()
-            initialChantal = context.getSharedPreferences("chantal_progress", Context.MODE_PRIVATE).getString("snapshot", null)
+
 
             // 6. Подготавливаем откат для дискового файла книги
             if (originalTargetFile.exists()) {
@@ -407,6 +399,11 @@ class BackupRestoreManager(
                 originalTargetFile.copyTo(tempBackup, overwrite = true)
                 backupNovelFile = tempBackup
             }
+
+            recoveryJournal.write(JSONObject().put("operationId", operationId)
+                .put("preferences", settingsSnapshot(requireNotNull(initialSettings)).toJson())
+                .put("bookExisted", originalBookExisted)
+                .put("bookBase64", if (originalBookExisted) Base64.encodeToString(originalTargetFile.readBytes(), Base64.NO_WRAP) else ""))
 
             // 7. Выполняем атомарное обновление Room-базы
             dao.restoreUserDataAtomically(
@@ -427,7 +424,112 @@ class BackupRestoreManager(
 
                     // 8. Обновляем настройки в DataStore
                     preferencesRepository.updateSettings(
-                        BenchSignalSettings(
+                        snapshotSettings(prefsSnapshot)
+                    )
+
+                    // Old archives never contained Chantal: preserve existing companion progress.
+                    if (chantalSnapshot != null) chantalRepository.replaceWithinRestore(chantalSnapshot)
+
+                    // 9. Replace the book while the Room transaction is still open.
+                    bookWriteStarted = true
+                    check(targetBooksDir.isDirectory || targetBooksDir.mkdirs()) { "Не удалось открыть каталог книги" }
+                    if (stagedBookFile != null) {
+                        stagedBookFile.copyTo(originalTargetFile, overwrite = true)
+                    } else {
+                        if (originalTargetFile.exists()) {
+                            check(originalTargetFile.delete()) { "Не удалось заменить файл книги" }
+                        }
+                    }
+
+                    database.chantalDao().insertMarkerAsync(ChantalRestoreMarkerEntity(operationId))
+                }
+            )
+            recoveryJournal.clear()
+
+            // Успешно: удаляем резервную копию отката и каталог staging
+            runCatching { backupNovelFile?.delete(); clearDirectory(stagingDir) }
+
+            // Scheduling is derived from the committed aggregate, never part of its transaction.
+            runCatching {
+                val progress = chantalRepository.load()
+                com.example.service.ChantalReturnScheduler.sync(context,progress.optLong("activeJourneyStartMs",0))
+            }
+            Result.success(manifest)
+        } catch (e: Exception) {
+            // Room rolls back automatically. Complete external rollback even on cancellation.
+            withContext(NonCancellable) {
+                suspend fun rollback(action: suspend () -> Unit) {
+                    try { action() } catch (failure: Exception) { e.addSuppressed(failure) }
+                }
+                val committed = database.chantalDao().markerPresentAsync(operationId)
+                if (externalWriteStarted && !committed) {
+                    rollback { preferencesRepository.updateSettings(requireNotNull(initialSettings)) }
+
+                }
+                if (bookWriteStarted && !committed) rollback {
+                    if (originalBookExisted) {
+                        requireNotNull(backupNovelFile).copyTo(originalTargetFile, overwrite = true)
+                    } else if (originalTargetFile.exists()) {
+                        check(originalTargetFile.delete()) { "Не удалось удалить новый файл книги при откате" }
+                    }
+                }
+                if (e.suppressed.isEmpty()) {
+                    rollback { recoveryJournal.clear() }
+                    backupNovelFile?.delete()
+                }
+                clearDirectory(stagingDir)
+            }
+            if (e is CancellationException) throw e
+            Result.failure(if (e.suppressed.isEmpty()) e else IllegalStateException(
+                "Восстановление не завершено, откат также встретил ошибку. Сохраните исходный архив и повторите восстановление.", e
+            ))
+        }
+    }
+
+    /** Call before UI, workers, or repositories consume application state after process restart. */
+    suspend fun recoverPendingRestore(): Result<Unit> = serialized {
+        runCatching { recoverPendingRestoreLocked() }
+    }
+
+    private suspend fun recoverPendingRestoreLocked() {
+        val record = recoveryJournal.read() ?: return
+        val committed = database.chantalDao().markerPresentAsync(record.getString("operationId"))
+        if (!committed) {
+            val settings = snapshotSettings(BackupPreferencesSnapshot.fromJson(record.getString("preferences")))
+            val existed = record.getBoolean("bookExisted")
+            val bytes = if (existed) Base64.decode(record.getString("bookBase64"), Base64.NO_WRAP) else null
+            preferencesRepository.updateSettings(settings)
+            val target = File(targetBooksDir, StoryRepository.ACTIVE_SOURCE_FILE_NAME)
+            if (bytes != null) {
+                check(targetBooksDir.isDirectory || targetBooksDir.mkdirs()) { "Не удалось восстановить каталог книги" }
+                val atomic = android.util.AtomicFile(target)
+                val stream = atomic.startWrite()
+                try { stream.write(bytes); atomic.finishWrite(stream) }
+                catch (failure: Throwable) { atomic.failWrite(stream); throw failure }
+            } else if (target.exists()) check(target.delete()) { "Не удалось восстановить отсутствие книги" }
+        }
+        recoveryJournal.clear()
+    }
+
+    private fun settingsSnapshot(currentSettings: BenchSignalSettings): BackupPreferencesSnapshot = BackupPreferencesSnapshot(
+                soundEnabled = currentSettings.soundEnabled,
+                vibrationEnabled = currentSettings.vibrationEnabled,
+                metronomeEnabled = currentSettings.metronomeEnabled,
+                signalVolume = currentSettings.signalVolume,
+                metronomeVolume = currentSettings.metronomeVolume,
+                soundPackId = currentSettings.soundPack.id,
+                metronomeTickStyleId = currentSettings.metronomeTickStyle.id,
+                themeId = currentSettings.themeId.id,
+                readerModeId = currentSettings.readerMode.id,
+                readerFontSizeId = currentSettings.readerFontSize.id,
+                readerLineSpacingId = currentSettings.readerLineSpacing.id,
+                isRealProgramEnabled = currentSettings.isRealProgramEnabled,
+                realProgramSource = currentSettings.realProgramSource,
+                duckOtherApps = currentSettings.duckOtherApps,
+                frozenDates = currentSettings.frozenDates
+            )
+
+    private fun snapshotSettings(prefsSnapshot: BackupPreferencesSnapshot): BenchSignalSettings = BenchSignalSettings(
                             soundEnabled = prefsSnapshot.soundEnabled,
                             vibrationEnabled = prefsSnapshot.vibrationEnabled,
                             metronomeEnabled = prefsSnapshot.metronomeEnabled,
@@ -444,55 +546,6 @@ class BackupRestoreManager(
                             duckOtherApps = prefsSnapshot.duckOtherApps,
                             frozenDates = prefsSnapshot.frozenDates
                         )
-                    )
-
-                    // Old archives never contained Chantal: preserve existing companion progress.
-                    if (chantalSnapshot != null) chantalRepository.replace(chantalSnapshot)
-
-                    // 9. Replace the book while the Room transaction is still open.
-                    bookWriteStarted = true
-                    check(targetBooksDir.isDirectory || targetBooksDir.mkdirs()) { "Не удалось открыть каталог книги" }
-                    if (stagedBookFile != null) {
-                        stagedBookFile.copyTo(originalTargetFile, overwrite = true)
-                    } else {
-                        if (originalTargetFile.exists()) {
-                            check(originalTargetFile.delete()) { "Не удалось заменить файл книги" }
-                        }
-                    }
-
-                }
-            )
-
-            // Успешно: удаляем резервную копию отката и каталог staging
-            runCatching { backupNovelFile?.delete(); clearDirectory(stagingDir) }
-
-            Result.success(manifest)
-        } catch (e: Exception) {
-            // Room rolls back automatically. Complete external rollback even on cancellation.
-            withContext(NonCancellable) {
-                suspend fun rollback(action: suspend () -> Unit) {
-                    try { action() } catch (failure: Exception) { e.addSuppressed(failure) }
-                }
-                if (externalWriteStarted) {
-                    rollback { preferencesRepository.updateSettings(requireNotNull(initialSettings)) }
-                    rollback { chantalRepository.replace(initialChantal) }
-                }
-                if (bookWriteStarted) rollback {
-                    if (originalBookExisted) {
-                        requireNotNull(backupNovelFile).copyTo(originalTargetFile, overwrite = true)
-                    } else if (originalTargetFile.exists()) {
-                        check(originalTargetFile.delete()) { "Не удалось удалить новый файл книги при откате" }
-                    }
-                }
-                if (e.suppressed.isEmpty()) backupNovelFile?.delete()
-                clearDirectory(stagingDir)
-            }
-            if (e is CancellationException) throw e
-            Result.failure(if (e.suppressed.isEmpty()) e else IllegalStateException(
-                "Восстановление не завершено, откат также встретил ошибку. Сохраните исходный архив и повторите восстановление.", e
-            ))
-        }
-    }
 
     private suspend fun <T> serialized(block: suspend () -> T): T = withContext(Dispatchers.IO) {
         operationMutex.withLock { block() }

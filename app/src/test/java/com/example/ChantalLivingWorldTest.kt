@@ -25,7 +25,7 @@ class ChantalLivingWorldTest {
         val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
         val repo = ChantalProgressRepository(context)
         repo.replace(null)
-        val base = ChantalOfflineAdventure.previewBase().copy(npcNameRu="Ворон-почтальон Корвус", chosenActionSummaryRu="Помочь")
+        val base = ChantalOfflineAdventure.previewBase().copy(id="meeting-0", npcNameRu="Ворон-почтальон Корвус", chosenActionSummaryRu="Помочь")
         val snapshot = JSONObject().put("friendSceneAnswers", JSONObject().put("Корвус", 1))
         snapshot.put("journalList", JSONArray().put(ChantalProgressCodec.encode(base)))
         repo.save(snapshot)

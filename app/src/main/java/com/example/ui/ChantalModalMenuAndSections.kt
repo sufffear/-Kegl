@@ -1402,7 +1402,7 @@ internal fun ChantalAiLoreSectionCard(
                 .padding(0.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            ChantalGeminiSettings()
+            ChantalAiSettings()
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
             Text("Отображение характера", style = MaterialTheme.typography.titleMedium, color = HobbitCream)
             OutlinedButton(onClick = onToggleTraitArrows, modifier = Modifier.fillMaxWidth()) {

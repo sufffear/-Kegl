@@ -31,7 +31,7 @@ class BackupRestoreTest {
     private lateinit var scope: CoroutineScope
     private lateinit var prefsFile: File
     private val clock = SystemTimeProvider()
-    private val chantal get() = ChantalProgressRepository(context)
+    private val chantal get() = ChantalProgressRepository(context, db)
 
     @Before fun setup() {
         androidx.work.testing.WorkManagerTestInitHelper.initializeTestWorkManager(context)
@@ -51,7 +51,7 @@ class BackupRestoreTest {
     }
 
     private fun manager(repository: PreferencesRepository = prefs) = BackupRestoreManager(
-        context, db.velarisDao(), repository, StoryRepository(context, db.velarisDao(), clock), clock
+        context, db.velarisDao(), repository, StoryRepository(context, db.velarisDao(), clock), clock, database = db
     )
 
     private suspend fun archive(): ByteArray {
@@ -172,4 +172,35 @@ class BackupRestoreTest {
         assertTrue(manager().restoreBackup(bytes.inputStream(), true).isFailure)
         assertEquals(19, chantal.load().getInt("coins"))
     }
+    private fun preferencesFromArchive(bytes: ByteArray): String {
+        ZipInputStream(bytes.inputStream()).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: error("Preferences missing")
+                if (entry.name == BackupManifest.PREFERENCES_FILE_NAME) return zip.readBytes().toString(Charsets.UTF_8)
+            }
+        }
+    }
+    @Test fun interruptedRestoreWithoutCommitMarkerRecoversExternalPreimages() = runBlocking {
+        val oldPreferences = preferencesFromArchive(archive())
+        prefs.updateSettings(prefs.signalSettingsFlow.first().copy(soundEnabled=false))
+        val directory=File(context.filesDir,"imported_books").apply { mkdirs() }
+        File(directory,StoryRepository.ACTIVE_SOURCE_FILE_NAME).writeText("new partial book")
+        RestoreRecoveryJournal(context.filesDir).write(JSONObject().put("operationId","interrupted")
+            .put("preferences",oldPreferences).put("bookExisted",false).put("bookBase64",""))
+        manager().recoverPendingRestore().getOrThrow()
+        assertTrue(prefs.signalSettingsFlow.first().soundEnabled)
+        assertFalse(File(directory,StoryRepository.ACTIVE_SOURCE_FILE_NAME).exists())
+        manager().recoverPendingRestore().getOrThrow()
+    }
+    @Test fun committedRestoreKeepsNewExternalStateWhenJournalCleanupWasInterrupted() = runBlocking {
+        val oldPreferences=preferencesFromArchive(archive())
+        prefs.updateSettings(prefs.signalSettingsFlow.first().copy(soundEnabled=false))
+        db.chantalDao().insertMarker(ChantalRestoreMarkerEntity("committed"))
+        RestoreRecoveryJournal(context.filesDir).write(JSONObject().put("operationId","committed")
+            .put("preferences",oldPreferences).put("bookExisted",false).put("bookBase64",""))
+        manager().recoverPendingRestore().getOrThrow()
+        assertFalse(prefs.signalSettingsFlow.first().soundEnabled)
+        assertNull(RestoreRecoveryJournal(context.filesDir).read())
+    }
+
 }

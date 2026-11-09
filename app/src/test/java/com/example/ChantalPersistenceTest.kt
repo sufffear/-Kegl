@@ -23,6 +23,15 @@ class ChantalPersistenceTest {
     @Before fun clear() {
         androidx.work.testing.WorkManagerTestInitHelper.initializeTestWorkManager(context)
         context.getSharedPreferences("chantal_progress", Context.MODE_PRIVATE).edit().clear().commit()
+        val reset = java.util.concurrent.FutureTask {
+            val db = com.example.data.VelarisDatabase.getInstance(context)
+            db.runInTransaction {
+                db.chantalDao().clearEvents(); db.chantalDao().clearReceipts()
+                db.openHelper.writableDatabase.execSQL("DELETE FROM chantal_aggregate")
+            }
+        }
+        Thread(reset).start(); reset.get()
+
     }
 
     private fun episode() = ChantalStoryEpisode(

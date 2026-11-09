@@ -9,6 +9,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.rememberScrollState
@@ -195,7 +197,11 @@ fun VelarisChantalScreen(
     // Непрочитанная история после возвращения
     var pendingEpisode by remember { mutableStateOf<ChantalStoryEpisode?>(saved.optJSONObject("pendingEpisode")?.let { ChantalProgressCodec.decodeChantalStoryEpisode(it) }) }
     val generationScope = androidx.compose.runtime.rememberCoroutineScope()
-    val geminiAccess = remember(context) { com.example.data.ChantalGeminiAccess(context) }
+    val aiAccess = remember(context) { com.example.data.ChantalAiAccess(context) }
+    var isPreparingNarrative by remember { mutableStateOf(false) }
+    var narrativeHash by remember { mutableStateOf(saved.optJSONObject("narrativeBinding")?.optString("currentHash")) }
+    var engineArchive by remember { mutableStateOf(saved.optJSONObject("storyEngineState")?.toString()) }
+    var narrativeSource by remember { mutableStateOf(saved.optJSONObject("narrativeBinding")?.optString("source") ?: "local") }
     var generationJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var isGenerating by remember { mutableStateOf(false) }
     var generationMessage by remember { mutableStateOf("") }
@@ -373,7 +379,69 @@ fun VelarisChantalScreen(
         put("pendingEpisode", pendingEpisode?.let { ChantalProgressCodec.encode(it) } ?: JSONObject.NULL)
         put("rewardPopupData", rewardPopupData?.let { ChantalProgressCodec.encode(it) } ?: JSONObject.NULL)
     }
-    SideEffect { progressRepository.save(progressSnapshot) }
+    var persistenceFailure by remember { mutableStateOf(false) }
+    if (persistenceFailure) {
+        Text("Не удалось сохранить изменения. Перезапусти приложение: будет загружено последнее подтверждённое состояние.")
+        return
+    }
+    SideEffect {
+        if(!isPreparingNarrative && !isGenerating && runCatching { progressRepository.save(progressSnapshot) }.isFailure) persistenceFailure = true
+    }
+    fun showPreparedNarrative(data: JSONObject) {
+        engineArchive=data.optJSONObject("storyEngineState")?.toString()
+        pendingEpisode=data.optJSONObject("pendingEpisode")?.let(ChantalProgressCodec::decodeChantalStoryEpisode)
+        narrativeHash=data.optJSONObject("narrativeBinding")?.optString("currentHash")
+        narrativeSource=data.optJSONObject("narrativeBinding")?.optString("source") ?: "local"
+    }
+    LaunchedEffect(pendingEpisode?.id) {
+        val episode=pendingEpisode
+        if(episode!=null && !episode.isFiller) {
+            isPreparingNarrative=true
+            try {
+                val prepared=kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { progressRepository.prepareNarrative() }
+                showPreparedNarrative(prepared)
+                if(prepared.optJSONObject("narrativeBinding")?.optString("status")=="IN_FLIGHT") generationMessage="Предыдущий запрос прервался. Повтор возможен только вручную."
+            } catch(cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+              catch(_: Exception) { generationMessage="Не удалось подготовить рассказ. Перезапусти приложение; сохранение не сброшено." }
+            finally { isPreparingNarrative=false }
+        }
+    }
+    if(isGenerating) androidx.compose.ui.window.Dialog(onDismissRequest={generationJob?.cancel()}) {
+        Surface(shape=RoundedCornerShape(18.dp),color=HobbitCardBg) {
+            Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                Text("Создаём рассказ…",color=HobbitCream)
+                Text("Отправлен один запрос. После отмены сохранённая история останется доступной.",color=HobbitCream)
+                TextButton(onClick={generationJob?.cancel()}) { Text("Отменить") }
+            }
+        }
+    }
+
+    fun showCommittedJourney(result: com.example.data.ChantalJourneyConfirmation.Result) {
+        val data = result.snapshot
+        engineArchive=data.optJSONObject("storyEngineState")?.toString()
+        coins = data.optInt("coins")
+        maturityXp = data.optInt("maturityXp")
+        totalJourneys = data.optInt("totalJourneys")
+        curiosity = data.optInt("curiosity",5); tenderness = data.optInt("tenderness",6)
+        playfulness = data.optInt("playfulness",4); romanticism = data.optInt("romanticism",3)
+        courage = data.optInt("courage",4); wit = data.optInt("wit",5)
+        isExhausted45 = data.optBoolean("isExhausted45")
+        debtCoins = data.optInt("debtCoins"); debtReasonRu = data.optString("debtReasonRu")
+        inventoryList.clear()
+        data.optJSONArray("inventoryList")?.let { a -> repeat(a.length()) { inventoryList.add(ChantalProgressCodec.decodeChantalInventoryLootItem(a.getJSONObject(it))) } }
+        journalList.clear()
+        data.optJSONArray("journalList")?.let { a -> repeat(a.length()) { journalList.add(ChantalProgressCodec.decodeChantalStoryEpisode(a.getJSONObject(it))) } }
+        newlyAddedBagItemIds.clear()
+        newlyAddedBagItemIds.addAll(ChantalProgressCodec.strings(data.optJSONArray("newlyAddedBagItemIds")))
+        selectedBagItemId = data.optString("selectedBagItemId").ifBlank { null }
+        rewardPopupData = data.optJSONObject("rewardPopupData")?.let(ChantalProgressCodec::decodeChantalRewardPopupData)
+        fillerTextInput = data.optString("fillerTextInput")
+        pendingEpisode = null
+        recentXpGainText = "+${result.xpEarned} XP (Поход 🧭)"
+        val arrows = rewardPopupData?.traitArrowsText.orEmpty()
+        if (showTraitArrows && arrows.isNotBlank()) activeArrowToast = arrows
+        onPlaySampleTone(SignalType.SET_COMPLETED)
+    }
 
     // Пролог (первая встреча со спасённым рыжим лисёнком)
     if (!hasCompletedPrologue) {
@@ -443,7 +511,7 @@ fun VelarisChantalScreen(
             routeLocked = activeJourneyStartMs > 0L || pendingEpisode != null,
             onChooseRoute = { preferredRegionId = it; isBurgerMenuOpen = false; denAccordionTab = "loadout" },
             coins = coins,
-            selectedAiProvider = selectedAiProvider,
+            selectedAiProvider = aiAccess.label(),
             traits = traits,
             perks = perks,
             inventoryList = inventoryList,
@@ -831,10 +899,12 @@ fun VelarisChantalScreen(
                     choices = epChoices
                 )
                 pendingEpisode = pendingEpisode?.let { com.example.data.ChantalOfflineAdventure.decorate(it) }
+                if(engineArchive?.let { com.example.data.ChantalStoryEngineCodec.decode(JSONObject(it)).activePlot }==null) {
                 pendingEpisode?.let { base ->
                     com.example.data.ChantalLanternAdventure.next(base, journalList.toList(),
                         progressRepository.load().optJSONObject("worldMemory") ?: com.example.data.ChantalWorldMemory.empty())
                         ?.let { pendingEpisode = it }
+                }
                 }
                 pendingEpisode = pendingEpisode?.copy(trailNotesRu = activeTrailNotes,
                     personalDetailsRu = listOfNotNull(
@@ -936,134 +1006,85 @@ fun VelarisChantalScreen(
             onOpenWorkoutPlan = onOpenWorkoutPlan
         )
 
-        // Generate only on an explicit user request. The persisted original survives all failures.
-        pendingEpisode?.takeIf { !it.isFiller && !it.isMilestoneChest && !it.id.startsWith("lantern_chain_") }?.let { base ->
-            if (isGenerating) {
-                Text("Шанталь вспоминает приключение…")
-                androidx.compose.material3.TextButton(onClick = { generationJob?.cancel() }) { Text("Отменить и оставить историю") }
-            } else {
-                androidx.compose.material3.OutlinedButton(onClick = {
-                    if (!geminiAccess.hasKey()) {
-                        subTab = "ai"; isBurgerMenuOpen = true
-                    } else if (!geminiAccess.claimRequest()) {
-                        generationMessage = "Между запросами нужна минута. Текущую историю можно прочитать сейчас."
-                    } else {
-                        isGenerating = true
-                        generationMessage = ""
-                        generationJob = generationScope.launch {
+        val narrativeReady=pendingEpisode?.let { it.isFiller || narrativeHash==com.example.data.ChantalNarrativeSession.fingerprint(it) } ?: true
+        pendingEpisode?.takeIf { !it.isFiller }?.let { base ->
+            if(isPreparingNarrative) Text("Готовим рассказ…")
+            else if(narrativeReady) {
+                Text(if(narrativeSource=="local") "Локальный рассказ · без запроса к модели" else if(narrativeSource=="openrouter") "Рассказ Grok · OpenRouter" else "Рассказ Gemini")
+                OutlinedButton(onClick={
+                    val selected=aiAccess.provider()
+                    if(!aiAccess.credential().hasKey()) { subTab="ai";isBurgerMenuOpen=true }
+                    else if(!aiAccess.claimRequest()) generationMessage="Между запросами нужна минута. Сохранённый рассказ доступен сейчас."
+                    else {
+                        isGenerating=true;generationMessage=""
+                        generationJob=generationScope.launch {
+                            var ticket: com.example.data.ChantalProgressRepository.NarrativeTicket?=null
+                            var cancelled=false
                             try {
-                                val result = try {
-                                    val secret = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { geminiAccess.read() }
-                                    com.example.data.ChantalStoryGeneration.generate(
-                                        com.example.data.GeminiStoryTransport(secret, geminiAccess.model()), base,
-                                        progressRepository.load().optJSONObject("worldMemory") ?: com.example.data.ChantalWorldMemory.empty(), traits, totalJourneys, maturityXp)
-                                } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-                                  catch (_: Exception) { com.example.data.ChantalGenerationResult.Unavailable }
-                                if (pendingEpisode?.id == base.id && journalList.none { it.id == base.id }) {
-                                    if (result is com.example.data.ChantalGenerationResult.Ready) {
-                                        pendingEpisode = result.story.episode
-                                        generationMessage = "История Gemini готова. Выбери, как ответить Шанталь."
-                                    } else generationMessage = "Gemini пока недоступен: проверь ключ, модель, связь и квоту. Исходная история сохранена."
+                                val prepared=kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { progressRepository.beginNarrativeRequest(base.id) }
+                                ticket=prepared
+                                val description=com.example.data.ChantalNarrativeSession.describe(prepared.snapshot,prepared.snapshot.getJSONObject("narrativeBinding"))
+                                val transport=aiAccess.transport(selected)
+                                val response=transport.generate(com.example.data.ChantalNarrativeSession.prompt(prepared.snapshot,description))
+                                val published=kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { progressRepository.publishNarrative(prepared,response,selected) }
+                                showPreparedNarrative(published)
+                                generationMessage="Рассказ готов. Выбери, как ответить Шанталь."
+                            } catch(error: kotlinx.coroutines.CancellationException) {
+                                cancelled=true;generationMessage="Запрос отменён. Сохранённый рассказ доступен.";throw error
+                            } catch(error: Exception) { generationMessage=com.example.data.storyFailureMessage(error) }
+                            finally {
+                                val active=ticket
+                                if(active!=null) {
+                                    val finalState=kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable+kotlinx.coroutines.Dispatchers.IO) {
+                                        runCatching {
+                                            progressRepository.finishNarrativeRequest(active,cancelled)
+                                            progressRepository.ownNarrativeSnapshot()
+                                        }
+                                    }
+                                    if(finalState.isSuccess) showPreparedNarrative(finalState.getOrThrow()) else persistenceFailure=true
                                 }
-                            } finally { isGenerating = false }
+                                isGenerating=false
+                            }
                         }
                     }
-                }, modifier = Modifier.fillMaxWidth().testTag("generate_gemini_story")) {
-                    Text("Новая версия истории · Gemini")
+                },enabled=!isGenerating,modifier=Modifier.fillMaxWidth().testTag("generate_gemini_story")) {
+                    Text("Новая версия · ${aiAccess.label()} · один запрос")
+                }
+                // Explicit resumption is local and free; unavailable in a different region.
+                val engine=engineArchive?.let { JSONObject(it) }
+                if(engine!=null) {
+                    val state=com.example.data.ChantalStoryEngineCodec.decode(engine)
+                    val active=state.activePlot
+                    val mystery=com.example.domain.ChantalStoryEngine.mysteries.firstOrNull { it.id==active }
+                    val region=DEFAULT_CHANTAL_MAP_REGIONS.firstOrNull { it.titleRu==base.regionTitleRu }
+                    if(active!=null && state.plotStates[active]==com.example.domain.ChantalPlotStatus.SUSPENDED && mystery?.region==region?.id) {
+                        TextButton(onClick={
+                            isPreparingNarrative=true
+                            generationScope.launch {
+                                try { showPreparedNarrative(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { progressRepository.prepareNarrative(resume=true) }) }
+                                catch(_: Exception) { generationMessage="Не удалось вернуться к делу. Сохранённый рассказ остался на месте." }
+                                finally { isPreparingNarrative=false }
+                            }
+                        },enabled=!isGenerating) { Text("Вернуться к отложенной истории · бесплатно") }
+                    }
                 }
             }
         }
         if (generationMessage.isNotBlank()) Text(generationMessage)
         // Hide decision actions while a request is in flight; cancellation restores the original.
-        if (!isGenerating) ChantalCompactStoryEventCard(
+        if (!isGenerating && !isPreparingNarrative && narrativeReady) ChantalCompactStoryEventCard(
             pendingEpisode = pendingEpisode,
             fillerTextInput = fillerTextInput,
             onFillerTextChange = { fillerTextInput = it },
             onSelectEpisodeChoice = { ep, choiceIdx ->
-                val opt = ep.choices.getOrNull(choiceIdx) ?: return@ChantalCompactStoryEventCard
-                if (pendingEpisode?.id != ep.id || journalList.any { it.id == ep.id }) return@ChantalCompactStoryEventCard
-                onPlaySampleTone(SignalType.SET_COMPLETED)
-                val arrows = opt.delta.formatArrowIndicators().joinToString(" · ")
-                inventoryList.add(0, ep.lootItem)
-                newlyAddedBagItemIds.add(ep.lootItem.id)
-                selectedBagItemId = ep.lootItem.id
-                coins += ep.coinsEarned
-                val xpEarned = if (ep.isMilestoneChest) 15 else if (ep.isFiller) 8 else 10
-                maturityXp += xpEarned
-                recentXpGainText = "+$xpEarned XP (Поход 🧭)"
-
-                if (ep.causesExhaustion45) isExhausted45 = true
-                if (ep.debtAmountCoins > 0) {
-                    debtCoins += ep.debtAmountCoins
-                    debtReasonRu = ep.badNewsRu
-                }
-                if (!ep.isFiller) {
-                    val updated = traits.applyCanonicalDelta(opt.delta)
-                    curiosity = updated.curiosity
-                    tenderness = updated.tenderness
-                    playfulness = updated.playfulness
-                    romanticism = updated.romanticism
-                    courage = updated.courage
-                    wit = updated.wit
-                    totalJourneys += 1
-                    if (showTraitArrows && arrows.isNotBlank()) {
-                        activeArrowToast = arrows
-                    }
-                }
-                journalList.add(
-                    0,
-                    ep.copy(chosenActionSummaryRu = "${opt.labelRu} — Реакция Шанталь: ${opt.reactionRu}", chosenOptionIndex = ep.choices.indexOf(opt))
-                )
-                rewardPopupData = ChantalRewardPopupData(
-                    episodeTitleRu = ep.titleRu,
-                    journeyNumber = ep.journeyNumber,
-                    regionTitleRu = ep.regionTitleRu,
-                    playerChoiceRu = opt.labelRu,
-                    chantalReactionRu = opt.reactionRu,
-                    coinsEarned = ep.coinsEarned,
-                    xpEarned = xpEarned,
-                    lootItem = ep.lootItem,
-                    traitArrowsText = arrows,
-                    isMilestoneChest = ep.isMilestoneChest
-                )
-                pendingEpisode = null
+                val committed = runCatching { progressRepository.confirmJourney(ep.id, choiceIndex=choiceIdx) }
+                if (committed.isSuccess && committed.getOrThrow().applied) showCommittedJourney(committed.getOrThrow())
+                else if (committed.isFailure) generationMessage = "Не удалось сохранить выбор. Перезапусти приложение и повтори после загрузки прогресса."
             },
             onSubmitFillerResponse = { ep ->
-                if (pendingEpisode?.id != ep.id || journalList.any { it.id == ep.id }) return@ChantalCompactStoryEventCard
-                onPlaySampleTone(SignalType.SET_COMPLETED)
-                inventoryList.add(0, ep.lootItem)
-                newlyAddedBagItemIds.add(ep.lootItem.id)
-                selectedBagItemId = ep.lootItem.id
-                coins += ep.coinsEarned
-                val xpEarned = 8
-                maturityXp += xpEarned
-                recentXpGainText = "+$xpEarned XP (Поручение 🪶)"
-                if (debtCoins > 0) {
-                    debtCoins = 0
-                    debtReasonRu = ""
-                }
-                val userText = fillerTextInput
-                journalList.add(
-                    0,
-                    ep.copy(
-                        isFiller = true,
-                        chosenActionSummaryRu = "Свой текст: $userText"
-                    )
-                )
-                rewardPopupData = ChantalRewardPopupData(
-                    episodeTitleRu = ep.titleRu,
-                    journeyNumber = ep.journeyNumber,
-                    regionTitleRu = ep.regionTitleRu,
-                    playerChoiceRu = userText,
-                    chantalReactionRu = "Шанталь внимательно выслушала твоё поручение, радостно тявкнула и выложила на стол принесённые монеты и находку!",
-                    coinsEarned = ep.coinsEarned,
-                    xpEarned = xpEarned,
-                    lootItem = ep.lootItem,
-                    traitArrowsText = "",
-                    isMilestoneChest = ep.isMilestoneChest
-                )
-                fillerTextInput = ""
-                pendingEpisode = null
+                val committed = runCatching { progressRepository.confirmJourney(ep.id, fillerText=fillerTextInput) }
+                if (committed.isSuccess && committed.getOrThrow().applied) showCommittedJourney(committed.getOrThrow())
+                else if (committed.isFailure) generationMessage = "Не удалось сохранить ответ. Перезапусти приложение и повтори после загрузки прогресса."
             },
             petDialogueBubble = petDialogueBubble,
             lastReactionBanner = lastReactionBanner,

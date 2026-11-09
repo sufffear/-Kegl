@@ -17,9 +17,10 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.net.ssl.HttpsURLConnection
 
 /** Device-local credential, deliberately outside the game snapshot and backup archive. */
-class ChantalGeminiAccess(context: Context, private val keyProvider: (() -> SecretKey)? = null) {
-    private val prefs = context.getSharedPreferences("chantal_gemini_access", Context.MODE_PRIVATE)
-    private val alias = "velaris.gemini.personal.v1"
+class ChantalGeminiAccess(context: Context, private val provider: String = "gemini", private val keyProvider: (() -> SecretKey)? = null) {
+    init { require(provider in setOf("gemini","openrouter")) }
+    private val prefs = context.getSharedPreferences("chantal_${provider}_access", Context.MODE_PRIVATE)
+    private val alias = "velaris.$provider.personal.v1"
     private fun key(): SecretKey {
         keyProvider?.let { return it() }
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -44,9 +45,9 @@ class ChantalGeminiAccess(context: Context, private val keyProvider: (() -> Secr
         return String(cipher.doFinal(Base64.decode(prefs.getString("encrypted", ""), Base64.NO_WRAP)), Charsets.UTF_8)
     }
     fun remove() { check(prefs.edit().remove("encrypted").remove("iv").commit()) }
-    fun model() = prefs.getString("model", DEFAULT_MODEL) ?: DEFAULT_MODEL
+    fun model() = prefs.getString("model", if(provider=="openrouter") OpenRouterStoryTransport.DEFAULT_MODEL else DEFAULT_MODEL) ?: DEFAULT_MODEL
     fun setModel(model: String) {
-        require(model.matches(Regex("gemini-[a-zA-Z0-9.-]{1,80}")))
+        require(if(provider=="openrouter") model==OpenRouterStoryTransport.DEFAULT_MODEL else model.matches(Regex("gemini-[a-zA-Z0-9.-]{1,80}")))
         check(prefs.edit().putString("model", model).commit())
     }
     /** A local throttle only, never a claim about the Google project's billing tier. */

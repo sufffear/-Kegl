@@ -25,6 +25,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val recovery = runCatching { com.example.data.RestoreStartupGate.ensureRecovered(this) }
+        if (recovery.isFailure) {
+            setContent { androidx.compose.material3.Text("Не удалось завершить восстановление данных. Сохранения не сброшены. Перезапусти приложение.") }
+            return
+        }
         if (intent?.action == com.example.service.ChantalReturnScheduler.OPEN_CHANTAL) returnRequest++
         runCatching {
             val saved = com.example.data.ChantalProgressRepository(this).load()

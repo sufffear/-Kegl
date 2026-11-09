@@ -71,7 +71,7 @@ class ChantalScreenPersistenceTest {
 
     @Test fun prologueAndPettingSurviveLeavingTheScreen() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        context.getSharedPreferences("chantal_progress", Context.MODE_PRIVATE).edit().clear().commit()
+        ChantalProgressRepository(context).replace(null)
         val visible = mutableStateOf(true)
         compose.setContent {
             Column(Modifier.verticalScroll(rememberScrollState())) {
@@ -103,7 +103,7 @@ class ChantalScreenPersistenceTest {
 
     @Test fun modalMenuDoesNotShiftPortraitAndCoversAllFourJourneyStates() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        context.getSharedPreferences("chantal_progress", Context.MODE_PRIVATE).edit().clear().commit()
+        ChantalProgressRepository(context).replace(null)
 
         var capturedRootView: View? = null
         var wallNow by androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis())

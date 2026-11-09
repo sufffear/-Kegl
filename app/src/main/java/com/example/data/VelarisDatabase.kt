@@ -26,14 +26,19 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NovelReadingProgressEntity::class,
         ReadingProgressEntity::class,
         FreeIntervalTemplateEntity::class,
-        CustomProgramEntity::class
+        CustomProgramEntity::class,
+        ChantalAggregateEntity::class,
+        ChantalConfirmationEntity::class,
+        ChantalJournalEventEntity::class,
+        ChantalRestoreMarkerEntity::class
     ],
-    version = 5,
-    exportSchema = false
+    version = 6,
+    exportSchema = true
 )
 abstract class VelarisDatabase : RoomDatabase() {
 
     abstract fun velarisDao(): VelarisDao
+    abstract fun chantalDao(): ChantalDao
 
     companion object {
         @Volatile
@@ -189,6 +194,17 @@ abstract class VelarisDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `chantal_restore_markers` (`operationId` TEXT NOT NULL, PRIMARY KEY(`operationId`))")
+                // Do not import preferences here: the repository validates and imports them atomically.
+                db.execSQL("CREATE TABLE IF NOT EXISTS `chantal_aggregate` (`id` INTEGER NOT NULL, `revision` INTEGER NOT NULL, `payload` TEXT, PRIMARY KEY(`id`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `chantal_confirmations` (`episodeId` TEXT NOT NULL, `decisionId` TEXT NOT NULL, PRIMARY KEY(`episodeId`))")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_chantal_confirmations_decisionId` ON `chantal_confirmations` (`decisionId`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `chantal_journal_events` (`eventId` TEXT NOT NULL, `payload` TEXT NOT NULL, PRIMARY KEY(`eventId`))")
+            }
+        }
+
         fun getInstance(context: Context): VelarisDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -196,7 +212,7 @@ abstract class VelarisDatabase : RoomDatabase() {
                     VelarisDatabase::class.java,
                     "velaris_local.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build()
                     .also { INSTANCE = it }
             }

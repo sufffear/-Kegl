@@ -16,8 +16,8 @@ android {
     applicationId = "com.velaris.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 20
-    versionName = "0.16.0-living-map"
+    versionCode = 21
+    versionName = "0.17.0-grok-dev"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -167,3 +167,6 @@ val exportDebugApk by tasks.registering(Copy::class) {
 }
 
 
+
+// Persist Room schemas for explicit migration review.
+ksp { arg("room.schemaLocation", "$projectDir/schemas") }
