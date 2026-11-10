@@ -48,7 +48,7 @@ class VelarisFinalLayoutTest {
         val root = compose.activity.window.decorView
         val image = Bitmap.createBitmap(root.width,root.height,Bitmap.Config.ARGB_8888)
         root.draw(Canvas(image))
-        val file = File("build/reports/ui-final/$name.png"); file.parentFile.mkdirs()
+        val file = File("build/reports/ui-final/$name.png"); file.parentFile?.mkdirs()
         file.outputStream().use { image.compress(Bitmap.CompressFormat.PNG,100,it) }; image.recycle()
     }
     @Test fun largeFontThemeAndLandscapeKeepControlsAndSavedChildAccessible() {

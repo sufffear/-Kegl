@@ -42,7 +42,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SettingsBackupRestore
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -1569,7 +1569,7 @@ fun VelarisSettingsScreen(
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     SettingsSectionHeader(
-                        icon = Icons.Default.VolumeUp,
+                        icon = Icons.AutoMirrored.Filled.VolumeUp,
                         title = "Звук, профили и вибрация",
                         subtitle = soundSummaryRu,
                         testTag = "sound_settings_header"

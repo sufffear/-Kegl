@@ -80,7 +80,7 @@ private fun StatisticsCalendar(overview: WeeklyOverviewState, onDay: (String) ->
             Row(Modifier.fillMaxWidth().testTag("monthly_calendar_header"), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedButton(onClick = { savedMonth = month.minusMonths(1).toString() }, contentPadding = PaddingValues(0.dp),
                     modifier = Modifier.size(48.dp).testTag("btn_calendar_prev_month").semantics { contentDescription = "Предыдущий месяц" }) { Text("‹") }
-                Text(month.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale("ru"))).replaceFirstChar { it.titlecase(Locale("ru")) },
+                Text(month.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale("ru", "RU"))).replaceFirstChar { it.titlecase(Locale("ru", "RU")) },
                     modifier = Modifier.weight(1f).padding(horizontal = 4.dp).testTag("monthly_calendar_title"), textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.titleMedium, color = palette.textPrimary)
                 OutlinedButton(onClick = { savedMonth = month.plusMonths(1).toString() }, enabled = month < latest, contentPadding = PaddingValues(0.dp),
